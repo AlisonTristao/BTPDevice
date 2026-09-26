@@ -50,3 +50,5 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   compartilhado com USB Mass Storage) e `DeviceConfig::usb.install_driver`
   (USB composto instalado pela aplicação).
 - `Commands::shell()` para registrar módulos que já existem em TinyShell.
+- `DeviceConfig::serial_cleartext`: Serial sem cifra mesmo com chave (o rádio
+  sempre segue a chave).

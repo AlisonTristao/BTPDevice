@@ -110,6 +110,8 @@ esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn 
     if (err != ESP_OK) return err;
     err = start_link_with_fallback(requested, sizes);
     if (err != ESP_OK) return err;
+    sealed_ = has_key_ && !(active_link_ == Link::Serial && device_.serial_cleartext);
+    if (has_key_ && !sealed_) ESP_LOGI(tag::kKey, "Serial in clear (DeviceConfig::serial_cleartext)");
     err = create_node(topics);
     if (err != ESP_OK) return err;
 
@@ -168,7 +170,7 @@ esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn 
     ESP_LOGI(kTag, "\"%s\" ready on %s (source %08lx, boot %lu, memory %s)%s", device_.name,
              link_name(active_link_), static_cast<unsigned long>(source_id),
              static_cast<unsigned long>(boot_id), memory_name(device_.memory),
-             has_key_ ? "" : ", no key: traffic in clear");
+             sealed_ ? "" : ", traffic in clear");
     return ESP_OK;
 }
 

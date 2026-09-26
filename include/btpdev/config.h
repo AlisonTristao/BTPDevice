@@ -105,6 +105,9 @@ struct DeviceConfig {
     TcpConfig tcp{};
     EspNowConfig espnow{};
     UsbConfig usb{};
+    /// Serial without encryption even with a key: whoever holds the cable
+    /// already has the device in hand. The radio links always follow the key.
+    bool serial_cleartext = false;
     /// Unused entries keep key == nullptr.
     SourceInfo source_info[kMaxSourceInfo] = {};
 };

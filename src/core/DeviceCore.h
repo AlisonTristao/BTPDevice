@@ -99,10 +99,10 @@ public:
     void terminal(btp::Node& node, const btp::Header& header, btp::ByteView payload,
                   std::uint64_t now_ms) override;
     bool has_command() const noexcept override { return true; }
-    bool has_seal() const noexcept override { return has_key_; }
+    bool has_seal() const noexcept override { return sealed_; }
     bool seal(const btp::Header& header, std::uint16_t payload_size, const std::uint8_t* plaintext,
               std::uint8_t* out) override;
-    bool has_open() const noexcept override { return has_key_; }
+    bool has_open() const noexcept override { return sealed_; }
     bool open(const btp::Header& header, std::uint16_t sealed_size, const std::uint8_t* sealed,
               std::uint8_t* out_plaintext) override;
     void reply_seal(const btp::Header& request_header, btp::EndpointSealFn* out_seal,
@@ -202,6 +202,7 @@ private:
     btp::Hello hello_{};
     bool session_link_ = false;   // stream links run a responder session
     bool has_key_ = false;
+    bool sealed_ = false;         // has_key_, unless Serial with serial_cleartext
     DeviceKey key_;
     std::uint32_t dongle_source_id_ = 0U;   // ESP-NOW: the peer that holds key L
 
