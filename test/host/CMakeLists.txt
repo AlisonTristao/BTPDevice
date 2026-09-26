@@ -42,6 +42,8 @@ add_library(btpdev_portable STATIC
     ${BTPDEV_ROOT}/src/protocol/ShellText.cpp
     ${BTPDEV_ROOT}/src/protocol/Terminal.cpp
     ${BTPDEV_ROOT}/src/protocol/TopicRegistry.cpp
+    ${BTPDEV_ROOT}/src/security/KeyStore.cpp
+    ${BTPDEV_ROOT}/src/storage/FileSystem.cpp
     ${BTPDEV_ROOT}/src/core/StreamFraming.cpp
     ${BTPDEV_ROOT}/src/transport/WifiLogic.cpp
     ${BTPDEV_ROOT}/src/transport/WifiNetworks.cpp)
@@ -62,9 +64,20 @@ btpdev_warnings(btpdev_portable)
 enable_testing()
 
 foreach(test_name test_error test_config_check test_frame_queue test_stream_framing test_wifi
-                  test_core_pieces test_terminal test_node_presets test_topics)
+                  test_core_pieces test_terminal test_node_presets test_topics
+                  test_keystore test_filesystem)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE btpdev_portable)
     btpdev_warnings(${test_name})
+    # MinGW: link the C++ runtime in. A foreign libstdc++-6.dll earlier in
+    # PATH (Octave, Anaconda, Qt...) otherwise makes the test die at load
+    # with 0xc0000139 behind a Windows error dialog.
+    if(MINGW)
+        target_link_options(${test_name} PRIVATE -static)
+    endif()
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
+
+# test_keystore.cpp comes from bally_OS unchanged; its comments quote a shell
+# command with trailing `\` continuations.
+set_source_files_properties(test_keystore.cpp PROPERTIES COMPILE_OPTIONS "-Wno-comment")
