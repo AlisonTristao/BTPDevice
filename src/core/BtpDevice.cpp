@@ -117,6 +117,12 @@ std::uint32_t BtpDevice::source_id() const noexcept {
     return core_ != nullptr ? core_->device_source_id() : 0U;
 }
 
+btpdev::FileSystem* BtpDevice::fs() noexcept { return core_ != nullptr ? core_->fs() : nullptr; }
+
+esp_err_t BtpDevice::set_link(btpdev::Link link) noexcept {
+    return core_ != nullptr ? core_->set_link(link) : ESP_ERR_INVALID_STATE;
+}
+
 TinyShell* BtpDevice::shell() noexcept { return core_ != nullptr ? &core_->shell() : nullptr; }
 
 btp::Node* BtpDevice::node() noexcept { return core_ != nullptr ? core_->node() : nullptr; }

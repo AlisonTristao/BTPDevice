@@ -11,6 +11,7 @@
 #include <btpdev/commands.h>
 #include <btpdev/config.h>
 #include <btpdev/error.h>
+#include <btpdev/filesystem.h>
 #include <btpdev/topics.h>
 
 #include <cstdint>
@@ -89,6 +90,13 @@ public:
 
     const btpdev::DeviceConfig& device_config() const noexcept { return device_; }
     const btpdev::StorageConfig& storage_config() const noexcept { return storage_; }
+
+    /// The device's file system (LittleFS, else the SD card); nullptr when
+    /// nothing is mounted. Any task.
+    btpdev::FileSystem* fs() noexcept;
+
+    /// Saves the link Link::FromSettings uses from the next boot on.
+    esp_err_t set_link(btpdev::Link link) noexcept;
 
     /// Advanced. The shell behind the terminal and COMMAND_REQUEST (register
     /// commands on it after begin()); nullptr before begin().

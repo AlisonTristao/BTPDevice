@@ -19,9 +19,13 @@
 #include <nvs_flash.h>
 #include <sdkconfig.h>
 
+#include <btp/aead.hpp>
+#include <btpdev/bally_channels.h>
+
 #include "core/ConfigCheck.h"
 #include "core/Identity.h"
 #include "core/LogTags.h"
+#include "storage/Mount.h"
 #include "transport/BleLink.h"
 #include "transport/EspNowLink.h"
 #include "transport/TcpLink.h"
@@ -97,6 +101,8 @@ esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn 
     const PresetSizes sizes = preset_sizes(device_.memory);
 
     load_identity();
+    mount_storage();
+    load_key();
     const Link requested = resolve_link();
 
     esp_err_t err = allocate(sizes);
@@ -131,6 +137,7 @@ esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn 
     });
     shell_.begin();
     register_builtin_commands();
+    register_storage_commands();
     if (commands != nullptr) {
         Commands declared(shell_);
         commands(declared);
@@ -206,8 +213,7 @@ Link DeviceCore::resolve_link() noexcept {
         }
     }
 
-    has_key_ = false;  // Phase 5: the key store
-    degraded_.fetch_or(kNoKey);
+    if (!has_key_) degraded_.fetch_or(kNoKey);
     if (requested != Link::Serial && !has_key_) {
 #if CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO
         ESP_LOGW(tag::kKey,
@@ -216,9 +222,10 @@ Link DeviceCore::resolve_link() noexcept {
                  link_name(requested));
 #else
         fail(error_, BTPDEV_ERR_NO_KEY, tag::kKey,
-             "%s needs the device key and there is none: using Serial instead. Provision the "
-             "key, or enable CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO for bench tests",
-             link_name(requested));
+             "%s needs the device key and there is none: using Serial instead. Copy the file "
+             "from tools/provision_key.py to the device as \"%s\" (or enable "
+             "CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO for bench tests)",
+             link_name(requested), storage_.key_file);
         ESP_LOGE(error_.module, "%s", error_.message);
         degraded_.fetch_or(kLinkFallback);
         requested = Link::Serial;
@@ -257,14 +264,7 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
     link_ = nullptr;
     switch (link) {
         case Link::Tcp: {
-            network_count_ = 0U;
-            if (device_.wifi.ssid != nullptr && device_.wifi.ssid[0] != '\0') {
-                std::snprintf(networks_[0].ssid, sizeof(networks_[0].ssid), "%s", device_.wifi.ssid);
-                std::snprintf(networks_[0].password, sizeof(networks_[0].password), "%s",
-                              device_.wifi.password != nullptr ? device_.wifi.password : "");
-                network_count_ = 1U;
-            }
-            // Phase 5 appends the networks file here.
+            load_wifi_networks();  // the config's network first, then the networks file
             TcpLinkConfig config;
             config.device_name = device_.name;
             config.port = device_.tcp.port;
@@ -285,6 +285,7 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
         case Link::EspNow: {
             EspNowLinkConfig config;
             std::memcpy(config.peer_mac, device_.espnow.peer_mac, sizeof(config.peer_mac));
+            dongle_source_id_ = source_id_from_mac(device_.espnow.peer_mac);
             config.channel = device_.espnow.channel;
             config.normal_queue_bytes = sizes.link_queue_bytes / 2U;
             config.telemetry_queue_bytes = sizes.link_queue_bytes / 4U;
@@ -867,6 +868,285 @@ void DeviceCore::register_builtin_commands() noexcept {
             return RESULT_OK;
         },
         "reboot", "Restart the device", "btp");
+}
+
+// ============================================================================
+// Storage, key and Wi-Fi networks (docs/PLANO.md 4.9, 4.10)
+// ============================================================================
+
+void DeviceCore::mount_storage() noexcept {
+    ErrorInfo mount_error;
+    if (storage_.fs.partition != nullptr && storage_.fs.partition[0] != '\0') {
+        if (mount_littlefs(storage_.fs, fs_, mount_error) != ESP_OK) {
+            ESP_LOGE(mount_error.module, "%s [%s]", mount_error.message, err_name(mount_error.code));
+        }
+    }
+    if (storage_.sd.enabled && mount_sd(storage_.sd, sd_, mount_error) != ESP_OK) {
+        ESP_LOGE(mount_error.module, "%s [%s]", mount_error.message, err_name(mount_error.code));
+    }
+    if (!fs_.mounted() && !sd_.mounted()) degraded_.fetch_or(kNoStorage);
+}
+
+FileSystem* DeviceCore::fs() noexcept {
+    if (fs_.mounted()) return &fs_;
+    if (sd_.mounted()) return &sd_;
+    return nullptr;
+}
+
+void DeviceCore::load_key() noexcept {
+    has_key_ = false;
+    if (storage_.key == KeySource::None) return;
+    key_.load_saved();
+    // A key file on either volume replaces the saved key (the SD card first:
+    // it is the one a person carries from the PC).
+    for (FileSystem* volume : {&sd_, &fs_}) {
+        ErrorInfo import_error;
+        const esp_err_t err = key_.import_file(*volume, storage_.key_file, import_error);
+        if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+            ESP_LOGE(import_error.module, "%s [%s]", import_error.message, err_name(import_error.code));
+        }
+    }
+    has_key_ = key_.loaded();
+    if (!has_key_) {
+        ESP_LOGW(tag::kKey, "no device key: traffic goes in clear and only Serial is allowed. "
+                            "Provision it with tools/provision_key.py");
+    }
+}
+
+void DeviceCore::load_wifi_networks() noexcept {
+    network_count_ = 0U;
+    if (device_.wifi.ssid != nullptr && device_.wifi.ssid[0] != '\0') {
+        std::snprintf(networks_[0].ssid, sizeof(networks_[0].ssid), "%s", device_.wifi.ssid);
+        std::snprintf(networks_[0].password, sizeof(networks_[0].password), "%s",
+                      device_.wifi.password != nullptr ? device_.wifi.password : "");
+        network_count_ = 1U;
+    }
+    FileSystem* volume = fs();
+    if (volume == nullptr || device_.wifi.file == nullptr || !volume->exists(device_.wifi.file)) return;
+    static char text[kMaxWifiNetworks * (WifiNetwork::kMaxSsid + WifiNetwork::kMaxPassword + 4U)];
+    std::size_t size = 0U;
+    if (!volume->read(device_.wifi.file, text, sizeof(text), &size)) {
+        ESP_LOGE(tag::kWifi, "%s/%s could not be read (or is larger than %u bytes)", volume->root(),
+                 device_.wifi.file, static_cast<unsigned>(sizeof(text)));
+        return;
+    }
+    const WifiParseResult parsed = parse_wifi_networks(text, size, networks_ + network_count_,
+                                                       kMaxWifiNetworks - network_count_);
+    network_count_ += parsed.networks;
+    std::memset(text, 0, sizeof(text));  // passwords
+    if (parsed.skipped_lines != 0U) {
+        ESP_LOGW(tag::kWifi, "%s: %u line(s) skipped (\"ssid,password\" per line, at most %u networks)",
+                 device_.wifi.file, static_cast<unsigned>(parsed.skipped_lines),
+                 static_cast<unsigned>(kMaxWifiNetworks));
+    }
+    ESP_LOGI(tag::kWifi, "%u network(s) known", static_cast<unsigned>(network_count_));
+}
+
+esp_err_t DeviceCore::set_link(Link link) noexcept {
+    if (link == Link::FromSettings) return ESP_ERR_INVALID_ARG;
+    nvs_handle_t handle = 0;
+    esp_err_t err = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
+    if (err == ESP_OK) err = nvs_set_u8(handle, "link", static_cast<std::uint8_t>(link));
+    if (err == ESP_OK) err = nvs_commit(handle);
+    if (handle != 0) nvs_close(handle);
+    return err;
+}
+
+// ---- which key -----------------------------------------------------------------
+//
+// Direct links (Serial, TCP, BLE): the peer is TraceView, so everything is
+// channel B, key E. ESP-NOW (bally_channels.h): the peer is the dongle, which
+// relays TraceView's traffic -- a COMMAND, TERMINAL or (UN)SUBSCRIBE is
+// classified by who sent it (the dongle itself -> channel C, key L; anybody
+// else -> channel B, key E); everything else the device receives is channel C.
+// What the device originates: TELEMETRY, LOG and TERMINAL are for TraceView
+// (key E); STATUS and MANIFEST_DATA are for the dongle (key L); a reply
+// follows its request (reply_seal).
+
+bool DeviceCore::channel_b(const btp::Header& header) const noexcept {
+    if (active_link_ != Link::EspNow) return true;
+    const bool by_peer = header.type == btp::MessageType::Command ||
+                         header.type == btp::MessageType::Terminal ||
+                         (header.type == btp::MessageType::Control &&
+                          (header.object_id == btp::object_id::kSubscribe ||
+                           header.object_id == btp::object_id::kUnsubscribe));
+    if (!by_peer) return false;
+    return bally::channel_of_peer(bally::Vantage::Robot, header.source_id, dongle_source_id_) ==
+           bally::Channel::B_Endpoint;
+}
+
+const std::uint8_t* DeviceCore::send_key(const btp::Header& header) const noexcept {
+    if (active_link_ != Link::EspNow) return key_.key_e();
+    const bool for_console = header.type == btp::MessageType::Telemetry ||
+                             header.type == btp::MessageType::Log ||
+                             header.type == btp::MessageType::Terminal;
+    return for_console ? key_.key_e() : key_.key_l();
+}
+
+bool DeviceCore::seal(const btp::Header& header, std::uint16_t payload_size, const std::uint8_t* plaintext,
+                      std::uint8_t* out) {
+    const std::uint8_t* key = send_key(header);
+    if (key == nullptr) return false;  // fail closed: never a cleartext fallback
+    const btp::AeadKey aead_key{key, btp::kAesGcmKeySize};
+    return btp::aead_seal(aead_key, header, payload_size, plaintext, out) == btp::AeadError::Ok;
+}
+
+bool DeviceCore::seal_with_e(void* context, const btp::Header& header, std::uint16_t payload_size,
+                             const std::uint8_t* plaintext, std::uint8_t* out) noexcept {
+    const auto* self = static_cast<const DeviceCore*>(context);
+    const std::uint8_t* key = self->key_.key_e();
+    if (key == nullptr) return false;
+    const btp::AeadKey aead_key{key, btp::kAesGcmKeySize};
+    return btp::aead_seal(aead_key, header, payload_size, plaintext, out) == btp::AeadError::Ok;
+}
+
+bool DeviceCore::open(const btp::Header& header, std::uint16_t sealed_size, const std::uint8_t* sealed,
+                      std::uint8_t* out_plaintext) {
+    const std::uint8_t* key = channel_b(header) ? key_.key_e() : key_.key_l();
+    if (key == nullptr) return false;
+    const btp::AeadKey aead_key{key, btp::kAesGcmKeySize};
+    return btp::aead_open(aead_key, header, sealed_size, sealed, out_plaintext) == btp::AeadError::Ok;
+}
+
+void DeviceCore::reply_seal(const btp::Header& request_header, btp::EndpointSealFn* out_seal,
+                            void** out_seal_ctx) {
+    // A reply goes back with the key of the channel its request came on.
+    if (active_link_ == Link::EspNow && channel_b(request_header)) {
+        *out_seal = &DeviceCore::seal_with_e;
+        *out_seal_ctx = this;
+        return;
+    }
+    *out_seal = nullptr;  // seal() above decides
+    *out_seal_ctx = nullptr;
+}
+
+// ---- btp -key / -link / -wifi / -fs ---------------------------------------------
+
+void DeviceCore::register_storage_commands() noexcept {
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char text[160];
+            char tags[64];
+            key_.describe(tags, sizeof(tags));
+            std::snprintf(text, sizeof(text), "%s\nimport file: %s (on the device's file system)\n", tags,
+                          storage_.key_file);
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "key", "Key status (public verify tags only)", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            ErrorInfo error;
+            bool imported = false;
+            for (FileSystem* volume : {&sd_, &fs_}) {
+                const esp_err_t err = key_.import_file(*volume, storage_.key_file, error);
+                if (err == ESP_OK) imported = true;
+                if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
+                    shell_print(error.message);
+                    shell_print("\n");
+                    return RESULT_ERROR;
+                }
+            }
+            shell_print(imported ? "key imported: restart to use it (btp -reboot)\n"
+                                 : "no key file found\n");
+            return imported ? RESULT_OK : RESULT_ERROR;
+        },
+        "key_import", "Import the key file now", "btp");
+    shell_.add(
+        [this](const char* confirm) -> std::uint8_t {
+            if (confirm == nullptr || std::strcmp(confirm, "yes") != 0) {
+                shell_print("this erases the device key: type  btp -key_forget yes\n");
+                return RESULT_ERROR;
+            }
+            if (key_.forget() != ESP_OK) return RESULT_ERROR;
+            shell_print("key erased: restart to apply (btp -reboot)\n");
+            return RESULT_OK;
+        },
+        "key_forget", "Erase the device key (btp -key_forget yes)", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char text[128];
+            std::snprintf(text, sizeof(text), "in use: %s%s\nconfig: %s\n", link_name(active_link_),
+                          (degraded_.load() & kLinkFallback) != 0U ? " (fallback)" : "",
+                          link_name(device_.link));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "link", "Link in use", "btp");
+    shell_.add(
+        [this](const char* name) -> std::uint8_t {
+            const struct {
+                const char* name;
+                Link link;
+            } kLinks[] = {{"serial", Link::Serial}, {"tcp", Link::Tcp}, {"ble", Link::Ble}, {"espnow", Link::EspNow}};
+            for (const auto& entry : kLinks) {
+                if (name != nullptr && std::strcmp(name, entry.name) == 0) {
+                    if (set_link(entry.link) != ESP_OK) return RESULT_ERROR;
+                    shell_print(device_.link == Link::FromSettings
+                                    ? "saved: restart to use it (btp -reboot)\n"
+                                    : "saved, but DeviceConfig::link is not Link::FromSettings: it has no effect\n");
+                    return RESULT_OK;
+                }
+            }
+            shell_print("use serial, tcp, ble or espnow\n");
+            return RESULT_ERROR;
+        },
+        "link_set", "Save the link for next boot (serial|tcp|ble|espnow)", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char line[64];
+            for (std::size_t i = 0U; i < network_count_; ++i) {
+                std::snprintf(line, sizeof(line), "%u  %s\n", static_cast<unsigned>(i + 1U), networks_[i].ssid);
+                shell_print(line);
+            }
+            if (network_count_ == 0U) shell_print("no networks loaded (TCP link only)\n");
+            return RESULT_OK;
+        },
+        "wifi", "Known Wi-Fi networks (names only)", "btp");
+    shell_.add(
+        [this](const char* ssid, const char* password) -> std::uint8_t {
+            FileSystem* volume = fs();
+            if (volume == nullptr || device_.wifi.file == nullptr || ssid == nullptr || ssid[0] == '\0' ||
+                std::strlen(ssid) > WifiNetwork::kMaxSsid ||
+                (password != nullptr && std::strlen(password) > WifiNetwork::kMaxPassword)) {
+                shell_print("usage: btp -wifi_add <ssid>, <password>  (needs a mounted file system)\n");
+                return RESULT_ERROR;
+            }
+            char line[WifiNetwork::kMaxSsid + WifiNetwork::kMaxPassword + 3U];
+            const int size = std::snprintf(line, sizeof(line), "%s,%s\n", ssid, password != nullptr ? password : "");
+            if (size <= 0 || !volume->append(device_.wifi.file, line, static_cast<std::size_t>(size))) {
+                return RESULT_ERROR;
+            }
+            std::memset(line, 0, sizeof(line));
+            shell_print("added: restart to use it (btp -reboot)\n");
+            return RESULT_OK;
+        },
+        "wifi_add", "Add a network to the networks file", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            FileSystem* volume = fs();
+            if (volume == nullptr) {
+                shell_print("no file system mounted\n");
+                return RESULT_ERROR;
+            }
+            char line[96];
+            std::uint64_t total = 0U;
+            std::uint64_t used = 0U;
+            if (volume->usage(&total, &used)) {
+                std::snprintf(line, sizeof(line), "%s: %lu of %lu KB used\n", volume->root(),
+                              static_cast<unsigned long>(used / 1024U), static_cast<unsigned long>(total / 1024U));
+                shell_print(line);
+            }
+            volume->list(
+                [](void* context, const char* name, long size) {
+                    char entry[96];
+                    std::snprintf(entry, sizeof(entry), "%8ld  %s\n", size, name);
+                    static_cast<DeviceCore*>(context)->shell_print(entry);
+                },
+                this);
+            return RESULT_OK;
+        },
+        "fs", "Files and space on the device", "btp");
 }
 
 void printf(const char* format, ...) noexcept {

@@ -55,6 +55,8 @@ jobs:
           - examples/01_minimal
           - examples/02_weather_station
           - examples/03_relay_actuator
+          - examples/04_ble_secure
+          - examples/05_espnow_dongle
         target:
           - esp32s3
     steps:

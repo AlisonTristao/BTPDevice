@@ -1,7 +1,7 @@
 # Plano de implementação da BTPDevice
 
 **Criado em:** 2026-09-26
-**Estado:** Fase 4 (telemetria e comandos)
+**Estado:** Fase 5 (segurança e armazenamento)
 
 Este é o documento vivo do projeto: decisões, arquitetura e tarefas. Quem conclui
 uma tarefa marca o checkbox no mesmo commit (ver [CONTRIBUTING](../CONTRIBUTING.md#6-commits-versões-e-plano)).
@@ -556,7 +556,7 @@ Wi-Fi aceita também `ssid`/`password` direto na `DeviceConfig`, além do arquiv
 - [x] Fila RX única (com os eventos de conexão na mesma ordem dos bytes), `btpdev_comms`, `routine()`/`tick()` e `Threading::Manual`.
 - [x] Terminal (porta do `TerminalResponder`, sem locks) e shell em task própria; COMMAND_REQUEST (ação 1 = linha de shell, 2 = ping) respondido pelo `complete_command` do Node.
 - [x] Watchdog de sessão ligado: uma conexão que ficou calada além do tempo negociado é derrubada (o TraceView manda keepalive a cada ~5 s).
-- [ ] Contrato de canais (`bally_channels.h`) e `Seal`; `KeyStore` carregando de bytes. *Movido para a Fase 5, junto com o armazenamento da chave.*
+- [x] Contrato de canais (`bally_channels.h`) e `Seal`; `KeyStore` carregando de bytes. *Feito na Fase 5, junto com o armazenamento da chave.*
 - [ ] **Exemplo `01_minimal`**: Serial e o terminal do TraceView.
 
 **Pronto quando:** o TraceView encontra o `01_minimal` por nome na serial e abre o terminal
@@ -580,13 +580,15 @@ O teste por BLE e TCP cifrados fica para a Fase 5; até lá o `02_weather_statio
 
 ### Fase 5: segurança e armazenamento
 
-- [ ] `btpdev::FileSystem` com LittleFS (montar, formatar na primeira vez).
-- [ ] Backend SD (SPI e SDMMC).
-- [ ] Chave no NVS: importar do arquivo, `btp -key import/status`, sem nunca logar a chave.
-- [ ] `Link::FromSettings` e `set_link()` no NVS.
-- [ ] `tools/provision_key.py` e o teste dele.
-- [ ] **Exemplo `04_ble_secure`** (BLE com chave E, TraceView no Android).
-- [ ] **Exemplo `05_espnow_dongle`** (ESP-NOW através do bally_dongle).
+- [x] `btpdev::FileSystem` (POSIX sobre o VFS, testado no host) com LittleFS (monta, formata na primeira vez) e SD (SPI e SDMMC 1-bit). Partição vazia = sem LittleFS.
+- [x] Chave no NVS: `KeyStore` portado do bally_OS (vetores golden no host), import do arquivo no boot e com `btp -key_import`, `btp -key` (só as tags públicas), `btp -key_forget yes`.
+- [x] Cifragem que segue a chave ([D13](#2-decisões)): chave E nos links diretos; no ESP-NOW, E ou L pelo contrato de canais (`bally_channels.h`), com `reply_seal` devolvendo a resposta pelo canal do pedido.
+- [x] `Link::FromSettings`, `device.set_link()` e `btp -link` / `btp -link_set`.
+- [x] Redes do `wifi.txt` somadas à da config; `btp -wifi`, `btp -wifi_add`; `btp -fs`.
+- [x] `tools/provision_key.py` e o teste dele.
+- [x] **Exemplo `04_ble_secure`** (BLE com chave E).
+- [x] **Exemplo `05_espnow_dongle`** (ESP-NOW através do bally_dongle).
+- [ ] **Teste em hardware**: provisionar pela pasta `data/` (`pio run -t uploadfs`), BLE e TCP cifrados com o TraceView, ESP-NOW com o dongle.
 
 **Pronto quando:** um dispositivo novo sai do zero para cifrado e conectado seguindo só o README do exemplo.
 

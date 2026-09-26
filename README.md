@@ -68,6 +68,22 @@ void app_commands(btpdev::Commands& c) {
 }
 ```
 
+## Chave e arquivos
+
+Os links por rádio (TCP, BLE e ESP-NOW) só sobem com a chave do dispositivo.
+Sem ela, o dispositivo cai para Serial e diz no log como provisionar.
+
+```text
+python tools/provision_key.py --password-e <senha E> --password-l <senha L>
+# copie o bally.key gerado para a pasta data/ do projeto e:
+pio run -t uploadfs      # data/ -> partição LittleFS (chave e wifi.txt)
+```
+
+No primeiro boot a chave vai para o NVS e o arquivo vira `bally.key.imported`.
+No terminal do TraceView: `btp -key` (situação, só as tags públicas),
+`btp -fs`, `btp -wifi`, `btp -link`. A mesma senha E é configurada no
+TraceView para o dispositivo.
+
 ## Suporte
 
 | | |

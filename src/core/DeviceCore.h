@@ -42,9 +42,12 @@
 #include "protocol/ShellText.h"
 #include "protocol/Terminal.h"
 #include "protocol/TopicRegistry.h"
+#include "security/DeviceKey.h"
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
+
+#include <btpdev/filesystem.h>
 
 namespace btpdev {
 
@@ -74,6 +77,10 @@ public:
     bool connected() const noexcept { return state_.load() == State::Connected; }
     std::uint32_t device_source_id() const noexcept { return source_id; }
     TinyShell& shell() noexcept { return shell_; }
+    /// The file system the library uses (LittleFS, else the SD card), or nullptr.
+    FileSystem* fs() noexcept;
+    /// Saves the link for Link::FromSettings (applies at the next boot).
+    esp_err_t set_link(Link link) noexcept;
     btp::Node* node() noexcept { return node_; }
 
     // ---- btp::NodeConfig (called by node_, on the comms context) ----------
@@ -84,6 +91,14 @@ public:
     void terminal(btp::Node& node, const btp::Header& header, btp::ByteView payload,
                   std::uint64_t now_ms) override;
     bool has_command() const noexcept override { return true; }
+    bool has_seal() const noexcept override { return has_key_; }
+    bool seal(const btp::Header& header, std::uint16_t payload_size, const std::uint8_t* plaintext,
+              std::uint8_t* out) override;
+    bool has_open() const noexcept override { return has_key_; }
+    bool open(const btp::Header& header, std::uint16_t sealed_size, const std::uint8_t* sealed,
+              std::uint8_t* out_plaintext) override;
+    void reply_seal(const btp::Header& request_header, btp::EndpointSealFn* out_seal,
+                    void** out_seal_ctx) override;
     void command(std::uint16_t action_id, std::uint16_t action_version, btp::ByteView parameters,
                  btp::NodeActionOutcome* outcome, const btp::NodeCommandTicket& ticket) override;
 
@@ -121,6 +136,9 @@ private:
 
     // start() steps.
     void load_identity() noexcept;
+    void mount_storage() noexcept;
+    void load_key() noexcept;
+    void load_wifi_networks() noexcept;
     Link resolve_link() noexcept;
     esp_err_t allocate(const PresetSizes& sizes) noexcept;
     esp_err_t create_node(BtpDevice::TopicsFn topics) noexcept;
@@ -130,6 +148,13 @@ private:
     esp_err_t start_tasks() noexcept;
     void register_builtin_commands() noexcept;
     void shell_print(const char* text) noexcept;  // shell task, inside a command
+    void register_storage_commands() noexcept;
+
+    // Keys (docs/PLANO.md 4.9): which one seals / opens a message.
+    bool channel_b(const btp::Header& header) const noexcept;
+    const std::uint8_t* send_key(const btp::Header& header) const noexcept;
+    static bool seal_with_e(void* context, const btp::Header& header, std::uint16_t payload_size,
+                            const std::uint8_t* plaintext, std::uint8_t* out) noexcept;
 
     // Link driver callbacks (driver tasks).
     static void on_link_receive(void* context, const std::uint8_t* data, std::size_t size) noexcept;
@@ -168,7 +193,13 @@ private:
     std::uint8_t uuid_[16] = {};
     btp::Hello hello_{};
     bool session_link_ = false;   // stream links run a responder session
-    bool has_key_ = false;        // Phase 5
+    bool has_key_ = false;
+    DeviceKey key_;
+    std::uint32_t dongle_source_id_ = 0U;   // ESP-NOW: the peer that holds key L
+
+    // Storage.
+    FileSystem fs_;   // LittleFS
+    FileSystem sd_;   // SD card
 
     // Node (one StaticNode of the chosen preset, placement-new'd).
     void* node_storage_ = nullptr;

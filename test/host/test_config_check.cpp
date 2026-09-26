@@ -121,7 +121,10 @@ void source_info_is_filled_from_the_start() {
 void storage_rules() {
     btpdev::ErrorInfo error;
     StorageConfig config{};
-    config.fs.partition = "";
+    config.fs.partition = "";  // no LittleFS: allowed
+    CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
+    config.fs.partition = "storage";
+    config.fs.mount = nullptr;
     CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
     CHECK_STR_EQ(error.module, "btpdev.fs");
 

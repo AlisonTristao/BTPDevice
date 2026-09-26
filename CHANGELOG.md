@@ -29,3 +29,12 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - Comandos (`btpdev::Commands`) registrados em `begin(app_commands, app_topics)`,
   `btpdev::printf()` para o terminal, `btp -topics` e `btp -reboot`.
 - Exemplos `02_weather_station` (TCP) e `03_relay_actuator` (Serial).
+- Armazenamento: `btpdev::FileSystem` com LittleFS e cartão SD (SPI/SDMMC),
+  `BtpDevice::fs()`, redes extras no `wifi.txt`.
+- Chave do dispositivo no NVS, importada do arquivo de `tools/provision_key.py`;
+  cifragem AES-128-GCM pela chave E (links diretos) e E/L no ESP-NOW, conforme
+  `bally_channels.h`.
+- `Link::FromSettings` / `BtpDevice::set_link()` e os comandos `btp -key`,
+  `-key_import`, `-key_forget`, `-link`, `-link_set`, `-wifi`, `-wifi_add`, `-fs`.
+- Exemplos `04_ble_secure` e `05_espnow_dongle`; pasta `data/` com
+  `pio run -t uploadfs` para provisionar.

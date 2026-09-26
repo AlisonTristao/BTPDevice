@@ -118,12 +118,9 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
 
 esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noexcept {
     constexpr const char* kFsTag = tag::kFs;
-    if (config.fs.partition == nullptr || config.fs.partition[0] == '\0') {
-        return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
-                    "StorageConfig::fs.partition is empty: name the LittleFS "
-                    "partition from partitions.csv");
-    }
-    if (config.fs.mount == nullptr || config.fs.mount[0] != '/') {
+    // An empty partition name means "no LittleFS" (SD only, or no storage).
+    const bool littlefs = config.fs.partition != nullptr && config.fs.partition[0] != '\0';
+    if (littlefs && (config.fs.mount == nullptr || config.fs.mount[0] != '/')) {
         return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
                     "StorageConfig::fs.mount must be an absolute path such as \"/fs\"");
     }
@@ -137,7 +134,7 @@ esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noex
             return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
                         "StorageConfig::sd.mount must be an absolute path such as \"/sd\"");
         }
-        if (std::strcmp(config.sd.mount, config.fs.mount) == 0) {
+        if (littlefs && std::strcmp(config.sd.mount, config.fs.mount) == 0) {
             return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
                         "StorageConfig::sd.mount and fs.mount are both \"%s\"",
                         config.sd.mount);
