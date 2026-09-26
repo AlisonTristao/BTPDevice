@@ -13,6 +13,8 @@ namespace btpdev {
 
 /// Returns nullptr when neither PSRAM nor internal RAM has `size` bytes.
 std::uint8_t* alloc_buffer(std::size_t size) noexcept;
+/// Same, aligned for an object of alignment `alignment` (placement new).
+void* alloc_aligned(std::size_t alignment, std::size_t size) noexcept;
 void free_buffer(void* buffer) noexcept;
 
 /// An owning buffer from alloc_buffer(), freed on reset() / destruction.

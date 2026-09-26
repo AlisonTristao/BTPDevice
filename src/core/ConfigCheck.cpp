@@ -71,6 +71,18 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
                     "DeviceConfig::comms.core is %d: use 0, 1 or -1 (no affinity)",
                     config.comms.core);
     }
+    if (config.wifi.ssid != nullptr && std::strlen(config.wifi.ssid) > 32U) {
+        return fail(out, BTPDEV_ERR_CONFIG, tag::kWifi,
+                    "DeviceConfig::wifi.ssid is longer than 32 characters (802.11 limit)");
+    }
+    if (config.wifi.password != nullptr && std::strlen(config.wifi.password) > 64U) {
+        return fail(out, BTPDEV_ERR_CONFIG, tag::kWifi,
+                    "DeviceConfig::wifi.password is longer than 64 characters (WPA2 limit)");
+    }
+    if (config.comms.period_ms == 0U || config.comms.stack_bytes < 4096U) {
+        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+                    "DeviceConfig::comms needs period_ms >= 1 and stack_bytes >= 4096");
+    }
     if (config.tcp.port == 0U) {
         return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::tcp.port is 0");
     }

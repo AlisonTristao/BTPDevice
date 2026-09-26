@@ -34,7 +34,14 @@ void FrameQueue::write_bytes(std::size_t at, const std::uint8_t* data,
 
 bool FrameQueue::push(const std::uint8_t* data, std::size_t size,
                       Priority priority) noexcept {
-    if (data == nullptr || size == 0U || size > kMaxFrameSize || capacity_ == 0U) {
+    return push(nullptr, 0U, data, size, priority);
+}
+
+bool FrameQueue::push(const std::uint8_t* head, std::size_t head_size, const std::uint8_t* body,
+                      std::size_t body_size, Priority priority) noexcept {
+    const std::size_t size = head_size + body_size;
+    if ((head == nullptr && head_size != 0U) || body == nullptr || size == 0U ||
+        size > kMaxFrameSize || capacity_ == 0U) {
         ++stats_.refused_invalid;
         return false;
     }
@@ -54,7 +61,8 @@ bool FrameQueue::push(const std::uint8_t* data, std::size_t size,
     };
     const std::size_t tail = head_ + used_;
     write_bytes(tail, prefix, kEntryOverhead);
-    write_bytes(tail + kEntryOverhead, data, size);
+    if (head_size != 0U) write_bytes(tail + kEntryOverhead, head, head_size);
+    write_bytes(tail + kEntryOverhead + head_size, body, body_size);
     used_ += needed;
     ++frames_;
     ++stats_.pushed;

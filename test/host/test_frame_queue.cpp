@@ -201,9 +201,27 @@ void copy_front_refuses_a_half_consumed_frame() {
     CHECK(queue.empty());
 }
 
+void two_part_push_writes_head_then_body() {
+    std::uint8_t storage[16];
+    FrameQueue queue;
+    queue.bind(storage, sizeof(storage), 0U);
+    const std::uint8_t tag = 'D';
+    const auto body = bytes(10, 1);  // 1 + 10 + 2 = 13, then wraps next time
+    CHECK(queue.push(&tag, 1U, body.data(), body.size(), Priority::Normal));
+    std::uint8_t out[16];
+    CHECK(queue.copy_front(out, sizeof(out)) == 11U);
+    CHECK(out[0] == 'D' && std::memcmp(out + 1, body.data(), body.size()) == 0);
+    queue.pop_front();
+    CHECK(queue.push(&tag, 1U, body.data(), body.size(), Priority::Normal));  // wraps
+    CHECK(queue.copy_front(out, sizeof(out)) == 11U);
+    CHECK(out[0] == 'D' && std::memcmp(out + 1, body.data(), body.size()) == 0);
+    CHECK(!queue.push(&tag, 1U, nullptr, 0U, Priority::Normal));
+}
+
 }  // namespace
 
 int main() {
+    two_part_push_writes_head_then_body();
     copy_front_returns_a_wrapped_frame_whole();
     copy_front_refuses_a_half_consumed_frame();
     unbound_queue_refuses_everything();

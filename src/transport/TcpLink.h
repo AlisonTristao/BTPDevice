@@ -46,10 +46,12 @@ struct TcpLinkConfig {
     int task_core = 0;
 };
 
-class TcpLink final : public Link {
+class TcpLink final : public LinkDriver {
 public:
     static constexpr std::uint32_t kPendingHelloDeadlineMs = 2000U;
-    static constexpr std::size_t kReceiveBufferSize = 4096U;
+    // One recv() chunk; it has to fit the core's receive queue whole (the
+    // Small preset has 4 KB), so a little over one TCP segment.
+    static constexpr std::size_t kReceiveBufferSize = 1536U;
     static constexpr std::size_t kPendingReceiveBufferSize = 512U;
 
     /// Bytes from the pending (second, not yet rejected) connection. Runs on
@@ -69,6 +71,7 @@ public:
     bool send(const std::uint8_t* data, std::size_t size, Priority priority) noexcept override;
     bool connected() const noexcept override { return client_fd_.load() >= 0; }
     void poll(std::uint32_t now_ms) noexcept override;
+    void disconnect_peer() noexcept override { close_client(); }
     LinkStats stats() const noexcept override;
 
     void set_pending_handler(const PendingHandler& handler) noexcept { pending_handler_ = handler; }
@@ -108,7 +111,7 @@ private:
     std::atomic<std::uint32_t> bytes_out_{0U};
     std::atomic<std::uint32_t> send_refused_{0U};
 
-    // Owned by the link and only touched by run(): keeps 4.5 KB off the task
+    // Owned by the link and only touched by run(): keeps them off the task
     // stack, which the receive callback chain also needs.
     std::uint8_t receive_buffer_[kReceiveBufferSize] = {};
     std::uint8_t pending_receive_buffer_[kPendingReceiveBufferSize] = {};

@@ -53,6 +53,12 @@ public:
     /// frame, not bound, no room, or refused by the priority admission.
     bool push(const std::uint8_t* data, std::size_t size, Priority priority) noexcept;
 
+    /// Same, for a frame made of two parts written back to back (a one-byte
+    /// tag in front of a received chunk, without copying them together first).
+    /// `head` may be empty; the frame is head + body.
+    bool push(const std::uint8_t* head, std::size_t head_size, const std::uint8_t* body,
+              std::size_t body_size, Priority priority) noexcept;
+
     /// The next contiguous bytes of the front frame that are still to be
     /// sent -- possibly only part of it, when the frame wraps around the end
     /// of the storage. False when the queue is empty.

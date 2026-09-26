@@ -1,0 +1,206 @@
+#ifndef BTPDEV_DEVICE_CORE_H
+#define BTPDEV_DEVICE_CORE_H
+
+// Everything BtpDevice owns, behind the facade (include/BtpDevice.h keeps the
+// public header free of BTP, TinyShell and FreeRTOS internals).
+//
+// Threads (docs/PLANO.md 4.4):
+//   * link driver tasks  -> on_link_*(): copy into rx_queue_, wake the comms
+//                           task. Nothing else.
+//   * comms task         -> routine(): the ONLY context that touches node_,
+//     (or the user's task    terminal_ and the link's send side of the node.
+//      with Manual)
+//   * shell task         -> runs one command at a time on shell_, hands the
+//                           result back through completion_.
+//
+// It is the node's NodeConfig: send(), terminal() and command() below are
+// called by btp::Node from inside routine().
+
+#include <btp/node.hpp>
+
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <freertos/task.h>
+
+#include <BtpDevice.h>
+// TinyShell.h still injects `using namespace std` for 1.x compatibility unless
+// told not to; keep std out of the global namespace of our translation units.
+#ifndef TINYSHELL_NO_USING_NAMESPACE_STD
+#define TINYSHELL_NO_USING_NAMESPACE_STD
+#endif
+#include <TinyShell.h>
+
+#include "core/FrameQueue.h"
+#include "core/Memory.h"
+#include "core/NodePresets.h"
+#include "core/RuntimeErrors.h"
+#include "core/StreamFraming.h"
+#include "protocol/ShellText.h"
+#include "protocol/Terminal.h"
+#include "transport/Link.h"
+#include "transport/LinkMutex.h"
+#include "transport/WifiNetworks.h"
+
+namespace btpdev {
+
+class DeviceCore final : public btp::NodeConfig {
+public:
+    DeviceCore(const DeviceConfig& device, const StorageConfig& storage, ErrorInfo& error) noexcept;
+    ~DeviceCore() override;
+    DeviceCore(const DeviceCore&) = delete;
+    DeviceCore& operator=(const DeviceCore&) = delete;
+
+    /// The whole of begin(). On failure, `error` says why and nothing runs.
+    esp_err_t start() noexcept;
+
+    void routine() noexcept;
+    void tick() noexcept;
+
+    State state() const noexcept { return state_.load(); }
+    std::uint8_t degraded() const noexcept { return degraded_.load(); }
+    Link active_link() const noexcept { return active_link_; }
+    bool connected() const noexcept { return state_.load() == State::Connected; }
+    std::uint32_t device_source_id() const noexcept { return source_id; }
+    TinyShell& shell() noexcept { return shell_; }
+    btp::Node* node() noexcept { return node_; }
+
+    // ---- btp::NodeConfig (called by node_, on the comms context) ----------
+    bool send(const std::uint8_t* frame, std::size_t frame_size) override;
+    bool has_clock() const noexcept override { return true; }
+    std::uint64_t clock() override;
+    bool has_terminal() const noexcept override { return true; }
+    void terminal(btp::Node& node, const btp::Header& header, btp::ByteView payload,
+                  std::uint64_t now_ms) override;
+    bool has_command() const noexcept override { return true; }
+    void command(std::uint16_t action_id, std::uint16_t action_version, btp::ByteView parameters,
+                 btp::NodeActionOutcome* outcome, const btp::NodeCommandTicket& ticket) override;
+
+private:
+    // Tags in front of every rx_queue_ entry: the connection events travel in
+    // the same queue as the bytes, so they are seen in order.
+    static constexpr std::uint8_t kTagData = 'D';
+    static constexpr std::uint8_t kTagConnect = 'C';
+    static constexpr std::uint8_t kTagDisconnect = 'X';
+    static constexpr std::size_t kRxChunkMax = 1600U;   // >= every link's receive chunk
+    static constexpr std::size_t kTxFrameMax = 512U;    // btp::Node frames are <= 250
+    static constexpr std::uint32_t kHelloDeadlineMs = 2000U;
+    static constexpr std::uint32_t kStatusPeriodMs = 1000U;
+    static constexpr std::uint32_t kErrorReportPeriodMs = 1000U;
+    static constexpr std::uint64_t kReassemblyTimeoutMs = 4000U;
+    static constexpr std::size_t kTerminalChunk = 200U;
+    static constexpr std::size_t kMaxWifiNetworks = 8U;
+
+    struct ShellRequest {
+        enum class Origin : std::uint8_t { Terminal, Remote };
+        Origin origin;
+        std::uint32_t source_id;
+        std::uint32_t boot_id;
+        btp::NodeCommandTicket ticket;
+        char line[kMaxShellLine + 1U];
+    };
+    struct ShellCompletion {
+        ShellRequest::Origin origin;
+        std::uint32_t source_id;
+        std::uint32_t boot_id;
+        btp::NodeCommandTicket ticket;
+        std::uint8_t status;
+        char output[Terminal::kMaxCommandOut + 1U];
+    };
+
+    // start() steps.
+    void load_identity() noexcept;
+    Link resolve_link() noexcept;
+    esp_err_t allocate(const PresetSizes& sizes) noexcept;
+    esp_err_t create_node() noexcept;
+    void fill_catalog() noexcept;
+    esp_err_t create_link(Link link, const PresetSizes& sizes) noexcept;
+    esp_err_t start_link_with_fallback(Link requested, const PresetSizes& sizes) noexcept;
+    esp_err_t start_tasks() noexcept;
+    void register_builtin_commands() noexcept;
+    void shell_print(const char* text) noexcept;  // shell task, inside a command
+
+    // Link driver callbacks (driver tasks).
+    static void on_link_receive(void* context, const std::uint8_t* data, std::size_t size) noexcept;
+    static void on_link_connect(void* context) noexcept;
+    static void on_link_disconnect(void* context) noexcept;
+    void push_rx(std::uint8_t tag, const std::uint8_t* data, std::size_t size) noexcept;
+    void wake() noexcept;
+
+    // Comms context.
+    void drain_rx(std::uint64_t now_ms) noexcept;
+    void handle_connect(std::uint64_t now_ms) noexcept;
+    void handle_disconnect() noexcept;
+    void handle_frame(const btp::DecodedFrame& frame, std::uint64_t now_ms) noexcept;
+    void handle_datagram(const std::uint8_t* data, std::size_t size, std::uint64_t now_ms) noexcept;
+    void after_receive(std::uint32_t peer_source_id) noexcept;
+    void deliver_completion() noexcept;
+    void report_errors(std::uint32_t now_ms) noexcept;
+    static bool terminal_submit(void* context, std::uint32_t source_id, std::uint32_t boot_id,
+                                const char* line);
+    static bool terminal_emit(void* context, const std::uint8_t* data, std::size_t size);
+
+    // Shell task.
+    static void shell_task_entry(void* context);
+    void shell_loop() noexcept;
+    static void comms_task_entry(void* context);
+    void comms_loop() noexcept;
+
+    const DeviceConfig& device_;
+    const StorageConfig& storage_;
+    ErrorInfo& error_;
+
+    std::atomic<State> state_{State::Stopped};
+    std::atomic<std::uint8_t> degraded_{kDegradedNone};
+    Link active_link_ = Link::Serial;
+    std::uint8_t mac_[6] = {};
+    std::uint8_t uuid_[16] = {};
+    btp::Hello hello_{};
+    bool session_link_ = false;   // stream links run a responder session
+    bool has_key_ = false;        // Phase 5
+
+    // Node (one StaticNode of the chosen preset, placement-new'd).
+    void* node_storage_ = nullptr;
+    btp::Node* node_ = nullptr;
+    btp::Catalog* catalog_ = nullptr;
+    void (*destroy_node_)(btp::Node*) = nullptr;
+    char fw_build_[40] = {};
+
+    // Link.
+    LinkDriver* link_ = nullptr;
+    WifiNetwork networks_[kMaxWifiNetworks] = {};
+    std::size_t network_count_ = 0U;
+
+    // Receive side.
+    LinkMutex rx_mutex_;
+    Buffer rx_storage_;
+    FrameQueue rx_queue_;          // guarded by rx_mutex_
+    Buffer rx_chunk_;              // one entry copied out of rx_queue_ (comms)
+    Buffer decoder_storage_;
+    StreamDecoder decoder_;
+    std::uint32_t peer_source_id_ = 0U;
+
+    // Send side.
+    Buffer tx_wire_;               // COBS scratch for stream links (comms)
+
+    // Terminal and shell.
+    Terminal terminal_;
+    TinyShell shell_;
+    QueueHandle_t shell_queue_ = nullptr;
+    ShellRequest shell_request_{};           // shell task only
+    ShellCompletion completion_{};           // shell writes, comms reads
+    std::atomic<bool> completion_ready_{false};
+    std::size_t capture_length_ = 0U;        // shell task only
+
+    RuntimeErrors errors_;
+    TaskHandle_t comms_task_ = nullptr;
+    TaskHandle_t shell_task_ = nullptr;
+    std::uint32_t last_tick_ms_ = 0U;
+};
+
+}  // namespace btpdev
+
+#endif  // BTPDEV_DEVICE_CORE_H

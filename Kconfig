@@ -53,6 +53,16 @@ menu "BTPDevice"
         config BTPDEV_LINK_ESPNOW
             bool "ESP-NOW (through the bally_dongle)"
             default y
+
+        config BTPDEV_INSECURE_CLEARTEXT_RADIO
+            bool "DEVELOPMENT ONLY: let TCP/BLE/ESP-NOW run without the device key"
+            default n
+            help
+                Without a provisioned key, TCP, BLE and ESP-NOW refuse to start
+                and the device falls back to Serial (anyone in radio range could
+                read and command it otherwise). This lets them run in clear text
+                for bench tests before a key is provisioned. Never ship it: the
+                boot log warns every time.
     endmenu
 
 endmenu

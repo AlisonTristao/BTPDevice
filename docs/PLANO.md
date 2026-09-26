@@ -1,7 +1,7 @@
 # Plano de implementação da BTPDevice
 
 **Criado em:** 2026-09-26
-**Estado:** Fase 1 (infraestrutura)
+**Estado:** Fase 3 (núcleo)
 
 Este é o documento vivo do projeto: decisões, arquitetura e tarefas. Quem conclui
 uma tarefa marca o checkbox no mesmo commit (ver [CONTRIBUTING](../CONTRIBUTING.md#6-commits-versões-e-plano)).
@@ -532,27 +532,36 @@ autenticado com a chave L e guardar no NVS) fica como melhoria depois da v1.
 
 ### Fase 2: transportes
 
-- [ ] Trazer o COBS, com os testes.
-- [ ] `SerialLink` (backend TinyUSB CDC), com `test_apps/serial_echo`.
-- [ ] `Wifi` (STA, `wifi.txt`, backoff, mDNS) e `TcpLink`, com `test_apps/tcp_echo`.
-- [ ] `BleLink`, com `test_apps/ble_echo`.
-- [ ] `EspNowLink` e fila com prioridades, com `test_apps/espnow_echo`.
-- [ ] Admissão por prioridade comum a todos os links.
+- [x] COBS: `StreamDecoder` / `stream_encode` sobre o `btp::SerialDecoder`, com testes (inclusive o fluxo picotado em 1, 7 e 64 bytes).
+- [x] `UsbSerialLink` (TinyUSB CDC), com o nome do dispositivo no produto e na interface USB.
+- [x] `WifiStation` (STA, reconexão com backoff, `WifiLogic` testada no host) e `TcpLink` (mDNS `<nome>.local`, BUSY para a segunda conexão).
+- [x] `BleLink` (serviço GATT do BTP, notificações empacotando vários frames).
+- [x] `EspNowLink`: respostas unicast com confirmação, telemetria broadcast.
+- [x] Admissão por prioridade comum a todos os links: `FrameQueue`, sem alocação por frame.
+- [x] `test_apps/link_echo` (um app, um ambiente por link) + `tools/link_echo_test.py`. Os quatro ambientes compilam para ESP32-S3.
+- [ ] **Teste em hardware** do eco por Serial, TCP e BLE ([roteiro](../test_apps/link_echo/README.md)). O ESP-NOW fica para a Fase 5, com o dongle.
 
-**Pronto quando:** cada `test_app` ecoa frames COBS para um script no PC (ou para o dongle, no caso do ESP-NOW).
+**Pronto quando:** cada link ecoa frames COBS para o script no PC (ou para o dongle, no caso do ESP-NOW).
+
+**Diferenças em relação ao plano:** um app de eco só (`link_echo`) em vez de um por link; o
+Wi-Fi aceita também `ssid`/`password` direto na `DeviceConfig`, além do arquivo.
 
 ### Fase 3: núcleo
 
-- [ ] Tipos de configuração (`DeviceConfig`, `StorageConfig`, `Link`, `Memory`, `Threading`).
-- [ ] Infraestrutura de erros: tags, códigos, `last_error()`, ring e limite de taxa.
-- [ ] Ciclo de vida e ordem do `begin()` com a política de degradação.
-- [ ] Orçamento de memória e alocação única.
-- [ ] Identidade: `source_id` do MAC e nome propagado para BLE, mDNS, USB e `source_info`.
-- [ ] Fila RX única, `btpdev_comms`, `routine()`/`tick()` e `Threading::Manual`.
-- [ ] Contrato de canais (`bally_channels.h`) e `Seal`; `KeyStore` carregando de bytes.
-- [ ] **Exemplo `01_minimal`**: Serial, um tópico e o terminal do TraceView.
+- [x] Tipos de configuração (`DeviceConfig`, `StorageConfig`, `Link`, `Memory`, `Threading`).
+- [x] Infraestrutura de erros: tags, códigos, `last_error()`, `RuntimeErrors` (primeira ocorrência na hora, depois um resumo por segundo).
+- [x] Ciclo de vida (`State`, `degraded()`) e ordem do `begin()` com a política de degradação (queda para Serial).
+- [x] Orçamento de memória e alocação única: presets = `StaticNode` + filas (medidos no host: Small ~11,7 KB, Medium ~22,4 KB, Large ~47,2 KB só o Node).
+- [x] Identidade: `source_id` e `peer_uuid` do MAC (mesmo esquema do bally_OS), `boot_id` contado no NVS, nome no BLE, mDNS, USB e `source_info`.
+- [x] Fila RX única (com os eventos de conexão na mesma ordem dos bytes), `btpdev_comms`, `routine()`/`tick()` e `Threading::Manual`.
+- [x] Terminal (porta do `TerminalResponder`, sem locks) e shell em task própria; COMMAND_REQUEST (ação 1 = linha de shell, 2 = ping) respondido pelo `complete_command` do Node.
+- [x] Watchdog de sessão ligado: uma conexão que ficou calada além do tempo negociado é derrubada (o TraceView manda keepalive a cada ~5 s).
+- [ ] Contrato de canais (`bally_channels.h`) e `Seal`; `KeyStore` carregando de bytes. *Movido para a Fase 5, junto com o armazenamento da chave.*
+- [ ] **Exemplo `01_minimal`**: Serial e o terminal do TraceView.
 
-**Pronto quando:** o TraceView encontra o `01_minimal` por nome na serial, abre o terminal e plota o tópico.
+**Pronto quando:** o TraceView encontra o `01_minimal` por nome na serial e abre o terminal
+(`help`, `btp -status`). Plotar um tópico passou para o "pronto" da Fase 4, que é onde os
+tópicos nascem.
 
 ### Fase 4: telemetria e comandos
 

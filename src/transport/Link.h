@@ -1,7 +1,8 @@
 #ifndef BTPDEV_LINK_H
 #define BTPDEV_LINK_H
 
-// What every link (Serial, TCP, BLE, ESP-NOW) looks like to the core. Four
+// What every link driver (Serial, TCP, BLE, ESP-NOW) looks like to the core
+// (btpdev::Link, in config.h, is the user-facing choice of which one to use). Four
 // real implementations, so a small interface is justified (CONTRIBUTING.md
 // section 2): the core picks one per boot and never needs to know which.
 //
@@ -46,14 +47,14 @@ struct LinkStats {
     std::uint32_t send_refused = 0U;   ///< send() returned false
 };
 
-class Link {
+class LinkDriver {
 public:
     enum class Kind : std::uint8_t {
         Stream,    ///< byte pipe: frames travel as 0x00 || COBS || 0x00
         Datagram,  ///< one frame per datagram (ESP-NOW)
     };
 
-    virtual ~Link() = default;
+    virtual ~LinkDriver() = default;
 
     /// "Serial", "TCP", "BLE" or "ESP-NOW" (for logs).
     virtual const char* name() const noexcept = 0;
@@ -74,6 +75,11 @@ public:
     virtual bool connected() const noexcept = 0;
 
     virtual void poll(std::uint32_t now_ms) noexcept { (void)now_ms; }
+
+    /// Drops the current peer (the session watchdog expired: the peer is gone
+    /// but the transport did not notice -- a half-open TCP socket, a BLE
+    /// central that vanished). A link that cannot do this ignores it.
+    virtual void disconnect_peer() noexcept {}
 
     virtual LinkStats stats() const noexcept = 0;
 };

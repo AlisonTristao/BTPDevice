@@ -37,7 +37,7 @@ struct UsbSerialConfig {
     bool install_driver = true;
 };
 
-class UsbSerialLink final : public Link {
+class UsbSerialLink final : public LinkDriver {
 public:
     explicit UsbSerialLink(const UsbSerialConfig& config) noexcept : config_(config) {}
     ~UsbSerialLink() override;

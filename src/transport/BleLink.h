@@ -39,7 +39,7 @@ struct BleLinkConfig {
     std::size_t send_queue_bytes = 8192U;
 };
 
-class BleLink final : public Link {
+class BleLink final : public LinkDriver {
 public:
     static constexpr std::size_t kMaxNameLength = 29U;
     static constexpr std::size_t kMaxChunkSize = 512U;  // >= BLE 5's max ATT_MTU - 3
@@ -53,6 +53,7 @@ public:
     void stop() noexcept override;
     bool send(const std::uint8_t* data, std::size_t size, Priority priority) noexcept override;
     bool connected() const noexcept override;
+    void disconnect_peer() noexcept override;
     LinkStats stats() const noexcept override;
 
     // NimBLE glue (called by the file-scope handlers in the .cpp).

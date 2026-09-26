@@ -24,19 +24,30 @@ set(BTP_ENABLE_AEAD OFF CACHE BOOL "" FORCE)
 set(BTP_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${BTPDEV_BTP_DIR}" btp EXCLUDE_FROM_ALL)
 
+# TinyShell from the sibling checkout (ShellLineEditor, for the terminal).
+if(NOT DEFINED BTPDEV_TINYSHELL_DIR)
+    get_filename_component(BTPDEV_TINYSHELL_DIR "${BTPDEV_ROOT}/../TinyShell" ABSOLUTE)
+endif()
+add_subdirectory("${BTPDEV_TINYSHELL_DIR}" tinyshell EXCLUDE_FROM_ALL)
+target_compile_definitions(tinyshell PUBLIC TINYSHELL_COLOR)
+
 # Sources that must stay free of ESP-IDF calls. A file lands here once it is
 # portable; anything touching drivers stays in the component only.
 add_library(btpdev_portable STATIC
     ${BTPDEV_ROOT}/src/core/ConfigCheck.cpp
     ${BTPDEV_ROOT}/src/core/Error.cpp
     ${BTPDEV_ROOT}/src/core/FrameQueue.cpp
+    ${BTPDEV_ROOT}/src/core/Identity.cpp
+    ${BTPDEV_ROOT}/src/core/RuntimeErrors.cpp
+    ${BTPDEV_ROOT}/src/protocol/ShellText.cpp
+    ${BTPDEV_ROOT}/src/protocol/Terminal.cpp
     ${BTPDEV_ROOT}/src/core/StreamFraming.cpp
     ${BTPDEV_ROOT}/src/transport/WifiLogic.cpp
     ${BTPDEV_ROOT}/src/transport/WifiNetworks.cpp)
 target_include_directories(btpdev_portable PUBLIC
     ${BTPDEV_ROOT}/include
     ${BTPDEV_ROOT}/src)
-target_link_libraries(btpdev_portable PUBLIC btp::codec)
+target_link_libraries(btpdev_portable PUBLIC btp::codec btp::node tinyshell)
 
 function(btpdev_warnings target)
     if(MSVC)
@@ -49,7 +60,8 @@ btpdev_warnings(btpdev_portable)
 
 enable_testing()
 
-foreach(test_name test_error test_config_check test_frame_queue test_stream_framing test_wifi)
+foreach(test_name test_error test_config_check test_frame_queue test_stream_framing test_wifi
+                  test_core_pieces test_terminal test_node_presets)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE btpdev_portable)
     btpdev_warnings(${test_name})

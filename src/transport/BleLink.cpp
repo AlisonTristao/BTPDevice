@@ -193,6 +193,11 @@ bool BleLink::connected() const noexcept {
     return conn_handle_.load() != kNoConnection && subscribed_.load();
 }
 
+void BleLink::disconnect_peer() noexcept {
+    const std::uint16_t handle = conn_handle_.load();
+    if (handle != kNoConnection) ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+}
+
 void BleLink::on_sync() noexcept {
     std::uint8_t address_type = 0U;
     ble_hs_id_infer_auto(0, &address_type);
@@ -383,6 +388,7 @@ esp_err_t BleLink::start(const LinkEvents&, ErrorInfo& error) noexcept {
 void BleLink::stop() noexcept {}
 bool BleLink::send(const std::uint8_t*, std::size_t, Priority) noexcept { return false; }
 bool BleLink::connected() const noexcept { return false; }
+void BleLink::disconnect_peer() noexcept {}
 void BleLink::on_sync() noexcept {}
 int BleLink::on_gap_event(void*) noexcept { return 0; }
 int BleLink::on_rx_write(std::uint16_t, const std::uint8_t*, std::size_t) noexcept { return 0; }

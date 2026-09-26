@@ -40,7 +40,7 @@ struct EspNowLinkConfig {
     std::size_t telemetry_queue_bytes = 4096U;
 };
 
-class EspNowLink final : public Link {
+class EspNowLink final : public LinkDriver {
 public:
     static constexpr std::size_t kMaxFrameSize = 250U;   // btp::kEspNowMaxFrameSize
     static constexpr std::uint32_t kDeliveryTimeoutMs = 250U;

@@ -30,6 +30,11 @@ jobs:
           repository: AlisonTristao/BTP
           ref: ${{ env.BTP_REF }}
           path: BTP
+      - uses: actions/checkout@v4
+        with:
+          repository: AlisonTristao/TinyShell
+          ref: ${{ env.TINYSHELL_REF }}
+          path: TinyShell
       - name: Configure
         run: cmake -S BTPDevice/test/host -B build
       - name: Build
@@ -47,6 +52,7 @@ jobs:
         app:
           - test_apps/build_smoke
           - test_apps/link_echo
+          - examples/01_minimal
         target:
           - esp32s3
     steps:

@@ -46,12 +46,17 @@ enum class Threading : std::uint8_t {
 struct TaskConfig {
     int core = 0;                        ///< 0 or 1; -1 = no affinity
     std::uint32_t priority = 10U;
-    std::uint32_t stack_bytes = 6144U;
+    std::uint32_t stack_bytes = 8192U;
     std::uint32_t period_ms = 1U;        ///< pause between two routine() passes
 };
 
 struct WifiConfig {
-    /// Networks file in the file system root, one "ssid,password" per line.
+    /// One network written straight in the config (the simplest setup).
+    /// Tried first; empty = none.
+    const char* ssid = nullptr;
+    const char* password = nullptr;
+    /// More networks, from a file in the file system root, one
+    /// "ssid,password" per line (tried in order, after `ssid`).
     const char* file = "wifi.txt";
 };
 

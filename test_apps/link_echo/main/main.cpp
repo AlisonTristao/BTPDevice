@@ -52,7 +52,7 @@ namespace {
 constexpr const char* kTag = "link_echo";
 constexpr const char* kName = CONFIG_ECHO_DEVICE_NAME;
 
-btpdev::Link* g_link = nullptr;
+btpdev::LinkDriver* g_link = nullptr;
 btpdev::StreamDecoder g_decoder;
 btpdev::Buffer g_decoder_storage;
 std::uint8_t g_frame[btp::kSerialMaxFrameSize];
@@ -81,7 +81,7 @@ void echo_frame(const btp::DecodedFrame& decoded) {
 }
 
 void on_receive(void*, const std::uint8_t* data, std::size_t size) noexcept {
-    if (g_link->kind() == btpdev::Link::Kind::Datagram) {
+    if (g_link->kind() == btpdev::LinkDriver::Kind::Datagram) {
         if (g_link->send(data, size, btpdev::Priority::Normal)) {
             ++g_echoed;
         } else {
@@ -99,7 +99,7 @@ void on_disconnect(void*) noexcept { g_decoder.reset(); }
 btpdev::WifiNetwork g_networks[1];
 #endif
 
-btpdev::Link* make_link() {
+btpdev::LinkDriver* make_link() {
 #if ECHO_SERIAL
     static btpdev::UsbSerialLink link({.product_name = kName});
     return &link;
