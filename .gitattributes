@@ -1,0 +1,5 @@
+# Text files are stored with LF; Kconfig, CMake and shell scripts break with CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.bin binary

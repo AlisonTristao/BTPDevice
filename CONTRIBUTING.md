@@ -135,7 +135,9 @@ core  →  security, storage
 
 ## 5. Build e testes
 
-> Os comandos abaixo passam a existir na Fase 1 do [plano](docs/PLANO.md).
+Os projetos de `test_apps/` e `examples/` esperam o BTP e o TinyShell clonados
+**ao lado** deste repositório (`../BTP`, `../TinyShell`); ver
+`test_apps/btpdev_components.cmake`.
 
 ```text
 # Testes no PC (código portável: protocolo, chave, config, parsers)
@@ -143,9 +145,14 @@ cmake -S test/host -B test/host/build
 cmake --build test/host/build
 ctest --test-dir test/host/build --output-on-failure
 
-# Compilar todos os exemplos no alvo
-idf.py -C examples/01_minimal set-target esp32s3 build
+# Compilar um projeto no alvo (ESP-IDF ou PlatformIO)
+idf.py -C test_apps/build_smoke set-target esp32s3 build
+pio run -d test_apps/build_smoke
 ```
+
+Código portável (sem chamadas do IDF) entra na lista `btpdev_portable` de
+`test/host/CMakeLists.txt` e ganha teste. O header `btpdev/error.h` traz um
+substituto do `esp_err.h` para o host, com os mesmos valores.
 
 Antes de considerar uma mudança de código pronta:
 

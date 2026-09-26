@@ -4,7 +4,9 @@ build/
 .pio/
 managed_components/
 sdkconfig
-sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
+!sdkconfig.defaults.*
 examples/*/dependencies.lock
 test_apps/*/dependencies.lock
 

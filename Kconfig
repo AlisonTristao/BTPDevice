@@ -1,0 +1,58 @@
+menu "BTPDevice"
+
+    choice BTPDEV_LOG_LEVEL_CHOICE
+        prompt "Log level of the btpdev.* tags"
+        default BTPDEV_LOG_LEVEL_INFO
+        help
+            Applied by BtpDevice::begin() to every btpdev.* tag with
+            esp_log_level_set(). It cannot go above the project-wide
+            CONFIG_LOG_MAXIMUM_LEVEL. Change a single tag at runtime with
+            esp_log_level_set("btpdev.tcp", ESP_LOG_DEBUG).
+
+        config BTPDEV_LOG_LEVEL_NONE
+            bool "No output"
+        config BTPDEV_LOG_LEVEL_ERROR
+            bool "Error"
+        config BTPDEV_LOG_LEVEL_WARN
+            bool "Warning"
+        config BTPDEV_LOG_LEVEL_INFO
+            bool "Info"
+        config BTPDEV_LOG_LEVEL_DEBUG
+            bool "Debug"
+        config BTPDEV_LOG_LEVEL_VERBOSE
+            bool "Verbose"
+    endchoice
+
+    config BTPDEV_LOG_LEVEL
+        int
+        default 0 if BTPDEV_LOG_LEVEL_NONE
+        default 1 if BTPDEV_LOG_LEVEL_ERROR
+        default 2 if BTPDEV_LOG_LEVEL_WARN
+        default 3 if BTPDEV_LOG_LEVEL_INFO
+        default 4 if BTPDEV_LOG_LEVEL_DEBUG
+        default 5 if BTPDEV_LOG_LEVEL_VERBOSE
+
+    menu "Links"
+        help
+            A link that is compiled out cannot be selected at runtime:
+            begin() falls back to Serial (BTPDEV_ERR_LINK_UNSUPPORTED).
+
+        config BTPDEV_LINK_SERIAL
+            bool "Serial (USB CDC)"
+            default y
+
+        config BTPDEV_LINK_TCP
+            bool "TCP over Wi-Fi"
+            default y
+
+        config BTPDEV_LINK_BLE
+            bool "Bluetooth LE (needs NimBLE enabled in the Bluetooth menu)"
+            depends on BT_NIMBLE_ENABLED
+            default y
+
+        config BTPDEV_LINK_ESPNOW
+            bool "ESP-NOW (through the bally_dongle)"
+            default y
+    endmenu
+
+endmenu

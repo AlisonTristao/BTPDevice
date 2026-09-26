@@ -1,0 +1,6 @@
+version: "0.1.0"
+description: "Makes an ESP32 a BTP device for TraceView: telemetry, terminal, commands, encryption and discovery by name."
+url: https://github.com/AlisonTristao/BTPDevice
+license: MIT
+dependencies:
+  idf: ">=6.0"

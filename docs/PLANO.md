@@ -1,7 +1,7 @@
 # Plano de implementação da BTPDevice
 
 **Criado em:** 2026-09-26
-**Estado:** Fase 0 (levantamento)
+**Estado:** Fase 1 (infraestrutura)
 
 Este é o documento vivo do projeto: decisões, arquitetura e tarefas. Quem conclui
 uma tarefa marca o checkbox no mesmo commit (ver [CONTRIBUTING](../CONTRIBUTING.md#6-commits-versões-e-plano)).
@@ -133,7 +133,7 @@ const btpdev::DeviceConfig device_config = {
 const btpdev::StorageConfig storage_config = {
     .fs  = { .partition = "storage", .format_if_empty = true },   // LittleFS
     .key = btpdev::KeySource::Nvs,     // importa /bally.key uma vez, depois renomeia
-    .sd  = std::nullopt,               // opcional: SD como segunda raiz
+    // .sd = { .enabled = true, .cs = 10, .mosi = 11, .miso = 13, .sck = 12 },
 };
 ```
 
@@ -521,12 +521,12 @@ autenticado com a chave L e guardar no NVS) fica como melhoria depois da v1.
 
 ### Fase 1: infraestrutura do repositório
 
-- [ ] BTP e TinyShell como componentes IDF ([D15](#2-decisões)).
-- [ ] `CMakeLists.txt`, `idf_component.yml` e `Kconfig` (`BTPDEV_LOG_LEVEL`, `BTPDEV_LINK_*`) da BTPDevice.
-- [ ] Esqueleto de `include/BtpDevice.h` e `include/btpdev/` compilando vazio.
-- [ ] `test/host/` com CMake + CTest e um teste trivial.
-- [ ] `test_apps/build_smoke` compilando para ESP32-S3.
-- [ ] CI no GitHub Actions: testes de host e build IDF dos exemplos e `test_apps`.
+- [x] BTP e TinyShell como componentes IDF ([D15](#2-decisões)): BTP 2.49.0 e TinyShell 2.1.0, na branch `feature/idf-component` de cada um.
+- [x] `CMakeLists.txt`, `idf_component.yml` e `Kconfig` (`BTPDEV_LOG_LEVEL`, `BTPDEV_LINK_*`) da BTPDevice.
+- [x] Esqueleto de `include/BtpDevice.h` e `include/btpdev/` (config, erros, versão). O `begin()` já valida a configuração e responde `BTPDEV_ERR_NOT_IMPLEMENTED`.
+- [x] `test/host/` com CMake + CTest: `test_error` e `test_config_check`.
+- [x] `test_apps/build_smoke` compilando para ESP32-S3 (PlatformIO, ESP-IDF 6.0.1): BTP (com o backend AEAD/PSA), TinyShell e BTPDevice entram como componentes, sem embrulho.
+- [x] CI no GitHub Actions (`.github/workflows/ci.yml`): testes de host e build IDF dos `test_apps`. *O job IDF depende das tags `v2.49.0` (BTP) e `v2.1.0` (TinyShell) estarem publicadas.*
 
 **Pronto quando:** `ctest` e o build no alvo passam na CI.
 
