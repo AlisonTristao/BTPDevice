@@ -31,14 +31,33 @@ if(NOT _btpdev_header_version STREQUAL _btpdev_yml_version)
         "${_btpdev_header_version}, idf_component.yml says ${_btpdev_yml_version}")
 endif()
 
+set(btpdev_srcs
+    "src/core/BtpDevice.cpp"
+    "src/core/ConfigCheck.cpp"
+    "src/core/Error.cpp"
+    "src/core/FrameQueue.cpp"
+    "src/core/Memory.cpp"
+    "src/core/StreamFraming.cpp"
+    "src/transport/BleLink.cpp"
+    "src/transport/EspNowLink.cpp"
+    "src/transport/TcpLink.cpp"
+    "src/transport/UsbSerialLink.cpp"
+    "src/transport/WifiCore.cpp"
+    "src/transport/WifiLogic.cpp"
+    "src/transport/WifiNetworks.cpp"
+    "src/transport/WifiStation.cpp")
+
+# `bt` unconditionally: CONFIG_* values are not known yet when ESP-IDF
+# expands component requirements, so an if(CONFIG_BT_NIMBLE_ENABLED) here is
+# always false. BleLink.cpp compiles to a stub when NimBLE is off. esp_tinyusb
+# and mdns come from idf_component.yml (esp_tinyusb only on chips with USB OTG).
+set(btpdev_priv_requires log esp_timer esp_event esp_netif esp_wifi nvs_flash lwip bt)
+
 idf_component_register(
-    SRCS
-        "src/core/BtpDevice.cpp"
-        "src/core/ConfigCheck.cpp"
-        "src/core/Error.cpp"
+    SRCS ${btpdev_srcs}
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "src"
     REQUIRES BTP TinyShell
-    PRIV_REQUIRES log)
+    PRIV_REQUIRES ${btpdev_priv_requires})
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra)

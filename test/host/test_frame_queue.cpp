@@ -158,9 +158,54 @@ void large_frames_use_the_16_bit_length() {
     CHECK(drain_front(queue, 244U) == a);  // BLE-sized chunks
 }
 
+void copy_front_returns_a_wrapped_frame_whole() {
+    std::uint8_t storage[32];
+    FrameQueue queue;
+    queue.bind(storage, sizeof(storage), 0U);
+    // f1 takes bytes 0..21, f2 22..27; dropping f1 moves the head to 22, so
+    // `a` lands at 28..38: prefix at 28-29, payload 30..38 crossing the end.
+    const auto f1 = bytes(20, 0);
+    const auto f2 = bytes(4, 0);
+    queue.push(f1.data(), f1.size(), Priority::Normal);
+    queue.push(f2.data(), f2.size(), Priority::Normal);
+    queue.pop_front();
+    const auto a = bytes(9, 0xA0);
+    CHECK(queue.push(a.data(), a.size(), Priority::Normal));
+    queue.pop_front();  // drop f2: `a` is now the (wrapped) front
+
+    const std::uint8_t* data = nullptr;
+    std::size_t contiguous = 0U;
+    CHECK(queue.front(&data, &contiguous));
+    CHECK(contiguous < a.size());  // front() alone would give a piece
+
+    std::uint8_t out[16];
+    CHECK(queue.copy_front(out, sizeof(out)) == a.size());
+    CHECK(std::memcmp(out, a.data(), a.size()) == 0);
+    CHECK(queue.frames() == 1U);                // not removed
+    CHECK(queue.copy_front(out, 4U) == 0U);     // too small: refused
+    queue.pop_front();
+    CHECK(queue.empty());
+    CHECK(queue.copy_front(out, sizeof(out)) == 0U);
+}
+
+void copy_front_refuses_a_half_consumed_frame() {
+    std::uint8_t storage[32];
+    FrameQueue queue;
+    queue.bind(storage, sizeof(storage), 0U);
+    const auto a = bytes(9, 1);
+    queue.push(a.data(), a.size(), Priority::Normal);
+    queue.consume(2U);
+    std::uint8_t out[16];
+    CHECK(queue.copy_front(out, sizeof(out)) == 0U);
+    queue.pop_front();
+    CHECK(queue.empty());
+}
+
 }  // namespace
 
 int main() {
+    copy_front_returns_a_wrapped_frame_whole();
+    copy_front_refuses_a_half_consumed_frame();
     unbound_queue_refuses_everything();
     frames_come_out_whole_and_in_order();
     partial_consume_keeps_the_frame_at_the_head();

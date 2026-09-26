@@ -1,0 +1,37 @@
+menu "Link echo"
+
+    choice ECHO_LINK
+        prompt "Link under test"
+        default ECHO_LINK_SERIAL
+        config ECHO_LINK_SERIAL
+            bool "Serial (USB CDC)"
+        config ECHO_LINK_TCP
+            bool "TCP (Wi-Fi)"
+        config ECHO_LINK_BLE
+            bool "BLE"
+        config ECHO_LINK_ESPNOW
+            bool "ESP-NOW"
+    endchoice
+
+    config ECHO_DEVICE_NAME
+        string "Device name (USB, BLE, mDNS)"
+        default "btpdev-echo"
+
+    config ECHO_WIFI_SSID
+        string "Wi-Fi SSID (TCP)"
+        default ""
+
+    config ECHO_WIFI_PASSWORD
+        string "Wi-Fi password (TCP)"
+        default ""
+
+    config ECHO_ESPNOW_PEER
+        string "ESP-NOW peer MAC (aa:bb:cc:dd:ee:ff)"
+        default "ff:ff:ff:ff:ff:ff"
+
+    config ECHO_ESPNOW_CHANNEL
+        int "ESP-NOW channel"
+        default 1
+        range 1 14
+
+endmenu

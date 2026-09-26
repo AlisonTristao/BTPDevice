@@ -78,6 +78,22 @@ bool FrameQueue::front(const std::uint8_t** data, std::size_t* size) const noexc
     return true;
 }
 
+std::size_t FrameQueue::copy_front(std::uint8_t* out, std::size_t capacity) const noexcept {
+    if (frames_ == 0U || out == nullptr || front_sent_ != 0U) return 0U;
+    const std::size_t size = front_remaining();
+    if (size > capacity) return 0U;
+    const std::size_t at = (head_ + kEntryOverhead) % capacity_;
+    const std::size_t first = size < capacity_ - at ? size : capacity_ - at;
+    std::memcpy(out, storage_ + at, first);
+    if (first < size) std::memcpy(out + first, storage_, size - first);
+    return size;
+}
+
+void FrameQueue::pop_front() noexcept {
+    const std::size_t remaining = front_remaining();
+    if (remaining > 0U) consume(remaining);
+}
+
 void FrameQueue::consume(std::size_t size) noexcept {
     if (frames_ == 0U || size == 0U) return;
     const std::size_t remaining = front_remaining();

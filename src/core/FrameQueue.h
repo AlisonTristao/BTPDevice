@@ -62,6 +62,15 @@ public:
     /// returned). The frame is removed once all of it has been consumed.
     void consume(std::size_t size) noexcept;
 
+    /// Datagram links: copies the whole front frame (even when it wraps around
+    /// the end of the storage) into `out`, without removing it. Returns its
+    /// size, or 0 when the queue is empty, a partial consume() already
+    /// happened, or `capacity` is too small.
+    std::size_t copy_front(std::uint8_t* out, std::size_t capacity) const noexcept;
+
+    /// Removes the whole front frame, however much of it was consumed.
+    void pop_front() noexcept;
+
     /// Drops everything (a connection went away: nothing queued for the old
     /// peer may reach the next one).
     void clear() noexcept;
