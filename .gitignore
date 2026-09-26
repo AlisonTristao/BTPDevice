@@ -1,0 +1,26 @@
+# ESP-IDF / PlatformIO build output
+build/
+/build_*/
+.pio/
+managed_components/
+sdkconfig
+sdkconfig.old
+examples/*/dependencies.lock
+test_apps/*/dependencies.lock
+
+# Host test build trees
+/test/host/build/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs and local artifacts
+*.log
+__pycache__/
+
+# Secrets: provisioned key files must never be committed
+*.key
