@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <btpdev/identity.h>
 #include <btpdev/version.h>
 #include <esp_app_desc.h>
 #include <esp_heap_caps.h>
@@ -154,6 +155,10 @@ esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn 
         return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the print queue");
     }
     print_queue_.bind(print_storage_.data(), print_storage_.size(), 0U);
+    if (!log_mutex_.create() || !log_storage_.allocate(kLogQueueBytes)) {
+        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the log queue");
+    }
+    log_queue_.bind(log_storage_.data(), log_storage_.size(), 0U);
     active_ = this;
 
     err = start_tasks();
@@ -169,34 +174,10 @@ esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn 
 
 void DeviceCore::load_identity() noexcept {
     esp_efuse_mac_get_default(mac_);
-    source_id = source_id_from_mac(mac_);
-    uuid_from_mac(mac_, uuid_);
-
-    // The boot counter. Never erase NVS to get it: the device key lives there
-    // (docs/PLANO.md 4.9). Without NVS the boot_id is random, which still
-    // tells peers this is a new boot.
-    esp_err_t err = nvs_flash_init();
-    nvs_handle_t handle = 0;
-    if (err == ESP_OK) err = nvs_open(kNvsNamespace, NVS_READWRITE, &handle);
-    std::uint32_t previous = 0U;
-    if (err == ESP_OK) {
-        const esp_err_t get = nvs_get_u32(handle, "boot", &previous);
-        if (get != ESP_OK && get != ESP_ERR_NVS_NOT_FOUND) err = get;
-    }
-    if (err == ESP_OK) {
-        boot_id = next_boot_id(previous);
-        err = nvs_set_u32(handle, "boot", boot_id);
-        if (err == ESP_OK) err = nvs_commit(handle);
-    }
-    if (handle != 0) nvs_close(handle);
-    if (err != ESP_OK) {
-        boot_id = esp_random() | 1U;
-        ESP_LOGW(kTag,
-                 "NVS unavailable (%s): boot counter not saved, using a random boot id. "
-                 "If NVS is full or from an older layout, erase it (idf.py erase-flash) and "
-                 "provision the key again",
-                 esp_err_to_name(err));
-    }
+    const Identity& id = identity();
+    source_id = id.source_id;
+    boot_id = id.boot_id;
+    std::memcpy(uuid_, id.peer_uuid, sizeof(uuid_));
 }
 
 Link DeviceCore::resolve_link() noexcept {
@@ -252,7 +233,8 @@ esp_err_t DeviceCore::allocate(const PresetSizes& sizes) noexcept {
         return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the receive/send buffers");
     }
     rx_queue_.bind(rx_storage_.data(), rx_storage_.size(), 0U);
-    shell_queue_ = xQueueCreate(2, sizeof(ShellRequest));
+    // Room for a remote command and a few local ones (BtpDevice::run()).
+    shell_queue_ = xQueueCreate(4, sizeof(ShellRequest));
     if (shell_queue_ == nullptr) {
         return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the shell queue");
     }
@@ -295,6 +277,7 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
         default: {
             UsbSerialConfig config;
             config.product_name = device_.name;
+            config.install_driver = device_.usb.install_driver;
             config.send_queue_bytes = sizes.link_queue_bytes;
             link_ = new (std::nothrow) UsbSerialLink(config);
             break;
@@ -477,6 +460,7 @@ void DeviceCore::routine() noexcept {
     drain_rx(now);
     deliver_completion();
     drain_prints();
+    drain_logs(now);
     terminal_.pump(static_cast<std::uint32_t>(now));
     link_->poll(static_cast<std::uint32_t>(now));
     tick();
@@ -681,6 +665,19 @@ void DeviceCore::deliver_completion() noexcept {
     const ShellCompletion& done = completion_;
     if (done.origin == ShellRequest::Origin::Terminal) {
         terminal_.deliver(done.source_id, done.boot_id, done.output, done.status);
+    } else if (done.origin == ShellRequest::Origin::Local) {
+        // Nobody waits for it: the output goes to the log panel.
+        const std::size_t length = std::strlen(done.output);
+        char chunk[kMaxLogLine + 1U];
+        for (std::size_t at = 0U; at < length; at += kMaxLogLine) {
+            const std::size_t take = length - at < kMaxLogLine ? length - at : kMaxLogLine;
+            log(LogLevel::Command, now_ms() * 1000ULL, done.output + at, take);
+        }
+        if (done.status != RESULT_OK) {
+            const int n = std::snprintf(chunk, sizeof(chunk), "command failed (code %u)",
+                                        static_cast<unsigned>(done.status));
+            log(LogLevel::Error, now_ms() * 1000ULL, chunk, static_cast<std::size_t>(n));
+        }
     } else {
         // COMMAND_RESULT carries at most kMaxResultMessage of the output; the
         // terminal is where long output belongs.
@@ -740,6 +737,63 @@ void DeviceCore::print(const char* text) noexcept {
     }
     if (!queued) errors_.note(RuntimeError::TerminalDropped);
     wake();
+}
+
+bool DeviceCore::run(const char* line) noexcept {
+    if (line == nullptr || line[0] == '\0' || shell_queue_ == nullptr) return false;
+    ShellRequest request{};
+    request.origin = ShellRequest::Origin::Local;
+    const std::size_t length = std::strlen(line);
+    if (length >= sizeof(request.line)) return false;
+    std::memcpy(request.line, line, length + 1U);
+    return xQueueSend(shell_queue_, &request, 0) == pdTRUE;
+}
+
+bool DeviceCore::log(LogLevel level, std::uint64_t timestamp_us, const char* text,
+                     std::size_t length) noexcept {
+    if (text == nullptr || length == 0U) return false;
+    // No one to read it: refuse rather than fill the queue with lines that
+    // would go out stale when a peer connects. (The link, not the session:
+    // ESP-NOW has no session, and its dongle is always "there".)
+    const State state = state_.load();
+    if ((state != State::Ready && state != State::Connected) || link_ == nullptr || !link_->connected()) {
+        errors_.note(RuntimeError::LogDropped);
+        return false;
+    }
+    if (length > kMaxLogLine) length = kMaxLogLine;
+    std::uint8_t head[kLogHead];
+    head[0] = static_cast<std::uint8_t>(level);
+    for (std::size_t i = 0U; i < 8U; ++i) head[1U + i] = static_cast<std::uint8_t>(timestamp_us >> (8U * i));
+    bool queued = false;
+    {
+        LinkLock lock(log_mutex_, pdMS_TO_TICKS(2));
+        if (lock.locked()) {
+            queued = log_queue_.push(head, sizeof(head), reinterpret_cast<const std::uint8_t*>(text), length,
+                                     Priority::Normal);
+        }
+    }
+    if (!queued) errors_.note(RuntimeError::LogDropped);
+    wake();
+    return queued;
+}
+
+void DeviceCore::drain_logs(std::uint64_t) noexcept {
+    std::uint8_t entry[kLogHead + kMaxLogLine];
+    for (int budget = 0; budget < 8; ++budget) {
+        std::size_t size = 0U;
+        {
+            LinkLock lock(log_mutex_, pdMS_TO_TICKS(2));
+            if (!lock.locked() || log_queue_.empty()) return;
+            size = log_queue_.copy_front(entry, sizeof(entry));
+            log_queue_.pop_front();
+        }
+        if (size <= kLogHead) continue;
+        std::uint64_t timestamp_us = 0U;
+        for (std::size_t i = 0U; i < 8U; ++i) timestamp_us |= static_cast<std::uint64_t>(entry[1U + i]) << (8U * i);
+        if (!node_->send(btp::MessageType::Log, entry[0], entry + kLogHead, size - kLogHead, timestamp_us)) {
+            errors_.note(RuntimeError::LogDropped);
+        }
+    }
 }
 
 void DeviceCore::drain_prints() noexcept {
@@ -884,12 +938,16 @@ void DeviceCore::mount_storage() noexcept {
     if (storage_.sd.enabled && mount_sd(storage_.sd, sd_, mount_error) != ESP_OK) {
         ESP_LOGE(mount_error.module, "%s [%s]", mount_error.message, err_name(mount_error.code));
     }
-    if (!fs_.mounted() && !sd_.mounted()) degraded_.fetch_or(kNoStorage);
+    if (storage_.app_volume != nullptr && storage_.app_volume[0] != '\0') {
+        attach_app_volume(storage_.app_volume, app_);
+    }
+    if (!fs_.mounted() && !sd_.mounted() && !app_.mounted()) degraded_.fetch_or(kNoStorage);
 }
 
 FileSystem* DeviceCore::fs() noexcept {
     if (fs_.mounted()) return &fs_;
     if (sd_.mounted()) return &sd_;
+    if (app_.mounted()) return &app_;
     return nullptr;
 }
 
@@ -897,9 +955,9 @@ void DeviceCore::load_key() noexcept {
     has_key_ = false;
     if (storage_.key == KeySource::None) return;
     key_.load_saved();
-    // A key file on either volume replaces the saved key (the SD card first:
-    // it is the one a person carries from the PC).
-    for (FileSystem* volume : {&sd_, &fs_}) {
+    // A key file on any volume replaces the saved key (the removable ones
+    // first: they are what a person carries from the PC).
+    for (FileSystem* volume : {&sd_, &app_, &fs_}) {
         ErrorInfo import_error;
         const esp_err_t err = key_.import_file(*volume, storage_.key_file, import_error, /*activate=*/true);
         if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
@@ -1148,6 +1206,29 @@ void DeviceCore::register_storage_commands() noexcept {
             return RESULT_OK;
         },
         "fs", "Files and space on the device", "btp");
+}
+
+bool log(LogLevel level, const char* format, ...) noexcept {
+    DeviceCore* core = DeviceCore::active();
+    if (core == nullptr || format == nullptr) return false;
+    char text[kMaxLogLine + 1U];
+    va_list args;
+    va_start(args, format);
+    const int n = std::vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    if (n <= 0) return false;
+    const std::size_t length = static_cast<std::size_t>(n) < kMaxLogLine ? static_cast<std::size_t>(n) : kMaxLogLine;
+    return core->log(level, now_ms() * 1000ULL, text, length);
+}
+
+bool log_record(LogLevel level, std::uint64_t timestamp_us, const char* text, std::size_t length) noexcept {
+    DeviceCore* core = DeviceCore::active();
+    return core != nullptr && core->log(level, timestamp_us, text, length);
+}
+
+bool in_command() noexcept {
+    const DeviceCore* core = DeviceCore::active();
+    return core != nullptr && core->in_command();
 }
 
 void printf(const char* format, ...) noexcept {

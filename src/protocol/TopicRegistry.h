@@ -44,6 +44,10 @@ public:
     /// subscribed. False: no topic by that name.
     bool request_publish(const char* name) noexcept;
 
+    /// Any task: whether the topic had a subscriber at the last pass. False
+    /// for an unknown name (or past the first kMaxEventTopics).
+    bool subscribed(const char* name) const noexcept;
+
     std::size_t size() const noexcept { return topics_.topics_.size(); }
     /// Topic id of a declared topic, 0 when unknown.
     std::uint16_t id_of(const char* name) const noexcept;
@@ -54,6 +58,8 @@ private:
 
     Topics topics_;
     std::atomic<std::uint32_t> requested_{0U};
+    std::atomic<std::uint32_t> subscribed_{0U};   // written by publish_pending()
+    int index_of(const char* name) const noexcept;
     Text text_;
     std::uint8_t text_payload_[kMaxTextPayload] = {};
 };

@@ -596,10 +596,11 @@ O teste por BLE e TCP cifrados fica para a Fase 5; até lá o `02_weather_statio
 
 Validar a API numa aplicação grande. É o teste de fogo da lib, não o objetivo dela.
 
-- [ ] Branch/worktree no bally_OS usando a BTPDevice como componente.
-- [ ] Os tópicos e comandos do robô viram os arquivos de configuração dele.
-- [ ] Resolver a divisão do Wi-Fi com o OTA do robô e do USB com o Mass Storage.
-- [ ] Remover do bally_OS as libs que passaram para a BTPDevice.
+- [x] Branch/worktree no bally_OS usando a BTPDevice como componente (`feature/btpdevice`).
+- [x] Os tópicos e comandos do robô viram os arquivos de configuração dele (`src/btp/`).
+- [x] Resolver a divisão do Wi-Fi com o OTA do robô e do USB com o Mass Storage: no TCP a lib é dona do Wi-Fi e o OTA só serve HTTP quando há IP (boot em OTA usa TCP); no Serial o robô instala o USB composto (CDC + MSC) e a lib só abre o CDC (`usb.install_driver = false`); o SD é do robô (`StorageConfig::app_volume`).
+- [x] Remover do bally_OS as libs que passaram para a BTPDevice.
+- [x] O que o robô pediu e virou API geral da lib: `btpdev::log()` / `log_record()`, `BtpDevice::run()`, `subscribed()`, `btpdev::identity()`, `in_command()`, `TopicDecl::range()` em qualquer tipo, `Commands::shell()`.
 - [ ] Teste no hardware: TraceView por Serial, TCP e BLE, e dongle por ESP-NOW.
 
 **Pronto quando:** o robô faz tudo o que fazia antes, com a comunicação inteira vindo da BTPDevice.

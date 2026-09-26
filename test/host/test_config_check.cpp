@@ -147,6 +147,17 @@ void storage_rules() {
     CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
     config.sd.mount = "/fs";  // same as the LittleFS mount
     CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+
+    config = StorageConfig{};
+    config.fs.partition = "";
+    config.app_volume = "/sdcard";  // mounted by the application
+    CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
+    config.app_volume = "sdcard";
+    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK_CONTAINS(error.message, "app_volume");
+    config = StorageConfig{};
+    config.app_volume = "/fs";  // the library's own LittleFS mount
+    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
 }
 
 void link_names() {

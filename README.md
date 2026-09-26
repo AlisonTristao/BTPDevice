@@ -68,6 +68,16 @@ void app_commands(btpdev::Commands& c) {
 }
 ```
 
+De qualquer ponto do firmware:
+
+```cpp
+btpdev::printf("relé ligado
+");                              // terminal do TraceView
+btpdev::log(btpdev::LogLevel::Warn, "bateria em %u%%", pct);  // painel de logs
+device.publish("relay");                                      // amostra agora (evento)
+device.run("relay -set 0");                                   // um comando, como se digitado
+```
+
 ## Chave e arquivos
 
 Os links por rádio (TCP, BLE e ESP-NOW) só sobem com a chave do dispositivo.

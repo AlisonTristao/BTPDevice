@@ -10,6 +10,7 @@ const char* runtime_error_name(RuntimeError kind) noexcept {
         case RuntimeError::ShellBusy: return "commands refused, the shell was busy";
         case RuntimeError::TerminalDropped: return "terminal input/output dropped";
         case RuntimeError::SessionTimeout: return "peer went silent, session closed";
+        case RuntimeError::LogDropped: return "log lines dropped (no peer or log queue full)";
         case RuntimeError::Count: break;
     }
     return "?";

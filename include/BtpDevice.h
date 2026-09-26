@@ -12,6 +12,8 @@
 #include <btpdev/config.h>
 #include <btpdev/error.h>
 #include <btpdev/filesystem.h>
+#include <btpdev/identity.h>
+#include <btpdev/log.h>
 #include <btpdev/topics.h>
 
 #include <cstdint>
@@ -69,6 +71,22 @@ public:
     /// Publishes a topic now (an event), on top of its periodic rate -- only
     /// if someone is subscribed. Any task. False: no topic by that name.
     bool publish(const char* topic) noexcept;
+
+    /// Any task: whether anybody is subscribed to the topic now (refreshed on
+    /// every comms pass). For work only worth doing while someone watches,
+    /// like sampling a slow sensor for the topic's fill().
+    bool subscribed(const char* topic) const noexcept;
+
+    /// Runs a shell line on the library's shell task, as if typed in the
+    /// terminal: for a button, a scheduler or a script. Any task, never
+    /// blocks: false when the shell queue is full (try again later) or the
+    /// line is too long. The output goes to TraceView's log panel
+    /// (LogLevel::Command).
+    bool run(const char* command_line) noexcept;
+
+    /// This boot's BTP boot_id (an NVS counter), with source_id() the
+    /// identity every message carries.
+    std::uint32_t boot_id() const noexcept;
 
     /// Threading::Manual only: one full pass (received frames, commands,
     /// terminal, due telemetry, link housekeeping, then tick()). Call it

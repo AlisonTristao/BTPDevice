@@ -59,6 +59,14 @@ TopicDecl& TopicDecl::nullable() noexcept {
     return *this;
 }
 
+TopicDecl& TopicDecl::range(double min, double max) noexcept {
+    if (!fields_.empty()) {
+        fields_.back().min_value = min;
+        fields_.back().max_value = max;
+    }
+    return *this;
+}
+
 TopicDecl& Topics::topic(const char* name, Rate rate) {
     topics_.push_back(TopicDecl(name, rate));
     return topics_.back();
@@ -214,16 +222,25 @@ std::uint16_t TopicRegistry::id_of(const char* name) const noexcept {
     return 0U;
 }
 
-bool TopicRegistry::request_publish(const char* name) noexcept {
-    if (name == nullptr) return false;
+int TopicRegistry::index_of(const char* name) const noexcept {
+    if (name == nullptr) return -1;
     const std::vector<TopicDecl>& list = topics_.topics_;
     for (std::size_t i = 0U; i < list.size() && i < kMaxEventTopics; ++i) {
-        if (std::strcmp(list[i].name_, name) == 0) {
-            requested_.fetch_or(1U << i, std::memory_order_relaxed);
-            return true;
-        }
+        if (std::strcmp(list[i].name_, name) == 0) return static_cast<int>(i);
     }
-    return false;
+    return -1;
+}
+
+bool TopicRegistry::request_publish(const char* name) noexcept {
+    const int i = index_of(name);
+    if (i < 0) return false;
+    requested_.fetch_or(1U << i, std::memory_order_relaxed);
+    return true;
+}
+
+bool TopicRegistry::subscribed(const char* name) const noexcept {
+    const int i = index_of(name);
+    return i >= 0 && (subscribed_.load(std::memory_order_relaxed) & (1U << i)) != 0U;
 }
 
 bool TopicRegistry::publish_one(btp::Node& node, std::size_t index, std::uint64_t now_ms) noexcept {
@@ -245,6 +262,12 @@ void TopicRegistry::publish_pending(btp::Node& node, std::uint64_t now_ms) noexc
     btp::SubscriptionTable* subscriptions = node.subscriptions();
     if (subscriptions == nullptr) return;
     std::vector<TopicDecl>& list = topics_.topics_;
+
+    std::uint32_t subscribed = 0U;
+    for (std::size_t i = 0U; i < list.size() && i < kMaxEventTopics; ++i) {
+        if (subscriptions->subscriber_count(list[i].id_) != 0U) subscribed |= 1U << i;
+    }
+    subscribed_.store(subscribed, std::memory_order_relaxed);
 
     // Field topics that are due are the node's own job (on_publish); text
     // topics are not in its registry (no fields to write), so they are here.

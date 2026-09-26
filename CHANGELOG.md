@@ -38,3 +38,15 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   `-key_import`, `-key_forget`, `-link`, `-link_set`, `-wifi`, `-wifi_add`, `-fs`.
 - Exemplos `04_ble_secure` e `05_espnow_dongle`; pasta `data/` com
   `pio run -t uploadfs` para provisionar.
+- `btpdev::log()` / `log_record()`: linhas para o painel de logs do TraceView
+  (mensagens LOG do BTP), de qualquer task.
+- `BtpDevice::run()`: uma linha de shell vinda da aplicação (botão, agendador,
+  script), com a saída no painel de logs.
+- `BtpDevice::subscribed()`, `btpdev::in_command()`, `btpdev::identity()` e
+  `BtpDevice::boot_id()`.
+- `TopicDecl::range()` para qualquer tipo de campo e campos inteiros sem
+  variável (preenchidos pelo `.fill()`).
+- `StorageConfig::app_volume` (volume montado pela aplicação, como um SD
+  compartilhado com USB Mass Storage) e `DeviceConfig::usb.install_driver`
+  (USB composto instalado pela aplicação).
+- `Commands::shell()` para registrar módulos que já existem em TinyShell.

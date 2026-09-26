@@ -26,6 +26,7 @@ enum class RuntimeError : std::uint8_t {
     ShellBusy,        ///< a command arrived while the shell was busy
     TerminalDropped,  ///< terminal input or output dropped (too long / too fast)
     SessionTimeout,   ///< the peer went silent: session closed by the watchdog
+    LogDropped,       ///< btpdev::log() lines dropped (no peer, queue full)
     Count
 };
 

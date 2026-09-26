@@ -152,14 +152,26 @@ public:
     TopicDecl& i16(const char* name, const std::int16_t* variable, const char* unit = "") noexcept {
         return field(name, FieldType::I16, variable, unit, NAN, NAN);
     }
+    TopicDecl& i16(const char* name, const char* unit = "") noexcept {
+        return field(name, FieldType::I16, nullptr, unit, NAN, NAN);
+    }
     TopicDecl& u16(const char* name, const std::uint16_t* variable, const char* unit = "") noexcept {
         return field(name, FieldType::U16, variable, unit, NAN, NAN);
+    }
+    TopicDecl& u16(const char* name, const char* unit = "") noexcept {
+        return field(name, FieldType::U16, nullptr, unit, NAN, NAN);
     }
     TopicDecl& i8(const char* name, const std::int8_t* variable, const char* unit = "") noexcept {
         return field(name, FieldType::I8, variable, unit, NAN, NAN);
     }
+    TopicDecl& i8(const char* name, const char* unit = "") noexcept {
+        return field(name, FieldType::I8, nullptr, unit, NAN, NAN);
+    }
     TopicDecl& u8(const char* name, const std::uint8_t* variable, const char* unit = "") noexcept {
         return field(name, FieldType::U8, variable, unit, NAN, NAN);
+    }
+    TopicDecl& u8(const char* name, const char* unit = "") noexcept {
+        return field(name, FieldType::U8, nullptr, unit, NAN, NAN);
     }
     TopicDecl& boolean(const char* name, const bool* variable) noexcept {
         return field(name, FieldType::Bool, variable, "", NAN, NAN);
@@ -169,6 +181,9 @@ public:
     }
     /// Marks the field just added as nullable (Sample::put_null()).
     TopicDecl& nullable() noexcept;
+    /// Expected range of the field just declared, in its unit (TraceView uses
+    /// it for the plot's axis). NAN on one side: no bound there.
+    TopicDecl& range(double min, double max) noexcept;
     /// Fills every sample (instead of reading bound variables).
     TopicDecl& fill(FillFn function) noexcept {
         fill_ = std::move(function);

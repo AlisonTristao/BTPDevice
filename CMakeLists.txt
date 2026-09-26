@@ -32,6 +32,7 @@ if(NOT _btpdev_header_version STREQUAL _btpdev_yml_version)
 endif()
 
 set(btpdev_srcs
+    "src/core/BootIdentity.cpp"
     "src/core/BtpDevice.cpp"
     "src/core/ConfigCheck.cpp"
     "src/core/DeviceCore.cpp"

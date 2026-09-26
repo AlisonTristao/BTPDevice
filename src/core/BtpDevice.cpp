@@ -88,6 +88,18 @@ esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
     return ESP_OK;
 }
 
+std::uint32_t BtpDevice::boot_id() const noexcept {
+    return core_ != nullptr ? core_->device_boot_id() : 0U;
+}
+
+bool BtpDevice::run(const char* command_line) noexcept {
+    return core_ != nullptr && core_->run(command_line);
+}
+
+bool BtpDevice::subscribed(const char* topic) const noexcept {
+    return core_ != nullptr && core_->subscribed(topic);
+}
+
 bool BtpDevice::publish(const char* topic) noexcept {
     return core_ != nullptr && core_->publish(topic);
 }

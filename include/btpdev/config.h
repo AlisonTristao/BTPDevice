@@ -50,6 +50,15 @@ struct TaskConfig {
     std::uint32_t period_ms = 1U;        ///< pause between two routine() passes
 };
 
+/// Link::Serial on the native USB port.
+struct UsbConfig {
+    /// false: the application installs TinyUSB itself (a composite device,
+    /// e.g. CDC + Mass Storage, with CONFIG_TINYUSB_CDC_ENABLED) before
+    /// begin(); the library only opens the CDC port. The USB names are then
+    /// the application's.
+    bool install_driver = true;
+};
+
 struct WifiConfig {
     /// One network written straight in the config (the simplest setup).
     /// Tried first; empty = none.
@@ -95,6 +104,7 @@ struct DeviceConfig {
     WifiConfig wifi{};
     TcpConfig tcp{};
     EspNowConfig espnow{};
+    UsbConfig usb{};
     /// Unused entries keep key == nullptr.
     SourceInfo source_info[kMaxSourceInfo] = {};
 };
@@ -131,6 +141,11 @@ struct StorageConfig {
     /// Key file looked for at boot (96 octets, tools/provision_key.py format).
     const char* key_file = "bally.key";
     SdConfig sd{};
+    /// A volume the application mounts itself (e.g. "/sdcard", shared with
+    /// USB Mass Storage). The library reads the key file and the Wi-Fi file
+    /// there, and `btp -fs` shows it, but never mounts, formats or unmounts
+    /// it: mount it before begin(). nullptr = none.
+    const char* app_volume = nullptr;
 };
 
 }  // namespace btpdev

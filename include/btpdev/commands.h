@@ -67,6 +67,11 @@ public:
     }
 
     /// First mistake, for begin(): 0 when there was none.
+    /// The TinyShell itself, for code that already registers on one
+    /// (shell.create_module() / shell.add()). Its mistakes are caught too:
+    /// begin() fails if a registration did not fit the tables.
+    TinyShell& shell() noexcept { return *shell_; }
+
     std::uint8_t error_code() const noexcept { return error_code_; }
     const char* error_message() const noexcept { return error_message_; }
 

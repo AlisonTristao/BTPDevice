@@ -63,8 +63,15 @@ public:
 
     /// Any task: publish a topic on the next pass (see TopicRegistry).
     bool publish(const char* topic) noexcept;
+    bool subscribed(const char* topic) const noexcept { return registry_.subscribed(topic); }
     /// Any task: text for TraceView's terminal (btpdev::printf()).
     void print(const char* text) noexcept;
+    /// Any task: a shell line from the application (BtpDevice::run()).
+    bool run(const char* line) noexcept;
+    /// Any task: a line for TraceView's log panel (btpdev::log()). True when queued.
+    bool log(LogLevel level, std::uint64_t timestamp_us, const char* text, std::size_t length) noexcept;
+    /// True on the shell task (a command is running).
+    bool in_command() const noexcept { return shell_task_ != nullptr && xTaskGetCurrentTaskHandle() == shell_task_; }
     /// The running device, for btpdev::printf() (one device per firmware).
     static DeviceCore* active() noexcept { return active_; }
 
@@ -76,6 +83,7 @@ public:
     Link active_link() const noexcept { return active_link_; }
     bool connected() const noexcept { return state_.load() == State::Connected; }
     std::uint32_t device_source_id() const noexcept { return source_id; }
+    std::uint32_t device_boot_id() const noexcept { return boot_id; }
     TinyShell& shell() noexcept { return shell_; }
     /// The file system the library uses (LittleFS, else the SD card), or nullptr.
     FileSystem* fs() noexcept;
@@ -118,7 +126,7 @@ private:
     static constexpr std::size_t kMaxWifiNetworks = 8U;
 
     struct ShellRequest {
-        enum class Origin : std::uint8_t { Terminal, Remote };
+        enum class Origin : std::uint8_t { Terminal, Remote, Local };
         Origin origin;
         std::uint32_t source_id;
         std::uint32_t boot_id;
@@ -200,6 +208,7 @@ private:
     // Storage.
     FileSystem fs_;   // LittleFS
     FileSystem sd_;   // SD card
+    FileSystem app_;  // mounted by the application (StorageConfig::app_volume)
 
     // Node (one StaticNode of the chosen preset, placement-new'd).
     void* node_storage_ = nullptr;
@@ -243,6 +252,15 @@ private:
     Buffer print_storage_;
     FrameQueue print_queue_;   // guarded by print_mutex_
     void drain_prints() noexcept;
+
+    // btpdev::log(): any task -> comms -> LOG message.
+    // Entry: level (1), timestamp_us (8, little-endian), text.
+    static constexpr std::size_t kLogHead = 9U;
+    static constexpr std::size_t kLogQueueBytes = 2048U;
+    LinkMutex log_mutex_;
+    Buffer log_storage_;
+    FrameQueue log_queue_;     // guarded by log_mutex_
+    void drain_logs(std::uint64_t now_ms) noexcept;
 
     static DeviceCore* active_;
 

@@ -13,6 +13,8 @@ static uint8_t relay_set(uint8_t on) {
     relay_write(on != 0U);
     btpdev::printf("relay %s\n", on ? "on" : "off");
     device.publish("relay");  // the plot sees the change at once
+    // Also in TraceView's log panel, with the time it happened.
+    btpdev::log(btpdev::LogLevel::Info, "relay switched %s", on ? "on" : "off");
     return RESULT_OK;
 }
 

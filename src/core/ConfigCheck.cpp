@@ -146,6 +146,21 @@ esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noex
                         "SD over SPI needs cs, mosi, miso and sck pins");
         }
     }
+    if (config.app_volume != nullptr && config.app_volume[0] != '\0') {
+        // FileSystem keeps the root in 64 octets and joins names after it.
+        if (config.app_volume[0] != '/' || std::strlen(config.app_volume) > 32U) {
+            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+                        "StorageConfig::app_volume must be an absolute path of at most 32 "
+                        "characters, such as \"/sdcard\"");
+        }
+        const bool same_as_fs = littlefs && std::strcmp(config.app_volume, config.fs.mount) == 0;
+        const bool same_as_sd = config.sd.enabled && std::strcmp(config.app_volume, config.sd.mount) == 0;
+        if (same_as_fs || same_as_sd) {
+            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+                        "StorageConfig::app_volume \"%s\" is also a volume the library mounts",
+                        config.app_volume);
+        }
+    }
     clear(out);
     return ESP_OK;
 }

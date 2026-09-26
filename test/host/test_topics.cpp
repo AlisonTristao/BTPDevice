@@ -6,6 +6,7 @@
 #include <btp/codec.hpp>
 #include <btp/telemetry.hpp>
 
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -158,6 +159,29 @@ void fill_functions_write_the_sample() {
     CHECK(samples.size() == 1U && samples[0].size() == 2U && samples[0][0] == 12.5 && samples[0][1] == 0.25);
 }
 
+void ranges_reach_the_catalogue_for_any_type() {
+    Rig rig;
+    Topics topics;
+    topics.topic("motors", btpdev::Hz(5))
+        .u16("current", "counts").range(0, 4095)
+        .i8("pwm", "%").range(-100, 100)
+        .u8("mode")
+        .fill([](btpdev::Sample& s) { s.put("current", 1234).put("pwm", -50).put("mode", 3); });
+    CHECK(rig.install(topics) == ESP_OK);
+    const btp::CatalogTopic* topic = rig.node.catalog().topic(Topics::kFirstTopicId);
+    CHECK(topic != nullptr && topic->field_count == 3U);
+    if (topic != nullptr) {
+        CHECK(rig.node.catalog().field_min(*topic, 0) == 0.0 && rig.node.catalog().field_max(*topic, 0) == 4095.0);
+        CHECK(rig.node.catalog().field_min(*topic, 1) == -100.0 && rig.node.catalog().field_max(*topic, 1) == 100.0);
+        CHECK(std::isnan(rig.node.catalog().field_min(*topic, 2)));
+    }
+    CHECK(rig.subscribe(Topics::kFirstTopicId));
+    rig.node.routine(1000U);
+    const auto samples = rig.samples(Topics::kFirstTopicId);
+    CHECK(samples.size() == 1U && samples[0].size() == 3U && samples[0][0] == 1234.0 &&
+          samples[0][1] == -50.0 && samples[0][2] == 3.0);
+}
+
 void a_wrong_fill_drops_the_sample() {
     Rig rig;
     Topics topics;
@@ -193,10 +217,13 @@ void event_publish_only_reaches_subscribers() {
     rig.registry.publish_pending(rig.node, 10U);
     CHECK(rig.samples(Topics::kFirstTopicId).empty());  // nobody listening
 
+    CHECK(!rig.registry.subscribed("alarm"));
     CHECK(rig.subscribe(Topics::kFirstTopicId, 1000U));
+    CHECK(!rig.registry.subscribed("alarm"));  // seen on the next pass
     rig.registry.request_publish("alarm");
     rig.registry.publish_pending(rig.node, 20U);
     CHECK(rig.samples(Topics::kFirstTopicId).size() == 1U);
+    CHECK(rig.registry.subscribed("alarm") && !rig.registry.subscribed("nope"));
     rig.registry.publish_pending(rig.node, 30U);  // the request was consumed
     CHECK(rig.samples(Topics::kFirstTopicId).size() == 1U);
 }
@@ -277,6 +304,7 @@ void text_buffer_is_bounded() {
 int main() {
     bound_variables_become_samples();
     fill_functions_write_the_sample();
+    ranges_reach_the_catalogue_for_any_type();
     a_wrong_fill_drops_the_sample();
     text_topics_publish_utf8();
     event_publish_only_reaches_subscribers();

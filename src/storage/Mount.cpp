@@ -35,10 +35,11 @@ bool littlefs_usage(void*, std::uint64_t* total, std::uint64_t* used) {
     return true;
 }
 
-bool fat_usage(void*, std::uint64_t* total, std::uint64_t* used) {
+// context: the mount point (outlives the attachment).
+bool fat_usage(void* context, std::uint64_t* total, std::uint64_t* used) {
     std::uint64_t t = 0U;
     std::uint64_t free_bytes = 0U;
-    if (esp_vfs_fat_info(g_sd_mount, &t, &free_bytes) != ESP_OK) return false;
+    if (esp_vfs_fat_info(static_cast<const char*>(context), &t, &free_bytes) != ESP_OK) return false;
     *total = t;
     *used = t - free_bytes;
     return true;
@@ -122,12 +123,19 @@ esp_err_t mount_sd(const SdConfig& config, FileSystem& fs, ErrorInfo& error) noe
                     "no SD card at %s (%s): check the card, the pins and that it is FAT formatted",
                     config.mount, esp_err_to_name(err));
     }
-    fs.attach(config.mount, &fat_usage, nullptr);
+    fs.attach(config.mount, &fat_usage, g_sd_mount);
     ESP_LOGI(kTag, "SD card at %s: %s, %llu MB", config.mount, card != nullptr ? card->cid.name : "?",
              card != nullptr
                  ? static_cast<unsigned long long>(card->csd.capacity) * card->csd.sector_size / (1024ULL * 1024ULL)
                  : 0ULL);
     return ESP_OK;
+}
+
+void attach_app_volume(const char* root, FileSystem& fs) noexcept {
+    // Not ours to mount: when the application has it unmounted (USB Mass
+    // Storage, card removed), reads simply fail and the key stays in NVS.
+    fs.attach(root, &fat_usage, const_cast<char*>(root));
+    ESP_LOGI(kTag, "application volume %s attached", root);
 }
 
 }  // namespace btpdev

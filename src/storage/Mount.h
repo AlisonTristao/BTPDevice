@@ -20,6 +20,9 @@ namespace btpdev {
 
 esp_err_t mount_littlefs(const FsConfig& config, FileSystem& fs, ErrorInfo& error) noexcept;
 esp_err_t mount_sd(const SdConfig& config, FileSystem& fs, ErrorInfo& error) noexcept;
+/// A volume the application mounted (StorageConfig::app_volume): only attached,
+/// with the usage of a FAT volume when it is one.
+void attach_app_volume(const char* root, FileSystem& fs) noexcept;
 
 }  // namespace btpdev
 
