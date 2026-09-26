@@ -150,6 +150,10 @@ idf.py -C test_apps/build_smoke set-target esp32s3 build
 pio run -d test_apps/build_smoke
 ```
 
+Depois de mudar a lista de fontes ou as dependências do `CMakeLists.txt` do
+componente, apague o build do PlatformIO (`.pio/build`): ele não reconfigura o
+CMake sozinho e o erro aparece como `undefined reference` no link.
+
 Código portável (sem chamadas do IDF) entra na lista `btpdev_portable` de
 `test/host/CMakeLists.txt` e ganha teste. O header `btpdev/error.h` traz um
 substituto do `esp_err.h` para o host, com os mesmos valores.

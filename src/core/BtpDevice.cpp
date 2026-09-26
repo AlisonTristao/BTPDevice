@@ -54,7 +54,7 @@ BtpDevice::BtpDevice(const btpdev::DeviceConfig& device,
 
 BtpDevice::~BtpDevice() { delete core_; }
 
-esp_err_t BtpDevice::begin() noexcept {
+esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
     if (started_) {
         btpdev::fail(error_, BTPDEV_ERR_ALREADY_STARTED, btpdev::tag::kCore,
                      "begin() called twice: the device is already running");
@@ -78,7 +78,7 @@ esp_err_t BtpDevice::begin() noexcept {
         log_failure(error_);
         return error_.code;
     }
-    const esp_err_t err = core_->start();
+    const esp_err_t err = core_->start(commands, topics);
     if (err != ESP_OK) {
         log_failure(error_);
         delete core_;  // stops whatever did start
@@ -86,6 +86,10 @@ esp_err_t BtpDevice::begin() noexcept {
         return err;
     }
     return ESP_OK;
+}
+
+bool BtpDevice::publish(const char* topic) noexcept {
+    return core_ != nullptr && core_->publish(topic);
 }
 
 void BtpDevice::routine() noexcept {

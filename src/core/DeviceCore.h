@@ -41,6 +41,7 @@
 #include "core/StreamFraming.h"
 #include "protocol/ShellText.h"
 #include "protocol/Terminal.h"
+#include "protocol/TopicRegistry.h"
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
@@ -55,7 +56,14 @@ public:
     DeviceCore& operator=(const DeviceCore&) = delete;
 
     /// The whole of begin(). On failure, `error` says why and nothing runs.
-    esp_err_t start() noexcept;
+    esp_err_t start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn topics) noexcept;
+
+    /// Any task: publish a topic on the next pass (see TopicRegistry).
+    bool publish(const char* topic) noexcept;
+    /// Any task: text for TraceView's terminal (btpdev::printf()).
+    void print(const char* text) noexcept;
+    /// The running device, for btpdev::printf() (one device per firmware).
+    static DeviceCore* active() noexcept { return active_; }
 
     void routine() noexcept;
     void tick() noexcept;
@@ -115,7 +123,7 @@ private:
     void load_identity() noexcept;
     Link resolve_link() noexcept;
     esp_err_t allocate(const PresetSizes& sizes) noexcept;
-    esp_err_t create_node() noexcept;
+    esp_err_t create_node(BtpDevice::TopicsFn topics) noexcept;
     void fill_catalog() noexcept;
     esp_err_t create_link(Link link, const PresetSizes& sizes) noexcept;
     esp_err_t start_link_with_fallback(Link requested, const PresetSizes& sizes) noexcept;
@@ -194,6 +202,18 @@ private:
     ShellCompletion completion_{};           // shell writes, comms reads
     std::atomic<bool> completion_ready_{false};
     std::size_t capture_length_ = 0U;        // shell task only
+
+    // Telemetry.
+    TopicRegistry registry_;
+
+    // btpdev::printf() from outside a command: any task -> comms -> terminal.
+    static constexpr std::size_t kPrintQueueBytes = 2048U;
+    LinkMutex print_mutex_;
+    Buffer print_storage_;
+    FrameQueue print_queue_;   // guarded by print_mutex_
+    void drain_prints() noexcept;
+
+    static DeviceCore* active_;
 
     RuntimeErrors errors_;
     TaskHandle_t comms_task_ = nullptr;

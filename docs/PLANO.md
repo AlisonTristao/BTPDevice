@@ -1,7 +1,7 @@
 # Plano de implementação da BTPDevice
 
 **Criado em:** 2026-09-26
-**Estado:** Fase 3 (núcleo)
+**Estado:** Fase 4 (telemetria e comandos)
 
 Este é o documento vivo do projeto: decisões, arquitetura e tarefas. Quem conclui
 uma tarefa marca o checkbox no mesmo commit (ver [CONTRIBUTING](../CONTRIBUTING.md#6-commits-versões-e-plano)).
@@ -565,14 +565,18 @@ tópicos nascem.
 
 ### Fase 4: telemetria e comandos
 
-- [ ] Builder de tópicos (ponteiro, `.fill()`, texto) com IDs automáticos e validação.
-- [ ] Integração com o registro de publicação do Node e com a revisão automática.
-- [ ] `Commands` sobre o TinyShell, `btpdev_shell` e respostas assíncronas pelo link de origem.
-- [ ] Módulo embutido `btp` (`-status`, `-link`, `-errors`, `-wifi`, `-fs`, `-reboot`).
-- [ ] **Exemplo `02_weather_station`** (TCP, tópicos ligados a variáveis).
-- [ ] **Exemplo `03_relay_actuator`** (comandos e confirmação).
+- [x] Builder de tópicos (`include/btpdev/topics.h`): campos ligados a variáveis, `.fill()`, tópicos de texto, IDs automáticos a partir de 0x0101, faixas, validação com o nome do tópico no erro.
+- [x] Integração com o registro de publicação do Node (`on_publish`: só publica com assinatura, na taxa concedida) e revisão automática do manifesto. Tópicos de texto e publicação por evento (`device.publish()`) pelo `TopicRegistry`.
+- [x] `Commands` sobre o TinyShell (`include/btpdev/commands.h`), shell em task própria e respostas assíncronas pelo link de origem.
+- [x] `btpdev::printf()`: dentro de um comando vira a saída dele; fora, aparece acima do prompt dos terminais abertos.
+- [x] Módulo embutido `btp`: `-status`, `-errors`, `-topics`, `-reboot`. (`-link`, `-wifi`, `-fs` e `-key` entram na Fase 5, com o armazenamento.)
+- [x] **Exemplo `02_weather_station`** (TCP, tópicos ligados a variáveis, tópico de texto).
+- [x] **Exemplo `03_relay_actuator`** (comandos, `printf`, publicação por evento).
+- [ ] **Teste em hardware** com o TraceView: `01_minimal` (Serial), `02_weather_station` (TCP), `03_relay_actuator` (Serial).
 
-**Pronto quando:** os três exemplos funcionam com o TraceView por Serial, TCP e BLE, trocando só o `.link`.
+**Pronto quando:** os três exemplos funcionam com o TraceView e o gráfico mostra os tópicos.
+O teste por BLE e TCP cifrados fica para a Fase 5; até lá o `02_weather_station` usa
+`CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO`.
 
 ### Fase 5: segurança e armazenamento
 

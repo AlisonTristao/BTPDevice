@@ -1,0 +1,7 @@
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+# The TCP link needs the device key, which arrives with Fase 5. Until then this
+# lets the example run in clear text on a bench network. REMOVE before real use.
+CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO=y

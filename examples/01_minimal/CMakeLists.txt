@@ -1,5 +1,4 @@
-# 01_minimal: the smallest BTPDevice. Open TraceView, pick the device by name,
-# open its terminal and type `help` or `btp -status`.
+# 01_minimal: the smallest BTPDevice -- a terminal and one topic.
 cmake_minimum_required(VERSION 3.16)
 
 # While the library is developed, BTPDevice, BTP and TinyShell come from

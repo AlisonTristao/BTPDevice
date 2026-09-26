@@ -23,3 +23,9 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   módulo de shell `btp` (`-status`, `-errors`) e queda automática para Serial.
 - `DeviceConfig::wifi.ssid`/`password` para uma rede direto na config.
 - Exemplo `examples/01_minimal` e `test_apps/link_echo` + `tools/link_echo_test.py`.
+- Tópicos de telemetria (`btpdev::Topics`): campos ligados a variáveis ou
+  `.fill()`, tópicos de texto, publicação só com assinatura e por evento
+  (`BtpDevice::publish()`).
+- Comandos (`btpdev::Commands`) registrados em `begin(app_commands, app_topics)`,
+  `btpdev::printf()` para o terminal, `btp -topics` e `btp -reboot`.
+- Exemplos `02_weather_station` (TCP) e `03_relay_actuator` (Serial).

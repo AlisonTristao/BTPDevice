@@ -12,6 +12,8 @@
 #include <esp_log.h>
 #include <esp_mac.h>
 #include <esp_random.h>
+#include <esp_system.h>
+#include <cstdarg>
 #include <esp_timer.h>
 #include <nvs.h>
 #include <nvs_flash.h>
@@ -67,11 +69,14 @@ const char* memory_name(Memory memory) {
 
 }  // namespace
 
+DeviceCore* DeviceCore::active_ = nullptr;
+
 DeviceCore::DeviceCore(const DeviceConfig& device, const StorageConfig& storage,
                        ErrorInfo& error) noexcept
     : device_(device), storage_(storage), error_(error) {}
 
 DeviceCore::~DeviceCore() {
+    if (active_ == this) active_ = nullptr;
     if (comms_task_ != nullptr) vTaskDelete(comms_task_);
     if (shell_task_ != nullptr) vTaskDelete(shell_task_);
     if (link_ != nullptr) {
@@ -87,7 +92,7 @@ DeviceCore::~DeviceCore() {
 // start(): the whole of begin()
 // ============================================================================
 
-esp_err_t DeviceCore::start() noexcept {
+esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn topics) noexcept {
     state_.store(State::Starting);
     const PresetSizes sizes = preset_sizes(device_.memory);
 
@@ -98,7 +103,7 @@ esp_err_t DeviceCore::start() noexcept {
     if (err != ESP_OK) return err;
     err = start_link_with_fallback(requested, sizes);
     if (err != ESP_OK) return err;
-    err = create_node();
+    err = create_node(topics);
     if (err != ESP_OK) return err;
 
     terminal_.configure(
@@ -126,6 +131,23 @@ esp_err_t DeviceCore::start() noexcept {
     });
     shell_.begin();
     register_builtin_commands();
+    if (commands != nullptr) {
+        Commands declared(shell_);
+        commands(declared);
+        if (declared.error_code() != 0U) {
+            return fail(error_, BTPDEV_ERR_BAD_COMMAND, tag::kCmd, "%s", declared.error_message());
+        }
+    }
+    if (shell_.dropped_registrations() != 0U) {
+        return fail(error_, BTPDEV_ERR_BAD_COMMAND, tag::kCmd,
+                    "%u command(s) did not fit TinyShell's tables: raise TINYSHELL_MAX_* in menuconfig",
+                    static_cast<unsigned>(shell_.dropped_registrations()));
+    }
+    if (!print_mutex_.create() || !print_storage_.allocate(kPrintQueueBytes)) {
+        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the print queue");
+    }
+    print_queue_.bind(print_storage_.data(), print_storage_.size(), 0U);
+    active_ = this;
 
     err = start_tasks();
     if (err != ESP_OK) return err;
@@ -308,7 +330,7 @@ esp_err_t DeviceCore::start_link_with_fallback(Link requested, const PresetSizes
     return ESP_OK;
 }
 
-esp_err_t DeviceCore::create_node() noexcept {
+esp_err_t DeviceCore::create_node(BtpDevice::TopicsFn topics) noexcept {
     // NodeConfig fields read by the node's constructor / begin().
     bool made = false;
     switch (device_.memory) {
@@ -325,6 +347,14 @@ esp_err_t DeviceCore::create_node() noexcept {
     if (!made) return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the BTP node");
 
     fill_catalog();
+    if (topics != nullptr) {
+        Topics declared;
+        topics(declared);
+        const esp_err_t installed = registry_.install(declared, *node_, *catalog_,
+                                                      preset_sizes(device_.memory).catalog_topics, error_);
+        if (installed != ESP_OK) return installed;
+        ESP_LOGI(tag::kTopic, "%u topic(s) declared", static_cast<unsigned>(registry_.size()));
+    }
     node_->serve_catalog(catalog_, static_cast<std::uint8_t>(btp::Role::Producer), uuid_, device_.name);
     node_->enable_status(kStatusPeriodMs);
     if (!node_->begin(false)) {
@@ -445,6 +475,7 @@ void DeviceCore::routine() noexcept {
     const std::uint64_t now = now_ms();
     drain_rx(now);
     deliver_completion();
+    drain_prints();
     terminal_.pump(static_cast<std::uint32_t>(now));
     link_->poll(static_cast<std::uint32_t>(now));
     tick();
@@ -452,7 +483,8 @@ void DeviceCore::routine() noexcept {
 
 void DeviceCore::tick() noexcept {
     const std::uint64_t now = now_ms();
-    node_->routine(now);  // due telemetry, session watchdog, STATUS
+    node_->routine(now);  // due field topics, session watchdog, STATUS
+    registry_.publish_pending(*node_, now);  // text topics and event publishes
     if (state_.load() == State::Connected && node_->session_event() == btp::SessionEvent::TimedOut) {
         // The peer went quiet past the negotiated timeout (TraceView keeps an
         // idle session alive every ~5 s): it is gone, even if the transport
@@ -685,6 +717,45 @@ void DeviceCore::report_errors(std::uint32_t now) noexcept {
     });
 }
 
+bool DeviceCore::publish(const char* topic) noexcept {
+    const bool known = registry_.request_publish(topic);
+    if (known) wake();
+    return known;
+}
+
+void DeviceCore::print(const char* text) noexcept {
+    if (text == nullptr || text[0] == '\0') return;
+    if (xTaskGetCurrentTaskHandle() == shell_task_) {
+        shell_print(text);  // inside a command: part of its output
+        return;
+    }
+    bool queued = false;
+    {
+        LinkLock lock(print_mutex_, pdMS_TO_TICKS(2));
+        if (lock.locked()) {
+            queued = print_queue_.push(reinterpret_cast<const std::uint8_t*>(text), std::strlen(text),
+                                       Priority::Normal);
+        }
+    }
+    if (!queued) errors_.note(RuntimeError::TerminalDropped);
+    wake();
+}
+
+void DeviceCore::drain_prints() noexcept {
+    char line[Terminal::kMaxAsyncOut + 1U];
+    for (int budget = 0; budget < 8; ++budget) {
+        std::size_t size = 0U;
+        {
+            LinkLock lock(print_mutex_, pdMS_TO_TICKS(2));
+            if (!lock.locked() || print_queue_.empty()) return;
+            size = print_queue_.copy_front(reinterpret_cast<std::uint8_t*>(line), sizeof(line) - 1U);
+            print_queue_.pop_front();
+        }
+        line[size] = '\0';
+        terminal_.async_line(line);
+    }
+}
+
 // ============================================================================
 // Shell task
 // ============================================================================
@@ -761,6 +832,52 @@ void DeviceCore::register_builtin_commands() noexcept {
             return RESULT_OK;
         },
         "errors", "Runtime error counters since boot", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            if (registry_.size() == 0U) {
+                shell_print("no topics declared\n");
+                return RESULT_OK;
+            }
+            // Declarations only: the subscription table belongs to the
+            // communication task and is not read from here.
+            for (std::size_t i = 0U; i < catalog_->topic_count(); ++i) {
+                const btp::CatalogTopic* t = catalog_->topic_at(i);
+                if (t == nullptr) continue;
+                char line[96];
+                std::snprintf(line, sizeof(line), "0x%04x  %-20s %2u field(s)  max %lu mHz\n",
+                              static_cast<unsigned>(t->topic_id), t->name,
+                              static_cast<unsigned>(t->field_count),
+                              static_cast<unsigned long>(t->max_rate_millihz));
+                shell_print(line);
+            }
+            return RESULT_OK;
+        },
+        "topics", "Declared telemetry topics", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            shell_print("restarting in 0.5 s\n");
+            // Later, on a timer: the reply has to leave before the reset.
+            esp_timer_create_args_t args{};
+            args.callback = [](void*) { esp_restart(); };
+            args.name = "btpdev_reboot";
+            esp_timer_handle_t timer = nullptr;
+            if (esp_timer_create(&args, &timer) != ESP_OK || esp_timer_start_once(timer, 500000) != ESP_OK) {
+                return RESULT_ERROR;
+            }
+            return RESULT_OK;
+        },
+        "reboot", "Restart the device", "btp");
+}
+
+void printf(const char* format, ...) noexcept {
+    DeviceCore* core = DeviceCore::active();
+    if (core == nullptr || format == nullptr) return;
+    char text[Terminal::kMaxAsyncOut];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    core->print(text);
 }
 
 }  // namespace btpdev

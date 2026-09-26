@@ -54,6 +54,7 @@ struct PresetSizes {
     std::size_t slot_bytes;
     std::size_t max_subscriptions;
     std::size_t max_commands;
+    std::size_t catalog_topics;
     std::size_t source_info;
     std::size_t link_queue_bytes;
     std::size_t rx_queue_bytes;
@@ -63,7 +64,7 @@ template <Memory M>
 constexpr PresetSizes preset_sizes_of() noexcept {
     using P = NodePreset<M>;
     return {sizeof(typename P::Node), alignof(typename P::Node), P::kSlots, P::kSlotBytes,
-            P::kMaxSubscriptions, P::kMaxCommands, P::kSourceInfo, P::kLinkQueueBytes,
+            P::kMaxSubscriptions, P::kMaxCommands, P::kCatalogTopics, P::kSourceInfo, P::kLinkQueueBytes,
             P::kRxQueueBytes};
 }
 

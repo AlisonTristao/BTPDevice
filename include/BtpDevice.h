@@ -4,13 +4,14 @@
 // BtpDevice -- the one object an application needs to talk to TraceView over
 // BTP. See README.md for the target API and docs/PLANO.md for the plan.
 //
-// Status (Phase 3): identity, one link per boot, the BTP node with session,
-// manifest and STATUS, the TraceView terminal and the shell. Topics and the
-// command/topic configuration files arrive in Phase 4, the key and the file
-// system in Phase 5.
+// Status (Phase 4): identity, one link per boot, the BTP node with session,
+// manifest and STATUS, the TraceView terminal, commands and telemetry topics.
+// The key and the file system arrive in Phase 5.
 
+#include <btpdev/commands.h>
 #include <btpdev/config.h>
 #include <btpdev/error.h>
+#include <btpdev/topics.h>
 
 #include <cstdint>
 
@@ -46,6 +47,10 @@ const char* state_name(State state) noexcept;
 
 class BtpDevice {
 public:
+    /// The application's declaration functions (btp_commands.cpp, btp_topics.cpp).
+    using CommandsFn = void (*)(btpdev::Commands&);
+    using TopicsFn = void (*)(btpdev::Topics&);
+
     /// Both configs are copied; they do not need to outlive the device.
     BtpDevice(const btpdev::DeviceConfig& device,
               const btpdev::StorageConfig& storage) noexcept;
@@ -54,10 +59,15 @@ public:
     BtpDevice(const BtpDevice&) = delete;
     BtpDevice& operator=(const BtpDevice&) = delete;
 
-    /// Brings the device up (identity, link, node, tasks). Returns ESP_OK, or
-    /// the failure also recorded in last_error() and printed with ESP_LOGE.
-    /// Call once, from app_main() or any task.
-    esp_err_t begin() noexcept;
+    /// Brings the device up (identity, link, node, commands, topics, tasks).
+    /// Returns ESP_OK, or the failure also recorded in last_error() and
+    /// printed with ESP_LOGE. Call once, from app_main() or any task. Either
+    /// function may be nullptr.
+    esp_err_t begin(CommandsFn commands = nullptr, TopicsFn topics = nullptr) noexcept;
+
+    /// Publishes a topic now (an event), on top of its periodic rate -- only
+    /// if someone is subscribed. Any task. False: no topic by that name.
+    bool publish(const char* topic) noexcept;
 
     /// Threading::Manual only: one full pass (received frames, commands,
     /// terminal, due telemetry, link housekeeping, then tick()). Call it

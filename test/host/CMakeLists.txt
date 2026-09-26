@@ -41,6 +41,7 @@ add_library(btpdev_portable STATIC
     ${BTPDEV_ROOT}/src/core/RuntimeErrors.cpp
     ${BTPDEV_ROOT}/src/protocol/ShellText.cpp
     ${BTPDEV_ROOT}/src/protocol/Terminal.cpp
+    ${BTPDEV_ROOT}/src/protocol/TopicRegistry.cpp
     ${BTPDEV_ROOT}/src/core/StreamFraming.cpp
     ${BTPDEV_ROOT}/src/transport/WifiLogic.cpp
     ${BTPDEV_ROOT}/src/transport/WifiNetworks.cpp)
@@ -61,7 +62,7 @@ btpdev_warnings(btpdev_portable)
 enable_testing()
 
 foreach(test_name test_error test_config_check test_frame_queue test_stream_framing test_wifi
-                  test_core_pieces test_terminal test_node_presets)
+                  test_core_pieces test_terminal test_node_presets test_topics)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE btpdev_portable)
     btpdev_warnings(${test_name})

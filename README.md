@@ -5,8 +5,10 @@ conversar com o [TraceView](https://github.com/AlisonTristao/TraceView): telemet
 terminal, comandos, criptografia e descoberta automática por nome. Você declara o
 que o dispositivo mede e o que ele sabe fazer, e a BTPDevice cuida do resto.
 
-> **Estado:** em implementação. A API abaixo é o **alvo** da versão 1.0 e ainda
-> não existe no código. O andamento está em [docs/PLANO.md](docs/PLANO.md).
+> **Estado:** em implementação (versão 0.x). Links, terminal, comandos e tópicos
+> já funcionam; a chave de criptografia e o sistema de arquivos chegam na Fase 5.
+> O andamento está em [docs/PLANO.md](docs/PLANO.md) e os exemplos em
+> [examples/](examples/).
 
 ## Para que serve
 
@@ -28,7 +30,7 @@ A BTPDevice é essa infraestrutura escrita uma vez.
 - **Erros legíveis.** Cada falha sai no `ESP_LOG` com a causa e o que fazer, e o
   `begin()` devolve um código e uma mensagem.
 
-## Como vai ficar (alvo)
+## Como fica
 
 ```cpp
 #include <BtpDevice.h>

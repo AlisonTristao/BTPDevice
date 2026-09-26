@@ -43,6 +43,7 @@ set(btpdev_srcs
     "src/core/StreamFraming.cpp"
     "src/protocol/ShellText.cpp"
     "src/protocol/Terminal.cpp"
+    "src/protocol/TopicRegistry.cpp"
     "src/transport/BleLink.cpp"
     "src/transport/EspNowLink.cpp"
     "src/transport/TcpLink.cpp"
