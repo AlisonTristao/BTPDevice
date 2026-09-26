@@ -33,9 +33,13 @@ public:
     /// Imports `name` from `fs` if the file exists: ESP_OK when imported,
     /// ESP_ERR_NOT_FOUND when there is no file, BTPDEV_ERR_BAD_KEY (logged,
     /// with the field) when it is invalid, BTPDEV_ERR_STORAGE when NVS failed.
-    esp_err_t import_file(FileSystem& fs, const char* name, ErrorInfo& error) noexcept;
+    /// `activate`: also load it into RAM now. Only at boot -- while running,
+    /// the communication task reads the key concurrently, so a new key takes
+    /// effect at the next boot.
+    esp_err_t import_file(FileSystem& fs, const char* name, ErrorInfo& error, bool activate) noexcept;
 
-    /// Erases the key from NVS and RAM.
+    /// Erases the key from NVS; the key in RAM stays in use until the next
+    /// boot (same reason as `activate` above).
     esp_err_t forget() noexcept;
 
     bool loaded() const noexcept { return store_.loaded(); }

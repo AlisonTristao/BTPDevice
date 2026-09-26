@@ -52,7 +52,7 @@ void DeviceKey::load_saved() noexcept {
     wipe(image, sizeof(image));
 }
 
-esp_err_t DeviceKey::import_file(FileSystem& fs, const char* name, ErrorInfo& error) noexcept {
+esp_err_t DeviceKey::import_file(FileSystem& fs, const char* name, ErrorInfo& error, bool activate) noexcept {
     if (!fs.mounted() || name == nullptr || !fs.exists(name)) return ESP_ERR_NOT_FOUND;
 
     // One byte more than the format: a longer file is refused by size.
@@ -79,7 +79,7 @@ esp_err_t DeviceKey::import_file(FileSystem& fs, const char* name, ErrorInfo& er
         wipe(image, sizeof(image));
         return fail(error, BTPDEV_ERR_STORAGE, kTag, "could not save the key in NVS (%s)", esp_err_to_name(err));
     }
-    store_.load(image, KeyStore::kFileSize);
+    if (activate) store_.load(image, KeyStore::kFileSize);
     wipe(image, sizeof(image));
 
     // Imported once: the renamed file stays as a record, never read again.
@@ -90,12 +90,13 @@ esp_err_t DeviceKey::import_file(FileSystem& fs, const char* name, ErrorInfo& er
     }
     char tags[64];
     describe(tags, sizeof(tags));
-    ESP_LOGI(kTag, "key imported from %s/%s (%s)", fs.root(), name, tags);
+    ESP_LOGI(kTag, "key imported from %s/%s%s", fs.root(), name,
+             activate ? "" : ": in use from the next boot");
+    if (activate) ESP_LOGI(kTag, "%s", tags);
     return ESP_OK;
 }
 
 esp_err_t DeviceKey::forget() noexcept {
-    store_.unload();
     nvs_handle_t handle = 0;
     esp_err_t err = nvs_open(kNamespace, NVS_READWRITE, &handle);
     if (err == ESP_OK) {

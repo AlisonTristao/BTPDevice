@@ -901,7 +901,7 @@ void DeviceCore::load_key() noexcept {
     // it is the one a person carries from the PC).
     for (FileSystem* volume : {&sd_, &fs_}) {
         ErrorInfo import_error;
-        const esp_err_t err = key_.import_file(*volume, storage_.key_file, import_error);
+        const esp_err_t err = key_.import_file(*volume, storage_.key_file, import_error, /*activate=*/true);
         if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
             ESP_LOGE(import_error.module, "%s [%s]", import_error.message, err_name(import_error.code));
         }
@@ -1039,7 +1039,8 @@ void DeviceCore::register_storage_commands() noexcept {
             ErrorInfo error;
             bool imported = false;
             for (FileSystem* volume : {&sd_, &fs_}) {
-                const esp_err_t err = key_.import_file(*volume, storage_.key_file, error);
+                // NVS only: the comms task is using the current key right now.
+                const esp_err_t err = key_.import_file(*volume, storage_.key_file, error, /*activate=*/false);
                 if (err == ESP_OK) imported = true;
                 if (err != ESP_OK && err != ESP_ERR_NOT_FOUND) {
                     shell_print(error.message);
@@ -1059,7 +1060,7 @@ void DeviceCore::register_storage_commands() noexcept {
                 return RESULT_ERROR;
             }
             if (key_.forget() != ESP_OK) return RESULT_ERROR;
-            shell_print("key erased: restart to apply (btp -reboot)\n");
+            shell_print("key erased from NVS: the device runs without it from the next boot (btp -reboot)\n");
             return RESULT_OK;
         },
         "key_forget", "Erase the device key (btp -key_forget yes)", "btp");
