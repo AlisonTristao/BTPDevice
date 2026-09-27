@@ -158,7 +158,7 @@ void EspNowLink::on_sent(bool delivered) noexcept {
 bool EspNowLink::send(const std::uint8_t* data, std::size_t size, Priority priority) noexcept {
     bool queued = false;
     if (running_.load() && size <= kMaxFrameSize) {
-        LinkLock lock(mutex_, pdMS_TO_TICKS(20));
+        LinkLock lock(mutex_, ms_to_ticks(20));
         queued = lock.locked() &&
                  (priority == Priority::Telemetry ? telemetry_ : normal_).push(data, size, priority);
     }
@@ -174,7 +174,7 @@ void EspNowLink::poll(std::uint32_t now) noexcept { pump(now); }
 
 void EspNowLink::pump(std::uint32_t now) noexcept {
     if (!running_.load()) return;
-    LinkLock lock(mutex_, pdMS_TO_TICKS(5));
+    LinkLock lock(mutex_, ms_to_ticks(5));
     if (!lock.locked()) return;
 
     if (in_flight_.load() && now - in_flight_since_ms_ >= kDeliveryTimeoutMs) {

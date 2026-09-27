@@ -4,10 +4,21 @@
 // The FreeRTOS mutex each link keeps around its FrameQueue (the queue itself
 // is not thread-safe: send() runs on any task, draining on the driver's).
 
+#include <cstdint>
+
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
 namespace btpdev {
+
+/// pdMS_TO_TICKS that never rounds a non-zero time down to 0. With the
+/// default CONFIG_FREERTOS_HZ=100 a tick is 10 ms: pdMS_TO_TICKS(1) is 0, and
+/// a "wait 1 ms" becomes "do not wait" -- a task that loops on it never
+/// sleeps and starves the idle task (task watchdog).
+inline TickType_t ms_to_ticks(std::uint32_t ms) noexcept {
+    const TickType_t ticks = pdMS_TO_TICKS(ms);
+    return (ms != 0U && ticks == 0U) ? 1U : ticks;
+}
 
 class LinkMutex {
 public:

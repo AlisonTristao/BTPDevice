@@ -157,7 +157,7 @@ void TcpLink::start_mdns() noexcept {
 bool TcpLink::send(const std::uint8_t* data, std::size_t size, Priority priority) noexcept {
     bool queued = false;
     if (client_fd_.load() >= 0) {
-        LinkLock lock(mutex_, pdMS_TO_TICKS(20));
+        LinkLock lock(mutex_, ms_to_ticks(20));
         queued = lock.locked() && queue_.push(data, size, priority);
     }
     if (!queued) send_refused_.fetch_add(1U, std::memory_order_relaxed);
@@ -178,7 +178,7 @@ void TcpLink::close_client() noexcept {
     if (fd < 0) return;
     close_socket(fd);
     {
-        LinkLock lock(mutex_, pdMS_TO_TICKS(20));
+        LinkLock lock(mutex_, ms_to_ticks(20));
         queue_.clear();  // nothing queued for this client may reach the next one
     }
     if (events_.on_disconnect != nullptr) events_.on_disconnect(events_.context);
@@ -206,7 +206,7 @@ void TcpLink::run() noexcept {
             FD_SET(client_fd, &read_set);
             bool pending_output = false;
             {
-                LinkLock lock(mutex_, pdMS_TO_TICKS(5));
+                LinkLock lock(mutex_, ms_to_ticks(5));
                 pending_output = lock.locked() && !queue_.empty();
             }
             if (pending_output) FD_SET(client_fd, &write_set);
@@ -289,7 +289,7 @@ void TcpLink::run() noexcept {
 void TcpLink::drain() noexcept {
     bool broken = false;
     {
-        LinkLock lock(mutex_, pdMS_TO_TICKS(20));
+        LinkLock lock(mutex_, ms_to_ticks(20));
         if (!lock.locked()) return;
         const int fd = client_fd_.load();
         const std::uint8_t* chunk = nullptr;

@@ -92,6 +92,10 @@ core  →  security, storage
   bloqueiam ou o `btp::Node`.
 - Se um lock for inevitável, ele fica dentro do componente dono do estado e o
   comentário explica o que ele protege.
+- **Tempo em ticks sempre por `ms_to_ticks()`** (`transport/LinkMutex.h`), nunca
+  `pdMS_TO_TICKS()` direto: com o tick padrão do ESP-IDF (100 Hz),
+  `pdMS_TO_TICKS(1)` é 0, e uma task que "espera 1 ms" num loop nunca dorme e
+  derruba o IDLE (watchdog). A lib tem de funcionar com o `sdkconfig` padrão.
 
 ### Erros e logs
 

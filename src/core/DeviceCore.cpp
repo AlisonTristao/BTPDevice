@@ -424,7 +424,7 @@ void DeviceCore::on_link_disconnect(void* context) noexcept {
 void DeviceCore::push_rx(std::uint8_t tag, const std::uint8_t* data, std::size_t size) noexcept {
     bool queued = false;
     {
-        LinkLock lock(rx_mutex_, pdMS_TO_TICKS(5));
+        LinkLock lock(rx_mutex_, ms_to_ticks(5));
         if (lock.locked()) {
             // A connection event carries no body: the tag is the whole entry.
             queued = size == 0U ? rx_queue_.push(&tag, 1U, Priority::Normal)
@@ -450,7 +450,7 @@ void DeviceCore::comms_loop() noexcept {
     for (;;) {
         // Woken at once by received bytes or a finished command; otherwise
         // once per period for telemetry, the watchdog and link housekeeping.
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(device_.comms.period_ms));
+        ulTaskNotifyTake(pdTRUE, ms_to_ticks(device_.comms.period_ms));
         routine();
     }
 }
@@ -488,7 +488,7 @@ void DeviceCore::drain_rx(std::uint64_t now) noexcept {
     for (int budget = 0; budget < 32; ++budget) {  // bounded: a flood cannot starve the rest
         std::size_t size = 0U;
         {
-            LinkLock lock(rx_mutex_, pdMS_TO_TICKS(5));
+            LinkLock lock(rx_mutex_, ms_to_ticks(5));
             if (!lock.locked() || rx_queue_.empty()) return;
             size = rx_queue_.copy_front(rx_chunk_.data(), rx_chunk_.size());
             rx_queue_.pop_front();
@@ -731,7 +731,7 @@ void DeviceCore::print(const char* text) noexcept {
     }
     bool queued = false;
     {
-        LinkLock lock(print_mutex_, pdMS_TO_TICKS(2));
+        LinkLock lock(print_mutex_, ms_to_ticks(2));
         if (lock.locked()) {
             queued = print_queue_.push(reinterpret_cast<const std::uint8_t*>(text), std::strlen(text),
                                        Priority::Normal);
@@ -768,7 +768,7 @@ bool DeviceCore::log(LogLevel level, std::uint64_t timestamp_us, const char* tex
     for (std::size_t i = 0U; i < 8U; ++i) head[1U + i] = static_cast<std::uint8_t>(timestamp_us >> (8U * i));
     bool queued = false;
     {
-        LinkLock lock(log_mutex_, pdMS_TO_TICKS(2));
+        LinkLock lock(log_mutex_, ms_to_ticks(2));
         if (lock.locked()) {
             queued = log_queue_.push(head, sizeof(head), reinterpret_cast<const std::uint8_t*>(text), length,
                                      Priority::Normal);
@@ -784,7 +784,7 @@ void DeviceCore::drain_logs(std::uint64_t) noexcept {
     for (int budget = 0; budget < 8; ++budget) {
         std::size_t size = 0U;
         {
-            LinkLock lock(log_mutex_, pdMS_TO_TICKS(2));
+            LinkLock lock(log_mutex_, ms_to_ticks(2));
             if (!lock.locked() || log_queue_.empty()) return;
             size = log_queue_.copy_front(entry, sizeof(entry));
             log_queue_.pop_front();
@@ -803,7 +803,7 @@ void DeviceCore::drain_prints() noexcept {
     for (int budget = 0; budget < 8; ++budget) {
         std::size_t size = 0U;
         {
-            LinkLock lock(print_mutex_, pdMS_TO_TICKS(2));
+            LinkLock lock(print_mutex_, ms_to_ticks(2));
             if (!lock.locked() || print_queue_.empty()) return;
             size = print_queue_.copy_front(reinterpret_cast<std::uint8_t*>(line), sizeof(line) - 1U);
             print_queue_.pop_front();
