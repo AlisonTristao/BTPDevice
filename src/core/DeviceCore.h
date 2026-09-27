@@ -64,6 +64,9 @@ public:
     /// Any task: publish a topic on the next pass (see TopicRegistry).
     bool publish(const char* topic) noexcept;
     bool subscribed(const char* topic) const noexcept { return registry_.subscribed(topic); }
+    /// Any task (one per stream): a block for a stream topic (BtpDevice::write_stream()).
+    bool write_stream(const char* topic, const std::int16_t* samples, std::size_t count, std::uint32_t rate_hz,
+                      std::uint64_t timestamp_us) noexcept;
     /// Any task: text for TraceView's terminal (btpdev::printf()).
     void print(const char* text) noexcept;
     /// Any task: a shell line from the application (BtpDevice::run()).
@@ -117,7 +120,8 @@ private:
     static constexpr std::uint8_t kTagConnect = 'C';
     static constexpr std::uint8_t kTagDisconnect = 'X';
     static constexpr std::size_t kRxChunkMax = 1600U;   // >= every link's receive chunk
-    static constexpr std::size_t kTxFrameMax = 512U;    // btp::Node frames are <= 250
+    static constexpr std::size_t kPeerLogicalPayload = 4096U;  // TraceView's HELLO max_logical_payload
+    static constexpr std::size_t kAeadTagBytes = 16U;
     static constexpr std::uint32_t kHelloDeadlineMs = 2000U;
     static constexpr std::uint32_t kStatusPeriodMs = 1000U;
     static constexpr std::uint32_t kErrorReportPeriodMs = 1000U;
@@ -189,6 +193,8 @@ private:
     void shell_loop() noexcept;
     static void comms_task_entry(void* context);
     void comms_loop() noexcept;
+    /// Largest stream block payload (see TopicRegistry::install()).
+    std::size_t max_stream_payload() const noexcept;
 
     const DeviceConfig& device_;
     const StorageConfig& storage_;

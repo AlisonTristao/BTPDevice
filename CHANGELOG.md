@@ -52,3 +52,15 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - `Commands::shell()` para registrar módulos que já existem em TinyShell.
 - `DeviceConfig::serial_cleartext`: Serial sem cifra mesmo com chave (o rádio
   sempre segue a chave).
+- Tópicos stream (`Topics::stream()` + `BtpDevice::write_stream()`): blocos de
+  amostras `int16` (seq, taxa, amostras) enviados todos, em ordem, enquanto há
+  assinatura; fila de blocos no dispositivo, contadores em `btp -topics`.
+
+### Corrigido
+- A task de comunicação girava sem dormir com o tick padrão do IDF (100 Hz):
+  esperas de 1 ms viravam 0 ticks (`ms_to_ticks()`).
+- Frames maiores que 512 bytes eram recusados nos links Serial e TCP (o buffer
+  COBS tinha tamanho fixo): agora segue o frame máximo do transporte, então um
+  manifesto grande ou um texto de 1 KB também passam.
+- `begin()` estourava a pilha de 3,5 KB do `app_main`: os helpers do catálogo
+  não são mais inlinados em `TopicRegistry::install()`.

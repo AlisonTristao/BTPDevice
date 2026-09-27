@@ -104,6 +104,11 @@ bool BtpDevice::publish(const char* topic) noexcept {
     return core_ != nullptr && core_->publish(topic);
 }
 
+bool BtpDevice::write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
+                             std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
+    return core_ != nullptr && core_->write_stream(topic, samples, count, rate_hz, timestamp_us);
+}
+
 void BtpDevice::routine() noexcept {
     if (core_ != nullptr && device_.threading == btpdev::Threading::Manual) core_->routine();
 }

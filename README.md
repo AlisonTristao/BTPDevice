@@ -71,11 +71,20 @@ void app_commands(btpdev::Commands& c) {
 De qualquer ponto do firmware:
 
 ```cpp
-btpdev::printf("relé ligado
-");                              // terminal do TraceView
+btpdev::printf("relé ligado\n");                             // terminal do TraceView
 btpdev::log(btpdev::LogLevel::Warn, "bateria em %u%%", pct);  // painel de logs
 device.publish("relay");                                      // amostra agora (evento)
 device.run("relay -set 0");                                   // um comando, como se digitado
+```
+
+Sinais contínuos (áudio, vibração) vão num **stream**: cada bloco de amostras
+chega ao TraceView uma vez, em ordem, com a taxa e um contador de blocos. O
+widget Audio Spectrum do TraceView toca e mostra a FFT:
+
+```cpp
+t.stream("audio.pcm", 1024, "counts").range(-2048, 2047);   // btp_topics.cpp
+
+device.write_stream("audio.pcm", block, 1024, 83333, esp_timer_get_time());
 ```
 
 ## Chave e arquivos

@@ -24,6 +24,10 @@
 //       t.text("status", btpdev::Hz(0.5), [](btpdev::Text& out) {
 //           out.printf("uptime %lus", uptime_s());
 //       });
+//
+//       // blocks of samples (audio, vibration), written with
+//       // BtpDevice::write_stream() -- see Topics::stream()
+//       t.stream("audio.pcm", 1024, "counts").range(-2048, 2047);
 //   }
 //
 // Topic ids are given in declaration order from kFirstTopicId, field ids and
@@ -114,6 +118,7 @@ struct FieldDecl {
     double min_value;       // NAN: no bound
     double max_value;
     bool nullable;
+    std::uint16_t max_count = 0U;  // 0: a scalar; else a variable array of at most this many
 };
 
 class Topics;
@@ -214,6 +219,8 @@ private:
     FillFn fill_;
     TextFn text_;
     bool is_text_ = false;
+    bool is_stream_ = false;
+    std::uint8_t stream_blocks_ = 0U;
 };
 
 /// What the application's topics function receives.
@@ -224,6 +231,22 @@ public:
     TopicDecl& topic(const char* name, Rate rate);
     /// A topic whose sample is free UTF-8 text (no fields).
     TopicDecl& text(const char* name, Rate rate, TextFn function);
+
+    /// A stream of int16 sample blocks (audio, vibration): every block given
+    /// to BtpDevice::write_stream() is sent once, in order, while someone is
+    /// subscribed -- no rate, no "latest value". Its fields are fixed:
+    ///
+    ///   seq      u32         block counter (a gap = blocks lost on the way)
+    ///   rate     u32, Hz     sample rate of the block
+    ///   samples  i16[<=max]  the samples, in `unit`
+    ///
+    /// Chain .range() for the samples' full scale (TraceView normalizes by
+    /// it). `max_samples` must fit one frame of the link (Serial: 2022,
+    /// TCP: 4070, BLE: 230, ESP-NOW: 99); begin() says so otherwise.
+    /// `queue_blocks` blocks wait on the device when the link is slower than
+    /// the producer for a moment; past that, write_stream() drops.
+    TopicDecl& stream(const char* name, std::uint16_t max_samples, const char* unit = "",
+                      std::uint8_t queue_blocks = 8U);
 
     std::size_t size() const noexcept { return topics_.size(); }
 

@@ -23,12 +23,14 @@ constexpr std::uint32_t kPeer = 0x55667788U;
 
 struct CaptureConfig : btp::NodeConfig {
     std::vector<std::vector<std::uint8_t>> frames;
+    bool refuse = false;  // a full link: every frame refused
     CaptureConfig() {
         source_id = kSelf;
         boot_id = 1U;
         transport = btp::kSerialTransport;
     }
     bool send(const std::uint8_t* frame, std::size_t size) override {
+        if (refuse) return false;
         frames.emplace_back(frame, frame + size);
         return true;
     }
@@ -85,6 +87,29 @@ struct Rig {
             btp::SampleValue value{};
             while (reader.next(&value) == btp::SampleStep::Item) {
                 values.push_back(value.is_null ? -9999.0 : value.f64(0));
+            }
+            if (reader.finish() == btp::MessageError::Ok) out.push_back(values);
+        }
+        return out;
+    }
+
+    // Every value of every field (arrays expanded), per captured sample.
+    std::vector<std::vector<double>> all_values(std::uint16_t topic_id) {
+        std::vector<std::vector<double>> out;
+        const btp::CatalogTopic* topic = node.catalog().topic(topic_id);
+        if (topic == nullptr) return out;
+        for (const auto& frame : config.frames) {
+            btp::DecodedFrame decoded{};
+            if (btp::decode(frame.data(), frame.size(), btp::kSerialTransport, &decoded) != btp::Error::Ok ||
+                decoded.header.type != btp::MessageType::Telemetry || decoded.header.object_id != topic_id) {
+                continue;
+            }
+            btp::SampleReader reader(decoded.payload.data, decoded.payload.size, topic->fields,
+                                     topic->field_count, topic->encoding);
+            std::vector<double> values;
+            btp::SampleValue value{};
+            while (reader.next(&value) == btp::SampleStep::Item) {
+                for (std::uint16_t i = 0U; i < value.count; ++i) values.push_back(value.f64(i));
             }
             if (reader.finish() == btp::MessageError::Ok) out.push_back(values);
         }
@@ -290,6 +315,71 @@ void mistakes_are_reported_by_name() {
     }
 }
 
+void streams_send_every_block_in_order() {
+    Rig rig;
+    Topics topics;
+    topics.stream("audio", 4U, "counts", 2U).range(-2048, 2047);
+    CHECK(rig.install(topics) == ESP_OK);
+    const btp::CatalogTopic* topic = rig.node.catalog().topic(Topics::kFirstTopicId);
+    CHECK(topic != nullptr && topic->field_count == 3U);
+    if (topic != nullptr) {
+        CHECK((topic->fields[2].flags & btp::kFieldVariableCount) != 0U);
+        CHECK(topic->fields[2].max_element_count == 4U);
+        CHECK(rig.node.catalog().field_min(*topic, 2) == -2048.0 && rig.node.catalog().field_max(*topic, 2) == 2047.0);
+    }
+    CHECK(!rig.registry.request_publish("audio"));  // not an event topic
+
+    const std::int16_t a[] = {1, -2, 3};
+    const std::int16_t b[] = {-2048, 2047, 0, 5};
+    const std::int16_t c[] = {7};
+    CHECK(!rig.registry.write_stream("audio", a, 3U, 8000U, 100U));  // nobody subscribed (seq 0)
+    CHECK(rig.subscribe(Topics::kFirstTopicId, 1000U));
+    rig.registry.publish_pending(rig.node, 10U);                      // sees the subscriber
+    CHECK(rig.registry.write_stream("audio", a, 3U, 8000U, 200U));    // seq 1
+    CHECK(rig.registry.write_stream("audio", b, 4U, 8000U, 300U));    // seq 2
+    CHECK(!rig.registry.write_stream("audio", c, 1U, 8000U, 400U));   // queue of 2 full (seq 3)
+    CHECK(!rig.registry.write_stream("audio", b, 5U, 8000U, 500U));   // over max_samples
+    CHECK(!rig.registry.write_stream("nope", c, 1U, 8000U, 500U));
+    CHECK(rig.registry.stream_stats(0).dropped == 1U && rig.registry.stream_stats(0).queued == 2U);
+
+    // A refusing link keeps the blocks queued, in order.
+    rig.config.refuse = true;
+    rig.registry.publish_pending(rig.node, 20U);
+    CHECK(rig.registry.stream_stats(0).queued == 2U && rig.registry.stream_stats(0).sent == 0U);
+    rig.config.refuse = false;
+    rig.registry.publish_pending(rig.node, 30U);
+    const auto blocks = rig.all_values(Topics::kFirstTopicId);
+    CHECK(blocks.size() == 2U);
+    if (blocks.size() == 2U) {
+        CHECK((blocks[0] == std::vector<double>{1, 8000, 1, -2, 3}));
+        CHECK((blocks[1] == std::vector<double>{2, 8000, -2048, 2047, 0, 5}));
+    }
+    CHECK(rig.registry.stream_stats(0).sent == 2U && rig.registry.stream_stats(0).queued == 0U);
+    CHECK(std::strcmp(rig.registry.stream_stats(0).name, "audio") == 0);
+
+    // The next block carries seq 5: the receiver sees the two that never left.
+    CHECK(rig.registry.write_stream("audio", c, 1U, 16000U, 600U));
+    rig.registry.publish_pending(rig.node, 40U);
+    const auto more = rig.all_values(Topics::kFirstTopicId);
+    CHECK(more.size() == 3U && (more.back() == std::vector<double>{5, 16000, 7}));
+}
+
+void streams_must_fit_one_frame() {
+    std::string message;
+    {
+        Topics t;
+        t.stream("big", 3000U);
+        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK_CONTAINS(message.c_str(), "at most 2022 samples");
+    }
+    {
+        Topics t;
+        t.stream("s", 16U).f32("extra", &temperature);
+        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK_CONTAINS(message.c_str(), "fields are fixed");
+    }
+}
+
 void text_buffer_is_bounded() {
     btpdev::Text text;
     const std::string big(3000, 'x');
@@ -310,6 +400,8 @@ int main() {
     event_publish_only_reaches_subscribers();
     ids_are_automatic_unless_pinned();
     mistakes_are_reported_by_name();
+    streams_send_every_block_in_order();
+    streams_must_fit_one_frame();
     text_buffer_is_bounded();
     return test_result("test_topics");
 }

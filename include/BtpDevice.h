@@ -16,6 +16,7 @@
 #include <btpdev/log.h>
 #include <btpdev/topics.h>
 
+#include <cstddef>
 #include <cstdint>
 
 class TinyShell;
@@ -76,6 +77,16 @@ public:
     /// every comms pass). For work only worth doing while someone watches,
     /// like sampling a slow sensor for the topic's fill().
     bool subscribed(const char* topic) const noexcept;
+
+    /// Queues a block of samples for a stream topic (Topics::stream()); the
+    /// library sends it in order while someone is subscribed. Call it from
+    /// ONE task per stream; it never blocks. False, and nothing queued: nobody
+    /// subscribed, the stream's queue is full (the link is slower than the
+    /// samples: counted in `btp -topics`), not a stream, or `count` is 0 or
+    /// over its max_samples. `timestamp_us` is the first sample's time
+    /// (esp_timer_get_time()).
+    bool write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
+                      std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
 
     /// Runs a shell line on the library's shell task, as if typed in the
     /// terminal: for a button, a scheduler or a script. Any task, never

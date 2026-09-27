@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <new>
 #include <utility>
 
 namespace btpdev {
@@ -80,6 +81,17 @@ TopicDecl& Topics::text(const char* name, Rate rate, TextFn function) {
     return decl;
 }
 
+TopicDecl& Topics::stream(const char* name, std::uint16_t max_samples, const char* unit,
+                          std::uint8_t queue_blocks) {
+    topics_.push_back(TopicDecl(name, OnEvent));
+    TopicDecl& decl = topics_.back();
+    decl.is_stream_ = true;
+    decl.stream_blocks_ = queue_blocks;
+    decl.u32("seq").u32("rate", "Hz").i16("samples", unit);
+    decl.fields_.back().max_count = max_samples;
+    return decl;
+}
+
 // ---- TopicRegistry ------------------------------------------------------------
 
 namespace {
@@ -87,6 +99,39 @@ namespace {
 constexpr const char* kTag = "btpdev.topic";
 
 bool empty_name(const char* name) { return name == nullptr || name[0] == '\0'; }
+
+void put_le16(std::uint8_t* out, std::uint16_t value) noexcept {
+    out[0] = static_cast<std::uint8_t>(value);
+    out[1] = static_cast<std::uint8_t>(value >> 8);
+}
+
+void put_le32(std::uint8_t* out, std::uint32_t value) noexcept {
+    for (int i = 0; i < 4; ++i) out[i] = static_cast<std::uint8_t>(value >> (8 * i));
+}
+
+void put_le64(std::uint8_t* out, std::uint64_t value) noexcept {
+    for (int i = 0; i < 8; ++i) out[i] = static_cast<std::uint8_t>(value >> (8 * i));
+}
+
+std::uint16_t get_le16(const std::uint8_t* in) noexcept {
+    return static_cast<std::uint16_t>(in[0] | (in[1] << 8));
+}
+
+std::uint64_t get_le64(const std::uint8_t* in) noexcept {
+    std::uint64_t value = 0U;
+    for (int i = 7; i >= 0; --i) value = (value << 8) | in[i];
+    return value;
+}
+
+// begin() runs on the caller's task -- app_main's 3.5 KB stack by default. A
+// TopicBuilder buffers 32 FieldRecords on the stack, and the compiler would
+// fold every catalogue helper into install()'s frame: each one gets its own
+// frame instead, released before the next.
+#if defined(__GNUC__)
+#define BTPDEV_NOINLINE __attribute__((noinline))
+#else
+#define BTPDEV_NOINLINE
+#endif
 
 void add_field(btp::TopicBuilder& builder, const FieldDecl& field) {
     switch (field.type) {
@@ -105,12 +150,40 @@ void add_field(btp::TopicBuilder& builder, const FieldDecl& field) {
     }
 }
 
+BTPDEV_NOINLINE btp::MessageError add_field_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
+                                                  bool is_text, std::uint32_t rate_millihz,
+                                                  const std::vector<FieldDecl>& fields) {
+    btp::TopicBuilder builder =
+        catalog.topic(id, TopicDecl::kSchemaVersion, name,
+                      is_text ? btp::TelemetryEncoding::Utf8 : btp::TelemetryEncoding::PackedLe,
+                      /*subscribable=*/true, rate_millihz);
+    for (const FieldDecl& field : fields) add_field(builder, field);
+    builder.default_rate(rate_millihz);
+    return builder.end();
+}
+
+BTPDEV_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
+                                                   const FieldDecl& seq, const FieldDecl& rate,
+                                                   const FieldDecl& samples) {
+    btp::FieldRecord fields[3] = {btp::u32(seq.name), btp::u32(rate.name, 1.0, rate.unit),
+                                  btp::i16(samples.name, 1.0, samples.unit)};
+    fields[2].flags = btp::kFieldVariableCount;
+    fields[2].element_count = 0U;
+    fields[2].max_element_count = samples.max_count;
+    fields[2].min_value = samples.min_value;
+    fields[2].max_value = samples.max_value;
+    return catalog.add_topic(id, TopicDecl::kSchemaVersion, btp::TelemetryEncoding::PackedLe,
+                             /*subscribable=*/true, /*max_rate_millihz=*/0U, name, fields, 3U);
+}
+
 }  // namespace
 
 esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& catalog,
-                                 std::size_t max_topics, ErrorInfo& error) noexcept {
+                                 std::size_t max_topics, ErrorInfo& error,
+                                 std::size_t max_stream_payload) noexcept {
     topics_.topics_ = std::move(topics.topics_);
     topics.topics_.clear();
+    streams_.clear();
     std::vector<TopicDecl>& list = topics_.topics_;
 
     if (list.size() > max_topics) {
@@ -134,6 +207,11 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
                 return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topics \"%s\" and \"%s\" have the same id 0x%04x",
                             list[j].name_, t.name_, static_cast<unsigned>(t.id_));
             }
+        }
+        if (t.is_stream_) {
+            const esp_err_t err = add_stream(t, i, catalog, max_stream_payload, error);
+            if (err != ESP_OK) return err;
+            continue;
         }
         if (t.is_text_) {
             if (!t.fields_.empty()) {
@@ -172,13 +250,8 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
             }
         }
 
-        btp::TopicBuilder builder = catalog.topic(
-            t.id_, TopicDecl::kSchemaVersion, t.name_,
-            t.is_text_ ? btp::TelemetryEncoding::Utf8 : btp::TelemetryEncoding::PackedLe,
-            /*subscribable=*/true, t.rate_.millihz);
-        for (const FieldDecl& field : t.fields_) add_field(builder, field);
-        builder.default_rate(t.rate_.millihz);
-        const btp::MessageError added = builder.end();
+        const btp::MessageError added =
+            add_field_topic(catalog, t.id_, t.name_, t.is_text_, t.rate_.millihz, t.fields_);
         if (added != btp::MessageError::Ok) {
             return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
                         "topic \"%s\" does not fit the catalogue (%s): too many fields or names for "
@@ -190,6 +263,132 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
         }
     }
     return ESP_OK;
+}
+
+esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::Catalog& catalog,
+                                    std::size_t max_stream_payload, ErrorInfo& error) noexcept {
+    // Topics::stream() declared seq, rate and samples; anything chained after
+    // it would not be in the payload write_stream() builds.
+    if (t.fields_.size() != 3U || t.fill_) {
+        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                    "stream \"%s\": its fields are fixed (seq, rate, samples), chain only .range()",
+                    t.name_);
+    }
+    const FieldDecl& samples = t.fields_[2];
+    if (samples.max_count == 0U || t.stream_blocks_ == 0U) {
+        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "stream \"%s\": max_samples and queue_blocks must be > 0",
+                    t.name_);
+    }
+    const std::size_t payload = kStreamHead + 2U * samples.max_count;
+    if (payload > max_stream_payload) {
+        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                    "stream \"%s\": %u samples need %u bytes, one frame of this link holds %u: use at "
+                    "most %u samples per block",
+                    t.name_, static_cast<unsigned>(samples.max_count), static_cast<unsigned>(payload),
+                    static_cast<unsigned>(max_stream_payload),
+                    static_cast<unsigned>((max_stream_payload - kStreamHead) / 2U));
+    }
+
+    const btp::MessageError added =
+        add_stream_topic(catalog, t.id_, t.name_, t.fields_[0], t.fields_[1], samples);
+    if (added != btp::MessageError::Ok) {
+        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                    "stream \"%s\" does not fit the catalogue (%s): too many fields or names for the "
+                    "memory preset",
+                    t.name_, btp::message_error_string(added));
+    }
+
+    std::unique_ptr<Stream> stream(new (std::nothrow) Stream);
+    if (stream == nullptr) {
+        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for stream \"%s\"", t.name_);
+    }
+    stream->topic_index = index;
+    stream->topic_id = t.id_;
+    stream->max_samples = samples.max_count;
+    stream->slot_bytes = kSlotHead + payload;
+    stream->slots = t.stream_blocks_;
+    stream->storage.reset(new (std::nothrow) std::uint8_t[stream->slot_bytes * stream->slots]);
+    if (stream->storage == nullptr) {
+        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for stream \"%s\" (%u bytes)", t.name_,
+                    static_cast<unsigned>(stream->slot_bytes * stream->slots));
+    }
+    streams_.push_back(std::move(stream));
+    return ESP_OK;
+}
+
+bool TopicRegistry::write_stream(const char* name, const std::int16_t* samples, std::size_t count,
+                                 std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
+    if (name == nullptr) return false;
+    Stream* stream = nullptr;
+    for (const auto& s : streams_) {
+        if (std::strcmp(topics_.topics_[s->topic_index].name_, name) == 0) {
+            stream = s.get();
+            break;
+        }
+    }
+    if (stream == nullptr) return false;
+    const std::uint32_t seq = stream->seq.fetch_add(1U, std::memory_order_relaxed);
+    if (samples == nullptr || count == 0U || count > stream->max_samples) return false;
+    if (stream->topic_index >= kMaxEventTopics ||
+        (subscribed_.load(std::memory_order_relaxed) & (1U << stream->topic_index)) == 0U) {
+        return false;
+    }
+    const std::uint32_t head = stream->head.load(std::memory_order_relaxed);
+    if (head - stream->tail.load(std::memory_order_acquire) >= stream->slots) {
+        stream->dropped.fetch_add(1U, std::memory_order_relaxed);
+        return false;
+    }
+
+    // The slot holds the block already encoded as its PACKED_LE payload, so
+    // the communication task sends it as is.
+    std::uint8_t* slot = stream->storage.get() + (head % stream->slots) * stream->slot_bytes;
+    const std::size_t payload = kStreamHead + 2U * count;
+    put_le64(slot, timestamp_us);
+    put_le16(slot + 8, static_cast<std::uint16_t>(payload));
+    std::uint8_t* out = slot + kSlotHead;
+    put_le16(out, TopicDecl::kSchemaVersion);
+    put_le32(out + 2, seq);
+    put_le32(out + 6, rate_hz);
+    put_le16(out + 10, static_cast<std::uint16_t>(count));
+    out += kStreamHead;
+    for (std::size_t i = 0U; i < count; ++i) put_le16(out + 2U * i, static_cast<std::uint16_t>(samples[i]));
+    stream->head.store(head + 1U, std::memory_order_release);
+    return true;
+}
+
+TopicRegistry::StreamStats TopicRegistry::stream_stats(std::size_t i) const noexcept {
+    StreamStats stats{"", 0U, 0U, 0U};
+    if (i >= streams_.size()) return stats;
+    const Stream& s = *streams_[i];
+    stats.name = topics_.topics_[s.topic_index].name_;
+    stats.sent = s.sent.load(std::memory_order_relaxed);
+    stats.dropped = s.dropped.load(std::memory_order_relaxed);
+    stats.queued = s.head.load(std::memory_order_acquire) - s.tail.load(std::memory_order_acquire);
+    return stats;
+}
+
+void TopicRegistry::send_streams(btp::Node& node, btp::SubscriptionTable& subscriptions) noexcept {
+    for (const auto& s : streams_) {
+        Stream& stream = *s;
+        if (subscriptions.subscriber_count(stream.topic_id) == 0U) {
+            // Nobody is listening any more: what is queued is for nobody.
+            stream.tail.store(stream.head.load(std::memory_order_acquire), std::memory_order_release);
+            continue;
+        }
+        for (;;) {
+            const std::uint32_t tail = stream.tail.load(std::memory_order_relaxed);
+            if (tail == stream.head.load(std::memory_order_acquire)) break;
+            const std::uint8_t* slot = stream.storage.get() + (tail % stream.slots) * stream.slot_bytes;
+            // Refused (the link's send queue is full): the block stays at the
+            // front and goes out on a later pass, in order.
+            if (!node.send(btp::MessageType::Telemetry, stream.topic_id, slot + kSlotHead, get_le16(slot + 8),
+                           get_le64(slot))) {
+                break;
+            }
+            stream.sent.fetch_add(1U, std::memory_order_relaxed);
+            stream.tail.store(tail + 1U, std::memory_order_release);
+        }
+    }
 }
 
 void TopicRegistry::fill_fields(void* context, btp::NamedSampleWriter& writer) {
@@ -233,7 +432,7 @@ int TopicRegistry::index_of(const char* name) const noexcept {
 
 bool TopicRegistry::request_publish(const char* name) noexcept {
     const int i = index_of(name);
-    if (i < 0) return false;
+    if (i < 0 || topics_.topics_[static_cast<std::size_t>(i)].is_stream_) return false;
     requested_.fetch_or(1U << i, std::memory_order_relaxed);
     return true;
 }
@@ -275,6 +474,8 @@ void TopicRegistry::publish_pending(btp::Node& node, std::uint64_t now_ms) noexc
         if (!list[i].is_text_ || !subscriptions->due(list[i].id_, now_ms)) continue;
         if (publish_one(node, i, now_ms)) subscriptions->note_published(list[i].id_, now_ms);
     }
+
+    send_streams(node, *subscriptions);
 
     const std::uint32_t requested = requested_.exchange(0U, std::memory_order_relaxed);
     for (std::size_t i = 0U; requested != 0U && i < list.size() && i < kMaxEventTopics; ++i) {

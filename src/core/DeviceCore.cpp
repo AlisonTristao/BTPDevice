@@ -218,9 +218,10 @@ Link DeviceCore::resolve_link() noexcept {
 }
 
 esp_err_t DeviceCore::allocate(const PresetSizes& sizes) noexcept {
+    // The send scratch is sized by the link that starts (a Serial frame here).
     const std::size_t needed = sizes.node_bytes + sizes.link_queue_bytes + sizes.rx_queue_bytes +
                                StreamDecoder::kStorageSize + kRxChunkMax +
-                               stream_encoded_capacity(kTxFrameMax);
+                               stream_encoded_capacity(btp::kSerialMaxFrameSize);
     const std::size_t available = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     if (needed > available) {
         return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag,
@@ -230,8 +231,7 @@ esp_err_t DeviceCore::allocate(const PresetSizes& sizes) noexcept {
                     static_cast<unsigned>(available));
     }
     if (!rx_mutex_.create() || !rx_storage_.allocate(sizes.rx_queue_bytes) ||
-        !rx_chunk_.allocate(kRxChunkMax) ||
-        !tx_wire_.allocate(stream_encoded_capacity(kTxFrameMax))) {
+        !rx_chunk_.allocate(kRxChunkMax)) {
         return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the receive/send buffers");
     }
     rx_queue_.bind(rx_storage_.data(), rx_storage_.size(), 0U);
@@ -313,6 +313,13 @@ esp_err_t DeviceCore::start_link_with_fallback(Link requested, const PresetSizes
     active_link_ = requested;
     session_link_ = link_->kind() == LinkDriver::Kind::Stream;
     transport = transport_of(requested);
+    // A stream link sends every frame COBS-encoded from this scratch: as large
+    // as the biggest frame the node makes on this transport (a stream block,
+    // a manifest or a long text sample fills a Serial frame).
+    if (session_link_ && !tx_wire_.allocate(stream_encoded_capacity(transport.max_frame_size))) {
+        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the %u-byte send scratch",
+                    static_cast<unsigned>(stream_encoded_capacity(transport.max_frame_size)));
+    }
     return ESP_OK;
 }
 
@@ -337,7 +344,8 @@ esp_err_t DeviceCore::create_node(BtpDevice::TopicsFn topics) noexcept {
         Topics declared;
         topics(declared);
         const esp_err_t installed = registry_.install(declared, *node_, *catalog_,
-                                                      preset_sizes(device_.memory).catalog_topics, error_);
+                                                      preset_sizes(device_.memory).catalog_topics, error_,
+                                                      max_stream_payload());
         if (installed != ESP_OK) return installed;
         ESP_LOGI(tag::kTopic, "%u topic(s) declared", static_cast<unsigned>(registry_.size()));
     }
@@ -723,6 +731,21 @@ bool DeviceCore::publish(const char* topic) noexcept {
     return known;
 }
 
+bool DeviceCore::write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
+                              std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
+    const bool queued = registry_.write_stream(topic, samples, count, rate_hz, timestamp_us);
+    if (queued) wake();
+    return queued;
+}
+
+std::size_t DeviceCore::max_stream_payload() const noexcept {
+    // One frame of the link, no more than the logical payload TraceView
+    // accepts (its HELLO), less the AEAD tag when the link is sealed.
+    std::size_t limit = btp::max_payload_size(transport);
+    if (limit > kPeerLogicalPayload) limit = kPeerLogicalPayload;
+    return sealed_ ? limit - kAeadTagBytes : limit;
+}
+
 void DeviceCore::print(const char* text) noexcept {
     if (text == nullptr || text[0] == '\0') return;
     if (xTaskGetCurrentTaskHandle() == shell_task_) {
@@ -905,6 +928,15 @@ void DeviceCore::register_builtin_commands() noexcept {
                               static_cast<unsigned>(t->topic_id), t->name,
                               static_cast<unsigned>(t->field_count),
                               static_cast<unsigned long>(t->max_rate_millihz));
+                shell_print(line);
+            }
+            // Stream counters are atomics: safe to read from the shell task.
+            for (std::size_t i = 0U; i < registry_.stream_count(); ++i) {
+                const TopicRegistry::StreamStats s = registry_.stream_stats(i);
+                char line[112];
+                std::snprintf(line, sizeof(line), "stream %-20s %lu sent, %lu dropped, %lu queued\n", s.name,
+                              static_cast<unsigned long>(s.sent), static_cast<unsigned long>(s.dropped),
+                              static_cast<unsigned long>(s.queued));
                 shell_print(line);
             }
             return RESULT_OK;
