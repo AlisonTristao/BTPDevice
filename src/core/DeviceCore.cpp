@@ -595,7 +595,14 @@ bool DeviceCore::send(const std::uint8_t* frame, std::size_t frame_size) {
     // No peer: STATUS and telemetry simply have nowhere to go. Not an error.
     if (link_ == nullptr || !link_->connected()) return false;
     // TELEMETRY (1) and LOG (2) are the first to be refused when the link backs up.
-    const Priority priority = frame_size > 5U && (frame[5] == 0x01U || frame[5] == 0x02U)
+    // Only a message's FIRST frame, though: once fragment 0 of a fragmented
+    // message is queued, the rest may use the reserve, so a message goes out
+    // whole or not at all. A half-sent message (the link filling up between two
+    // fragments) sits in the receiver's reassembly slots until they time out,
+    // and meanwhile every other fragmented message is dropped -- a stream block
+    // is ten 250-byte fragments. Header: flags (u16 LE) at 6, fragment_index at 34.
+    const bool continuation = frame_size > 35U && (frame[6] & btp::kFlagFragmented) != 0U && frame[34] != 0U;
+    const Priority priority = frame_size > 5U && (frame[5] == 0x01U || frame[5] == 0x02U) && !continuation
                                   ? Priority::Telemetry
                                   : Priority::Normal;
     bool sent = false;
