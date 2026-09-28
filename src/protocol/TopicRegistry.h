@@ -22,6 +22,7 @@
 
 #include <atomic>
 #include <cstddef>
+#include <cstdlib>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -89,13 +90,19 @@ public:
     std::uint16_t id_of(const char* name) const noexcept;
 
 private:
+    // The slot storage comes from std::malloc: with exceptions off (ESP-IDF's
+    // default) a failed new (std::nothrow) aborts instead of returning null,
+    // and a stream's slots are the one large allocation begin() makes.
+    struct FreeDeleter {
+        void operator()(std::uint8_t* p) const noexcept { std::free(p); }
+    };
     struct Stream {
         std::size_t topic_index = 0U;
         std::uint16_t topic_id = 0U;
         std::uint16_t max_samples = 0U;
         std::size_t slot_bytes = 0U;  // kSlotHead + kStreamHead + 2 * max_samples
         std::size_t slots = 0U;
-        std::unique_ptr<std::uint8_t[]> storage;
+        std::unique_ptr<std::uint8_t, FreeDeleter> storage;
         std::atomic<std::uint32_t> head{0U};  // next slot to fill (producer), free-running
         std::atomic<std::uint32_t> tail{0U};  // next slot to send (comms task)
         std::atomic<std::uint32_t> seq{0U};

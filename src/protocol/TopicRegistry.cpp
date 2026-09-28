@@ -307,10 +307,13 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
     stream->max_samples = samples.max_count;
     stream->slot_bytes = kSlotHead + payload;
     stream->slots = t.stream_blocks_;
-    stream->storage.reset(new (std::nothrow) std::uint8_t[stream->slot_bytes * stream->slots]);
+    const std::size_t bytes = stream->slot_bytes * stream->slots;
+    stream->storage.reset(static_cast<std::uint8_t*>(std::malloc(bytes)));
     if (stream->storage == nullptr) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for stream \"%s\" (%u bytes)", t.name_,
-                    static_cast<unsigned>(stream->slot_bytes * stream->slots));
+        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag,
+                    "no memory for stream \"%s\" (%u bytes in one block): use fewer queue_blocks or "
+                    "max_samples",
+                    t.name_, static_cast<unsigned>(bytes));
     }
     streams_.push_back(std::move(stream));
     return ESP_OK;

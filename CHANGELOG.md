@@ -64,3 +64,6 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   manifesto grande ou um texto de 1 KB também passam.
 - `begin()` estourava a pilha de 3,5 KB do `app_main`: os helpers do catálogo
   não são mais inlinados em `TopicRegistry::install()`.
+- Sem memória para a fila de um stream, `begin()` abortava (no ESP-IDF sem
+  exceções, `new (std::nothrow)` chama `abort()`): a fila vem de
+  `std::malloc` e a falta de memória vira `BTPDEV_ERR_MEMORY_BUDGET`.
