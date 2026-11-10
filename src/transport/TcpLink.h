@@ -33,7 +33,7 @@
 namespace btpdev {
 
 struct TcpLinkConfig {
-    /// Device name: mDNS instance name, and the hostname through
+    /// Device name: mDNS instance name, and the hostname (mDNS and DHCP) through
     /// mdns_host_from_name(). Must stay valid while the link runs.
     const char* device_name = nullptr;
     std::uint16_t port = 44300U;

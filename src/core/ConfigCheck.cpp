@@ -83,6 +83,14 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
         return fail(out, BTPDEV_ERR_CONFIG, kTag,
                     "DeviceConfig::comms needs period_ms >= 1 and stack_bytes >= 4096");
     }
+    if (config.shell.core < -1 || config.shell.core > 1) {
+        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+                    "DeviceConfig::shell.core is %d: use 0, 1 or -1 (no affinity)",
+                    config.shell.core);
+    }
+    if (config.shell.stack_bytes < 4096U) {
+        return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::shell needs stack_bytes >= 4096");
+    }
     if (config.tcp.port == 0U) {
         return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::tcp.port is 0");
     }

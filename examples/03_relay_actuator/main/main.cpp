@@ -1,4 +1,5 @@
-// 03_relay_actuator -- commands that act on hardware.
+// 03_relay_actuator -- commands that act on hardware, written as one class
+// (btpdev::App, in garden_pump.h).
 //
 //   1. Flash it and plug the board's native USB port into the PC.
 //   2. In TraceView, add "bomba-jardim" (Serial, automatic, no key).
@@ -8,17 +9,14 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-#include "btp/btp_device.h"
-#include "btp/btp_storage.h"
+#include "garden_pump.h"
 #include "relay.h"
 
-void app_commands(btpdev::Commands& c);
-void app_topics(btpdev::Topics& t);
-
-BtpDevice device(device_config, storage_config);  // btp_commands.cpp publishes through it
+GardenPump app;
+BtpDevice device(app);  // reads the App in begin(): the order of these two does not matter
 
 extern "C" void app_main() {
     relay_init();
-    if (device.begin(app_commands, app_topics) != ESP_OK) return;
+    if (device.begin() != ESP_OK) return;  // the cause is already in the log
     while (true) vTaskDelay(pdMS_TO_TICKS(1000));
 }

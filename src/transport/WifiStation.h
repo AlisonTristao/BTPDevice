@@ -37,7 +37,10 @@ public:
 
     /// `networks` must outlive the station. Starts the Wi-Fi driver if needed.
     /// BTPDEV_ERR_CONFIG when `count` is 0 (nothing to connect to).
-    esp_err_t start(const WifiNetwork* networks, std::size_t count, ErrorInfo& error) noexcept;
+    /// `hostname` (optional) is what the station gives DHCP, so the router's
+    /// client list shows the device's name instead of "espressif".
+    esp_err_t start(const WifiNetwork* networks, std::size_t count, ErrorInfo& error,
+                    const char* hostname = nullptr) noexcept;
     void stop() noexcept;
 
     /// Drives the state machine. Call every pass of the communication task.

@@ -25,6 +25,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <esp_timer.h>
 
 #include <BtpDevice.h>
 // TinyShell.h still injects `using namespace std` for 1.x compatibility unless
@@ -59,14 +60,22 @@ public:
     DeviceCore& operator=(const DeviceCore&) = delete;
 
     /// The whole of begin(). On failure, `error` says why and nothing runs.
-    esp_err_t start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn topics) noexcept;
+    esp_err_t start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics) noexcept;
 
     /// Any task: publish a topic on the next pass (see TopicRegistry).
     bool publish(const char* topic) noexcept;
+    bool publish(Topic topic) noexcept;
+    bool subscribed(Topic topic) const noexcept { return registry_.subscribed(topic); }
     bool subscribed(const char* topic) const noexcept { return registry_.subscribed(topic); }
     /// Any task (one per stream): a block for a stream topic (BtpDevice::write_stream()).
     bool write_stream(const char* topic, const std::int16_t* samples, std::size_t count, std::uint32_t rate_hz,
                       std::uint64_t timestamp_us) noexcept;
+    bool write_stream(Topic topic, const std::int16_t* samples, std::size_t count, std::uint32_t rate_hz,
+                      std::uint64_t timestamp_us) noexcept;
+    /// Threading::Manual: true when the calling task owns routine()/tick().
+    /// The first caller becomes the owner; another task is refused (D8: one
+    /// context touches the node) and logged once.
+    bool claim_manual_task() noexcept;
     /// Any task: text for TraceView's terminal (btpdev::printf()).
     void print(const char* text) noexcept;
     /// Any task: a shell line from the application (BtpDevice::run()).
@@ -153,7 +162,7 @@ private:
     void load_wifi_networks() noexcept;
     Link resolve_link() noexcept;
     esp_err_t allocate(const PresetSizes& sizes) noexcept;
-    esp_err_t create_node(BtpDevice::TopicsFn topics) noexcept;
+    esp_err_t create_node(const BtpDevice::TopicsFn& topics) noexcept;
     void fill_catalog() noexcept;
     esp_err_t create_link(Link link, const PresetSizes& sizes) noexcept;
     esp_err_t start_link_with_fallback(Link requested, const PresetSizes& sizes) noexcept;
@@ -193,6 +202,8 @@ private:
     void shell_loop() noexcept;
     static void comms_task_entry(void* context);
     void comms_loop() noexcept;
+    /// TaskConfig::timer: the esp_timer callback, which only wakes the task.
+    static void on_comms_timer(void* context) noexcept;
     /// Largest stream block payload (see TopicRegistry::install()).
     std::size_t max_stream_payload() const noexcept;
     std::size_t max_message_payload() const noexcept;
@@ -275,6 +286,9 @@ private:
     RuntimeErrors errors_;
     TaskHandle_t comms_task_ = nullptr;
     TaskHandle_t shell_task_ = nullptr;
+    esp_timer_handle_t comms_timer_ = nullptr;        // TaskConfig::timer
+    std::atomic<TaskHandle_t> manual_task_{nullptr};  // Threading::Manual owner
+    std::atomic<bool> manual_refused_{false};         // logged once
     std::uint32_t last_tick_ms_ = 0U;
 };
 

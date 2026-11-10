@@ -42,9 +42,19 @@
 // with the topic's name.
 //
 // A variable bound with a pointer is read on the communication task when a
-// sample is due; a 4-byte aligned float/int is read atomically on the ESP32,
-// but several fields that must be consistent with each other belong in a
-// .fill() function.
+// sample is due, possibly on the other core; a 4-byte aligned float/int is
+// read atomically on the ESP32, but several fields that must be consistent
+// with each other belong in a .fill() function. That is also why f64 has no
+// bound form: 8 bytes are not read atomically, and a value written on one
+// core could be published half old, half new.
+//
+// Every declaration converts to a btpdev::Topic, a handle for
+// BtpDevice::publish() / subscribed() / write_stream() that skips the
+// by-name lookup:
+//
+//   btpdev::Topic relay = t.topic("relay", btpdev::Hz(1)).boolean("on", &on);
+//   ...
+//   device.publish(relay);
 
 #include <cmath>
 #include <cstddef>
@@ -64,6 +74,15 @@ constexpr Rate Hz(double hz) noexcept {
 }
 /// Not periodic: only sent by BtpDevice::publish() (still only to subscribers).
 constexpr Rate OnEvent{0U};
+
+/// A declared topic, for BtpDevice::publish() / subscribed() /
+/// write_stream(): the declaration index, so no name is looked up. A
+/// default-constructed Topic is invalid and every call with it returns false.
+struct Topic {
+    static constexpr std::uint16_t kInvalid = 0xFFFFU;
+    std::uint16_t index = kInvalid;
+    constexpr bool valid() const noexcept { return index != kInvalid; }
+};
 
 enum class FieldType : std::uint8_t { F32, F64, I8, I16, I32, U8, U16, U32, Bool };
 
@@ -145,10 +164,10 @@ public:
     TopicDecl& f32(const char* name, const char* unit = "", double min = NAN, double max = NAN) noexcept {
         return field(name, FieldType::F32, nullptr, unit, min, max);
     }
+    /// No bound form: a double is not read atomically (see the top of this
+    /// file). Declare it here and put() it from the topic's .fill().
     TopicDecl& f64(const char* name, const double* variable, const char* unit = "",
-                   double min = NAN, double max = NAN) noexcept {
-        return field(name, FieldType::F64, variable, unit, min, max);
-    }
+                   double min = NAN, double max = NAN) noexcept = delete;
     TopicDecl& f64(const char* name, const char* unit = "", double min = NAN, double max = NAN) noexcept {
         return field(name, FieldType::F64, nullptr, unit, min, max);
     }
@@ -219,6 +238,11 @@ public:
 
     const char* name() const noexcept { return name_; }
 
+    /// This topic's handle (also an implicit conversion, so a chain can end
+    /// in `btpdev::Topic x = t.topic(...)...;`).
+    Topic handle() const noexcept { return Topic{index_}; }
+    operator Topic() const noexcept { return handle(); }
+
 private:
     friend class Topics;
     friend class TopicRegistry;
@@ -232,6 +256,7 @@ private:
     const char* name_;
     Rate rate_;
     std::uint16_t id_ = 0U;  // 0 = automatic
+    std::uint16_t index_ = Topic::kInvalid;  // declaration index (Topics sets it)
     std::uint16_t version_ = kSchemaVersion;
     std::vector<FieldDecl> fields_;
     FillFn fill_;

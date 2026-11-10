@@ -56,7 +56,11 @@ esp_err_t TcpLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     queue_.bind(queue_storage_.data(), queue_storage_.size(), queue_storage_.size() / 4U);
     events_ = events;
 
-    esp_err_t err = wifi_.start(config_.networks, config_.network_count, error);
+    // The same host name for DHCP (the router's client list) and for mDNS
+    // (<name>.local): see mdns_host_from_name().
+    char host[64];
+    const bool has_host = mdns_host_from_name(config_.device_name, host, sizeof(host));
+    esp_err_t err = wifi_.start(config_.networks, config_.network_count, error, has_host ? host : nullptr);
     if (err != ESP_OK) {
         queue_storage_.reset();
         return err;

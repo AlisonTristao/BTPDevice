@@ -63,8 +63,35 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   selagem do preset de memória.
 - `TopicDecl::version()`: versão de schema do tópico no manifesto e em cada
   amostra (campos, texto, stream e bytes); padrão 1.
+- `btpdev::App` (`include/btpdev/app.h`): o dispositivo inteiro numa classe
+  (`config()`, `storage()`, `commands()`, `topics()`), com o estado como membro
+  e `device()` disponível dentro dela. `BtpDevice device(app); device.begin();`.
+  A classe só é lida no `begin()`, então a ordem dos globais não importa. O
+  exemplo 03 foi reescrito nesse estilo.
+- `BtpDevice::CommandsFn`/`TopicsFn` passam a ser `std::function`: lambdas com
+  captura funcionam no `begin()`. O `StorageConfig` do construtor ficou opcional.
+- Handles de tópico (`btpdev::Topic`): toda declaração converte para um, e
+  `publish()`, `subscribed()` e `write_stream()` aceitam o handle, sem busca
+  pelo nome.
+- `DeviceConfig::shell` (`ShellConfig`): núcleo, prioridade e pilha da task de
+  comandos, que antes eram fixos (sem afinidade, 8 KB).
+- `TaskConfig::timer`: um `esp_timer` periódico acorda a task de comunicação a
+  cada `period_ms`, com período exato independente do `CONFIG_FREERTOS_HZ`. O
+  timer só notifica a task.
+- Hostname DHCP com o nome do dispositivo no link TCP: o roteador lista o
+  dispositivo pelo nome, não como `espressif`.
+
+### Alterado
+- `TopicDecl::f64()` não tem mais a forma ligada a uma variável: 8 bytes não
+  são lidos de forma atômica pela task de comunicação no outro núcleo. Use a
+  forma sem variável e `.fill()`.
+- `Threading::Manual`: a primeira task que chama `routine()` ou `tick()` vira a
+  dona do dispositivo, e chamadas de outra task são recusadas (e registradas
+  uma vez no log), em vez de correr em paralelo sobre o nó BTP.
 
 ### Corrigido
+- A task de shell esperava o slot de conclusão girando em `vTaskDelay(1)` (10 ms
+  por volta): agora a task de comunicação a notifica.
 - A task de comunicação girava sem dormir com o tick padrão do IDF (100 Hz):
   esperas de 1 ms viravam 0 ticks (`ms_to_ticks()`).
 - Frames maiores que 512 bytes eram recusados nos links Serial e TCP (o buffer

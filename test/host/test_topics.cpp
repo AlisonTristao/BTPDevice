@@ -253,6 +253,38 @@ void event_publish_only_reaches_subscribers() {
     CHECK(rig.samples(Topics::kFirstTopicId).size() == 1U);
 }
 
+void handles_reach_the_same_topics_as_names() {
+    Rig rig;
+    Topics topics;
+    const btpdev::Topic temp = topics.topic("temp", btpdev::Hz(1)).f32("x", &temperature);
+    btpdev::Topic alarm = topics.topic("alarm", btpdev::OnEvent).boolean("door", &pump_on);
+    const btpdev::Topic audio = topics.stream("audio", 4U, "counts", 2U).handle();
+    CHECK(temp.valid() && temp.index == 0U && alarm.index == 1U && audio.index == 2U);
+    CHECK(rig.install(topics) == ESP_OK);
+    CHECK(rig.registry.handle_of("alarm").index == alarm.index);
+    CHECK(!rig.registry.handle_of("nope").valid());
+
+    // An invalid handle, or one past the declarations, does nothing.
+    CHECK(!rig.registry.request_publish(btpdev::Topic{}));
+    CHECK(!rig.registry.request_publish(btpdev::Topic{7U}));
+    CHECK(!rig.registry.subscribed(btpdev::Topic{7U}));
+    const std::int16_t block[] = {1, 2};
+    CHECK(!rig.registry.write_stream(temp, block, 2U, 8000U, 1U));  // not a stream
+    CHECK(!rig.registry.request_publish(audio));                    // not an event topic
+
+    const std::uint16_t alarm_id = static_cast<std::uint16_t>(Topics::kFirstTopicId + alarm.index);
+    const std::uint16_t audio_id = static_cast<std::uint16_t>(Topics::kFirstTopicId + audio.index);
+    CHECK(rig.subscribe(alarm_id, 1000U) && rig.subscribe(audio_id, 1000U));
+    rig.registry.publish_pending(rig.node, 10U);  // sees the subscribers
+    CHECK(rig.registry.subscribed(alarm) && !rig.registry.subscribed(temp));
+    CHECK(rig.registry.request_publish(alarm));
+    CHECK(rig.registry.write_stream(audio, block, 2U, 8000U, 20U));
+    rig.registry.publish_pending(rig.node, 20U);
+    CHECK(rig.samples(alarm_id).size() == 1U);
+    const auto blocks = rig.all_values(audio_id);
+    CHECK(blocks.size() == 1U && (blocks[0] == std::vector<double>{0, 8000, 1, 2}));  // seq 0
+}
+
 void ids_are_automatic_unless_pinned() {
     Rig rig;
     Topics topics;
@@ -495,6 +527,7 @@ int main() {
     a_wrong_fill_drops_the_sample();
     text_topics_publish_utf8();
     event_publish_only_reaches_subscribers();
+    handles_reach_the_same_topics_as_names();
     ids_are_automatic_unless_pinned();
     mistakes_are_reported_by_name();
     streams_send_every_block_in_order();

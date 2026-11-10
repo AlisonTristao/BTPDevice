@@ -93,6 +93,17 @@ void task_and_network_ranges() {
     CHECK(check(config, error) == ESP_OK);
 
     config = valid_device();
+    CHECK(config.shell.core == -1 && config.shell.priority == 0U);  // the defaults
+    config.shell.core = 2;
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK_CONTAINS(error.message, "shell.core");
+    config.shell.core = 0;
+    config.shell.stack_bytes = 2048U;
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    config.shell.stack_bytes = 6144U;
+    CHECK(check(config, error) == ESP_OK);
+
+    config = valid_device();
     config.tcp.port = 0;
     CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
 

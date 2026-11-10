@@ -8,6 +8,7 @@
 // manifest and STATUS, the TraceView terminal, commands and telemetry topics.
 // The key and the file system arrive in Phase 5.
 
+#include <btpdev/app.h>
 #include <btpdev/commands.h>
 #include <btpdev/config.h>
 #include <btpdev/error.h>
@@ -18,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 
 class TinyShell;
 namespace btp {
@@ -51,13 +53,18 @@ const char* state_name(State state) noexcept;
 
 class BtpDevice {
 public:
-    /// The application's declaration functions (btp_commands.cpp, btp_topics.cpp).
-    using CommandsFn = void (*)(btpdev::Commands&);
-    using TopicsFn = void (*)(btpdev::Topics&);
+    /// The application's declaration functions (btp_commands.cpp,
+    /// btp_topics.cpp): a plain function, or a lambda that captures.
+    using CommandsFn = std::function<void(btpdev::Commands&)>;
+    using TopicsFn = std::function<void(btpdev::Topics&)>;
 
     /// Both configs are copied; they do not need to outlive the device.
     BtpDevice(const btpdev::DeviceConfig& device,
-              const btpdev::StorageConfig& storage) noexcept;
+              const btpdev::StorageConfig& storage = {}) noexcept;
+    /// A device described by a btpdev::App (include/btpdev/app.h). Nothing of
+    /// the App is called here -- its config, commands and topics are read by
+    /// begin() -- so the two globals may be declared in any order or file.
+    explicit BtpDevice(btpdev::App& app) noexcept;
     ~BtpDevice();
 
     BtpDevice(const BtpDevice&) = delete;
@@ -66,17 +73,23 @@ public:
     /// Brings the device up (identity, link, node, commands, topics, tasks).
     /// Returns ESP_OK, or the failure also recorded in last_error() and
     /// printed with ESP_LOGE. Call once, from app_main() or any task. Either
-    /// function may be nullptr.
+    /// function may be empty. With an App, call it with no arguments: the
+    /// App's commands() and topics() are used (a function given here
+    /// replaces the App's).
     esp_err_t begin(CommandsFn commands = nullptr, TopicsFn topics = nullptr) noexcept;
 
     /// Publishes a topic now (an event), on top of its periodic rate -- only
     /// if someone is subscribed. Any task. False: no topic by that name.
     bool publish(const char* topic) noexcept;
+    /// The same by handle (Topics declarations convert to btpdev::Topic):
+    /// no name lookup. False: an invalid handle, or a stream topic.
+    bool publish(btpdev::Topic topic) noexcept;
 
     /// Any task: whether anybody is subscribed to the topic now (refreshed on
     /// every comms pass). For work only worth doing while someone watches,
     /// like sampling a slow sensor for the topic's fill().
     bool subscribed(const char* topic) const noexcept;
+    bool subscribed(btpdev::Topic topic) const noexcept;
 
     /// Queues a block of samples for a stream topic (Topics::stream()); the
     /// library sends it in order while someone is subscribed. Call it from
@@ -85,7 +98,12 @@ public:
     /// samples: counted in `btp -topics`), not a stream, or `count` is 0 or
     /// over its max_samples. `timestamp_us` is the first sample's time
     /// (esp_timer_get_time()).
+    ///
+    /// Not from an interrupt: in an ADC / I2S DMA callback, notify a task and
+    /// call write_stream() from that task.
     bool write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
+                      std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
+    bool write_stream(btpdev::Topic topic, const std::int16_t* samples, std::size_t count,
                       std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
 
     /// Runs a shell line on the library's shell task, as if typed in the
@@ -103,8 +121,16 @@ public:
     /// terminal, due telemetry, link housekeeping, then tick()). Call it
     /// often -- every 1 to 10 ms -- from ONE task. With Threading::Auto the
     /// library's own task does this and these calls do nothing.
+    ///
+    /// Received bytes wait for the next call: the pass rate is the device's
+    /// reply latency. Not from an interrupt or an esp_timer callback (it
+    /// seals, sends and takes locks): to pace it with a timer, have the timer
+    /// notify the task that calls it.
     void routine() noexcept;
     /// Housekeeping only: session watchdog, STATUS, error summaries.
+    /// routine() already calls it. Same rule: Threading::Manual, and the SAME
+    /// task as routine(). The first task that calls either one owns the
+    /// device; a call from any other task is refused (and logged once).
     void tick() noexcept;
 
     btpdev::State state() const noexcept;
@@ -137,6 +163,7 @@ public:
 private:
     btpdev::DeviceConfig device_;
     btpdev::StorageConfig storage_;
+    btpdev::App* app_ = nullptr;
     btpdev::ErrorInfo error_;
     btpdev::DeviceCore* core_ = nullptr;
     bool started_ = false;

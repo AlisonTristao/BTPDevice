@@ -70,11 +70,13 @@ TopicDecl& TopicDecl::range(double min, double max) noexcept {
 
 TopicDecl& Topics::topic(const char* name, Rate rate) {
     topics_.push_back(TopicDecl(name, rate));
+    topics_.back().index_ = static_cast<std::uint16_t>(topics_.size() - 1U);
     return topics_.back();
 }
 
 TopicDecl& Topics::text(const char* name, Rate rate, TextFn function) {
     topics_.push_back(TopicDecl(name, rate));
+    topics_.back().index_ = static_cast<std::uint16_t>(topics_.size() - 1U);
     TopicDecl& decl = topics_.back();
     decl.text_ = std::move(function);
     decl.is_text_ = true;
@@ -83,6 +85,7 @@ TopicDecl& Topics::text(const char* name, Rate rate, TextFn function) {
 
 TopicDecl& Topics::bytes(const char* name, Rate rate, std::uint16_t max_size, BytesFn function) {
     topics_.push_back(TopicDecl(name, rate));
+    topics_.back().index_ = static_cast<std::uint16_t>(topics_.size() - 1U);
     TopicDecl& decl = topics_.back();
     decl.bytes_ = std::move(function);
     decl.is_bytes_ = true;
@@ -93,6 +96,7 @@ TopicDecl& Topics::bytes(const char* name, Rate rate, std::uint16_t max_size, By
 TopicDecl& Topics::stream(const char* name, std::uint16_t max_samples, const char* unit,
                           std::uint8_t queue_blocks) {
     topics_.push_back(TopicDecl(name, OnEvent));
+    topics_.back().index_ = static_cast<std::uint16_t>(topics_.size() - 1U);
     TopicDecl& decl = topics_.back();
     decl.is_stream_ = true;
     decl.stream_blocks_ = queue_blocks;
@@ -353,16 +357,28 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
     return ESP_OK;
 }
 
+TopicRegistry::Stream* TopicRegistry::stream_at(std::size_t topic_index) noexcept {
+    for (const auto& s : streams_) {
+        if (s->topic_index == topic_index) return s.get();
+    }
+    return nullptr;
+}
+
 bool TopicRegistry::write_stream(const char* name, const std::int16_t* samples, std::size_t count,
                                  std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
     if (name == nullptr) return false;
-    Stream* stream = nullptr;
     for (const auto& s : streams_) {
         if (std::strcmp(topics_.topics_[s->topic_index].name_, name) == 0) {
-            stream = s.get();
-            break;
+            return write_stream(Topic{static_cast<std::uint16_t>(s->topic_index)}, samples, count, rate_hz,
+                                timestamp_us);
         }
     }
+    return false;
+}
+
+bool TopicRegistry::write_stream(Topic topic, const std::int16_t* samples, std::size_t count,
+                                 std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
+    Stream* stream = topic.valid() ? stream_at(topic.index) : nullptr;
     if (stream == nullptr) return false;
     const std::uint32_t seq = stream->seq.fetch_add(1U, std::memory_order_relaxed);
     if (samples == nullptr || count == 0U || count > stream->max_samples) return false;
@@ -467,16 +483,38 @@ int TopicRegistry::index_of(const char* name) const noexcept {
     return -1;
 }
 
+Topic TopicRegistry::handle_of(const char* name) const noexcept {
+    if (name == nullptr) return Topic{};
+    const std::vector<TopicDecl>& list = topics_.topics_;
+    for (std::size_t i = 0U; i < list.size(); ++i) {
+        if (std::strcmp(list[i].name_, name) == 0) return Topic{static_cast<std::uint16_t>(i)};
+    }
+    return Topic{};
+}
+
 bool TopicRegistry::request_publish(const char* name) noexcept {
     const int i = index_of(name);
-    if (i < 0 || topics_.topics_[static_cast<std::size_t>(i)].is_stream_) return false;
-    requested_.fetch_or(1U << i, std::memory_order_relaxed);
-    return true;
+    return i >= 0 && request_publish(Topic{static_cast<std::uint16_t>(i)});
 }
 
 bool TopicRegistry::subscribed(const char* name) const noexcept {
     const int i = index_of(name);
-    return i >= 0 && (subscribed_.load(std::memory_order_relaxed) & (1U << i)) != 0U;
+    return i >= 0 && subscribed(Topic{static_cast<std::uint16_t>(i)});
+}
+
+bool TopicRegistry::request_publish(Topic topic) noexcept {
+    // Event publishes are a bit mask: only the first kMaxEventTopics topics.
+    if (!topic.valid() || topic.index >= topics_.topics_.size() || topic.index >= kMaxEventTopics ||
+        topics_.topics_[topic.index].is_stream_) {
+        return false;
+    }
+    requested_.fetch_or(1U << topic.index, std::memory_order_relaxed);
+    return true;
+}
+
+bool TopicRegistry::subscribed(Topic topic) const noexcept {
+    return topic.valid() && topic.index < topics_.topics_.size() && topic.index < kMaxEventTopics &&
+           (subscribed_.load(std::memory_order_relaxed) & (1U << topic.index)) != 0U;
 }
 
 bool TopicRegistry::publish_one(btp::Node& node, std::size_t index, std::uint64_t now_ms) noexcept {

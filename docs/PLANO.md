@@ -260,9 +260,14 @@ para respostas, então uma rajada de telemetria nunca impede uma resposta de sai
 | **`btpdev_shell`** | core | Executa comandos do TinyShell, para que um comando lento não trave a comunicação. Responde pela fila de conclusão do Node (`complete_command`). |
 
 - Com `Threading::Manual`, a `btpdev_comms` não é criada e o usuário chama
-  `routine()`.
+  `routine()`. A primeira task que chama `routine()`/`tick()` vira a dona; outra
+  task é recusada (D8).
 - Core, prioridade e stack são configuráveis em `.comms`. O padrão é core 0, junto
-  com os rádios.
+  com os rádios, e o núcleo 1 fica para a aplicação. Com `.comms.timer`, um
+  `esp_timer` periódico só notifica a task (período exato, independente do
+  `CONFIG_FREERTOS_HZ`). Nada da biblioteca roda em ISR ou no contexto do timer.
+- A `btpdev_shell` é configurável em `.shell` (`ShellConfig`): sem afinidade e uma
+  prioridade abaixo da `btpdev_comms` por padrão.
 
 ### 4.5 Ciclo de vida
 

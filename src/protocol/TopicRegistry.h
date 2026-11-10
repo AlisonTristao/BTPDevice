@@ -90,6 +90,15 @@ public:
     bool write_stream(const char* name, const std::int16_t* samples, std::size_t count,
                       std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
 
+    /// The same three, by handle (Topic): no name lookup. False for an
+    /// invalid handle or one from another declaration.
+    bool request_publish(Topic topic) noexcept;
+    bool subscribed(Topic topic) const noexcept;
+    bool write_stream(Topic topic, const std::int16_t* samples, std::size_t count,
+                      std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
+    /// The handle of a declared topic (invalid when unknown).
+    Topic handle_of(const char* name) const noexcept;
+
     std::size_t stream_count() const noexcept { return streams_.size(); }
     /// Any task: counters of the i-th declared stream.
     StreamStats stream_stats(std::size_t i) const noexcept;
@@ -140,6 +149,7 @@ private:
     std::atomic<std::uint32_t> requested_{0U};
     std::atomic<std::uint32_t> subscribed_{0U};   // written by publish_pending()
     int index_of(const char* name) const noexcept;
+    Stream* stream_at(std::size_t topic_index) noexcept;
     Text text_;
     std::uint8_t text_payload_[kMaxTextPayload] = {};
 };

@@ -23,7 +23,8 @@ A BTPDevice é essa infraestrutura escrita uma vez.
   armazenamento, rede) fica em arquivos de configuração, e há exemplos prontos
   para copiar.
 - **Um nome, qualquer link.** O nome do dispositivo aparece no anúncio BLE, no
-  mDNS (`<nome>.local`), na descrição da porta USB e no manifesto. O TraceView
+  mDNS (`<nome>.local`), no hostname DHCP (a lista de clientes do roteador), na
+  descrição da porta USB e no manifesto. O TraceView
   encontra o dispositivo pelo nome em qualquer um deles.
 - **Telemetria sob demanda.** Você declara o tópico uma vez, e ele só é publicado
   enquanto o TraceView (ou outro cliente) está assinando, na taxa pedida.
@@ -31,6 +32,49 @@ A BTPDevice é essa infraestrutura escrita uma vez.
   `begin()` devolve um código e uma mensagem.
 
 ## Como fica
+
+O dispositivo inteiro cabe numa classe derivada de `btpdev::App`: quem ele é,
+o que o terminal pode chamar e o que o TraceView pode plotar, com o estado como
+membro da classe ([examples/03_relay_actuator](examples/03_relay_actuator)).
+
+```cpp
+#include <BtpDevice.h>
+
+class BombaJardim : public btpdev::App {
+public:
+    btpdev::DeviceConfig config() const override {
+        return {.name = "bomba-jardim", .memory = btpdev::Memory::Small};
+    }
+    void commands(btpdev::Commands& c) override {
+        c.module("relay", "Relé da bomba")
+         .add("set", [this](uint8_t on) { return set(on); }, "relay -set <0|1>");
+    }
+    void topics(btpdev::Topics& t) override {
+        relay_ = t.topic("relay", btpdev::Hz(1)).boolean("on", &on_);
+    }
+
+private:
+    uint8_t set(uint8_t on) {
+        on_ = on != 0U;
+        gpio_set_level(RELE, on_);
+        device().publish(relay_);   // amostra agora, pelo handle do tópico
+        return RESULT_OK;
+    }
+    bool on_ = false;
+    btpdev::Topic relay_;
+};
+
+BombaJardim app;
+BtpDevice device(app);
+
+extern "C" void app_main() {
+    device.begin();   // ESP_OK, ou a causa no log e em device.last_error()
+}
+```
+
+A classe só é lida dentro do `begin()`, nunca num construtor, então a ordem dos
+dois globais não importa. O estilo em arquivos separados continua valendo e é o
+dos outros exemplos:
 
 ```cpp
 #include <BtpDevice.h>
@@ -77,6 +121,15 @@ device.publish("relay");                                      // amostra agora (
 device.run("relay -set 0");                                   // um comando, como se digitado
 ```
 
+Toda declaração de tópico vira um `btpdev::Topic`. Com ele, `publish()`,
+`subscribed()` e `write_stream()` não procuram o tópico pelo nome, e um nome
+errado deixa de ser um `false` silencioso em tempo de execução:
+
+```cpp
+btpdev::Topic relay = t.topic("relay", btpdev::Hz(1)).boolean("on", &on);
+device.publish(relay);
+```
+
 Sinais contínuos (áudio, vibração) vão num **stream**: cada bloco de amostras
 chega ao TraceView uma vez, em ordem, com a taxa e um contador de blocos. O
 widget Audio Spectrum do TraceView toca e mostra a FFT:
@@ -94,6 +147,43 @@ há nada novo ainda.
 ```cpp
 t.bytes("camera.matrix", btpdev::Hz(30), 1900, copy_latest_frame).version(2);
 ```
+
+## Tarefas e núcleos
+
+A biblioteca roda em duas tasks próprias, configuráveis em `DeviceConfig::comms`
+(`TaskConfig`) e `DeviceConfig::shell` (`ShellConfig`):
+
+| Task | Padrão | O que faz |
+|---|---|---|
+| `comms` | núcleo 0, prioridade 10 | Dona única do nó BTP: recebe, publica tópicos, envia. Fica no núcleo dos rádios. |
+| `shell` | sem afinidade, uma prioridade abaixo de `comms` | Executa os comandos, um de cada vez. |
+
+O núcleo 1 fica livre para o seu código. Um laço de controle fixado nele nunca é
+interrompido pela biblioteca:
+
+```cpp
+const btpdev::DeviceConfig device_config = {
+    .name  = "robo-bancada",
+    .comms = {.core = 0, .period_ms = 2, .timer = true},  // passada exata a cada 2 ms
+    .shell = {.core = 0},                                 // comandos pesados longe do núcleo 1
+};
+
+xTaskCreatePinnedToCore(control_loop, "control", 4096, nullptr, 20, nullptr, 1);
+```
+
+- **`period_ms` sem `timer`** é arredondado para ticks do FreeRTOS. Com o padrão
+  do IDF (`CONFIG_FREERTOS_HZ=100`), `period_ms = 1` vale 10 ms. Com
+  `.timer = true`, um `esp_timer` periódico só acorda a task, e o período fica exato.
+- **Nada da biblioteca roda em interrupção.** Uma passada cifra, envia e pega
+  locks. Para cadenciar por um timer de hardware, o timer notifica a task. O
+  mesmo vale para o `write_stream()`: num callback de DMA do ADC/I2S, notifique
+  uma task e chame `write_stream()` de lá.
+- **Com `Threading::Manual`**, você chama `device.routine()` do seu laço. A primeira
+  task que chama `routine()` ou `tick()` vira a dona, e uma chamada de outra task
+  é recusada e registrada no log.
+- **Variáveis ligadas por ponteiro** são lidas pela task `comms`, possivelmente no
+  outro núcleo. `float` e inteiros de até 4 bytes alinhados são lidos de forma
+  atômica. `f64` não tem forma ligada (8 bytes não são atômicos): use `.fill()`.
 
 ## Chave e arquivos
 

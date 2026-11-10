@@ -52,6 +52,8 @@ BtpDevice::BtpDevice(const btpdev::DeviceConfig& device,
                      const btpdev::StorageConfig& storage) noexcept
     : device_(device), storage_(storage) {}
 
+BtpDevice::BtpDevice(btpdev::App& app) noexcept : app_(&app) {}
+
 BtpDevice::~BtpDevice() { delete core_; }
 
 esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
@@ -63,6 +65,17 @@ esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
     }
     started_ = true;
     apply_log_level();
+
+    if (app_ != nullptr) {
+        // Every global exists by now: reading the App here, not in the
+        // constructor, keeps the order of the two globals irrelevant.
+        app_->device_ = this;
+        device_ = app_->config();
+        storage_ = app_->storage();
+        btpdev::App* app = app_;
+        if (!commands) commands = [app](btpdev::Commands& c) { app->commands(c); };
+        if (!topics) topics = [app](btpdev::Topics& t) { app->topics(t); };
+    }
 
     if (btpdev::check_device_config(device_, error_) != ESP_OK ||
         btpdev::check_storage_config(storage_, error_) != ESP_OK) {
@@ -104,17 +117,34 @@ bool BtpDevice::publish(const char* topic) noexcept {
     return core_ != nullptr && core_->publish(topic);
 }
 
+bool BtpDevice::publish(btpdev::Topic topic) noexcept {
+    return core_ != nullptr && core_->publish(topic);
+}
+
+bool BtpDevice::subscribed(btpdev::Topic topic) const noexcept {
+    return core_ != nullptr && core_->subscribed(topic);
+}
+
+bool BtpDevice::write_stream(btpdev::Topic topic, const std::int16_t* samples, std::size_t count,
+                             std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
+    return core_ != nullptr && core_->write_stream(topic, samples, count, rate_hz, timestamp_us);
+}
+
 bool BtpDevice::write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
                              std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
     return core_ != nullptr && core_->write_stream(topic, samples, count, rate_hz, timestamp_us);
 }
 
 void BtpDevice::routine() noexcept {
-    if (core_ != nullptr && device_.threading == btpdev::Threading::Manual) core_->routine();
+    if (core_ != nullptr && device_.threading == btpdev::Threading::Manual && core_->claim_manual_task()) {
+        core_->routine();
+    }
 }
 
 void BtpDevice::tick() noexcept {
-    if (core_ != nullptr && device_.threading == btpdev::Threading::Manual) core_->tick();
+    if (core_ != nullptr && device_.threading == btpdev::Threading::Manual && core_->claim_manual_task()) {
+        core_->tick();
+    }
 }
 
 btpdev::State BtpDevice::state() const noexcept {

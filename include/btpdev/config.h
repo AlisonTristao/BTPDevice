@@ -42,12 +42,35 @@ enum class Threading : std::uint8_t {
     Manual,  ///< the user calls BtpDevice::routine() from their own loop
 };
 
-/// The library's communication task.
+/// The library's communication task (DeviceConfig::comms).
+///
+/// On a dual-core ESP32 the Wi-Fi / Bluetooth stacks run on core 0. The
+/// defaults keep the communication task there, next to them, and leave core 1
+/// to the application: pin a control loop to core 1 and it is never
+/// interrupted by the library.
 struct TaskConfig {
     int core = 0;                        ///< 0 or 1; -1 = no affinity
     std::uint32_t priority = 10U;
     std::uint32_t stack_bytes = 8192U;
-    std::uint32_t period_ms = 1U;        ///< pause between two routine() passes
+    /// The longest pause between two routine() passes (received bytes and
+    /// finished commands wake the task at once anyway). Without `timer` it is
+    /// rounded UP to whole FreeRTOS ticks: with the IDF's default
+    /// CONFIG_FREERTOS_HZ=100 a tick is 10 ms, so 1 really means 10.
+    std::uint32_t period_ms = 1U;
+    /// Wake the task from a periodic esp_timer every `period_ms` instead of a
+    /// FreeRTOS timeout, so the period is exact whatever CONFIG_FREERTOS_HZ
+    /// is. The timer only notifies the task: the work never runs in the
+    /// timer's context.
+    bool timer = false;
+};
+
+/// The task commands run on, one at a time (DeviceConfig::shell).
+struct ShellConfig {
+    /// No affinity by default; pin it to core 0 when a heavy command must
+    /// not touch a loop on core 1.
+    int core = -1;                       ///< 0 or 1; -1 = no affinity
+    std::uint32_t priority = 0U;         ///< 0 = one below DeviceConfig::comms
+    std::uint32_t stack_bytes = 8192U;
 };
 
 /// Link::Serial on the native USB port.
@@ -101,6 +124,7 @@ struct DeviceConfig {
     Memory memory = Memory::Medium;
     Threading threading = Threading::Auto;
     TaskConfig comms{};
+    ShellConfig shell{};
     WifiConfig wifi{};
     TcpConfig tcp{};
     EspNowConfig espnow{};

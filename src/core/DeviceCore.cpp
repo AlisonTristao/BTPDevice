@@ -82,6 +82,10 @@ DeviceCore::DeviceCore(const DeviceConfig& device, const StorageConfig& storage,
 
 DeviceCore::~DeviceCore() {
     if (active_ == this) active_ = nullptr;
+    if (comms_timer_ != nullptr) {
+        esp_timer_stop(comms_timer_);
+        esp_timer_delete(comms_timer_);
+    }
     if (comms_task_ != nullptr) vTaskDelete(comms_task_);
     if (shell_task_ != nullptr) vTaskDelete(shell_task_);
     if (link_ != nullptr) {
@@ -97,7 +101,7 @@ DeviceCore::~DeviceCore() {
 // start(): the whole of begin()
 // ============================================================================
 
-esp_err_t DeviceCore::start(BtpDevice::CommandsFn commands, BtpDevice::TopicsFn topics) noexcept {
+esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics) noexcept {
     state_.store(State::Starting);
     const PresetSizes sizes = preset_sizes(device_.memory);
 
@@ -323,7 +327,7 @@ esp_err_t DeviceCore::start_link_with_fallback(Link requested, const PresetSizes
     return ESP_OK;
 }
 
-esp_err_t DeviceCore::create_node(BtpDevice::TopicsFn topics) noexcept {
+esp_err_t DeviceCore::create_node(const BtpDevice::TopicsFn& topics) noexcept {
     // NodeConfig fields read by the node's constructor / begin().
     bool made = false;
     switch (device_.memory) {
@@ -398,10 +402,16 @@ void DeviceCore::fill_catalog() noexcept {
 }
 
 esp_err_t DeviceCore::start_tasks() noexcept {
-    if (xTaskCreatePinnedToCore(&DeviceCore::shell_task_entry, "btpdev_shell", 8192, this,
-                                device_.comms.priority > 1U ? device_.comms.priority - 1U : 1U,
-                                &shell_task_, tskNO_AFFINITY) != pdPASS) {
-        return fail(error_, ESP_ERR_NO_MEM, kTag, "could not create the shell task");
+    // Commands run one priority below the communication task by default, so
+    // a long command never delays telemetry.
+    const std::uint32_t shell_priority =
+        device_.shell.priority != 0U ? device_.shell.priority
+                                     : (device_.comms.priority > 1U ? device_.comms.priority - 1U : 1U);
+    if (xTaskCreatePinnedToCore(&DeviceCore::shell_task_entry, "btpdev_shell", device_.shell.stack_bytes, this,
+                                shell_priority, &shell_task_,
+                                device_.shell.core < 0 ? tskNO_AFFINITY : device_.shell.core) != pdPASS) {
+        return fail(error_, ESP_ERR_NO_MEM, kTag, "could not create the shell task (%u bytes)",
+                    static_cast<unsigned>(device_.shell.stack_bytes));
     }
     if (device_.threading == Threading::Auto &&
         xTaskCreatePinnedToCore(&DeviceCore::comms_task_entry, "btpdev_comms", device_.comms.stack_bytes,
@@ -410,7 +420,39 @@ esp_err_t DeviceCore::start_tasks() noexcept {
         return fail(error_, ESP_ERR_NO_MEM, kTag, "could not create the communication task (%u bytes)",
                     static_cast<unsigned>(device_.comms.stack_bytes));
     }
+    if (device_.threading == Threading::Auto && device_.comms.timer) {
+        esp_timer_create_args_t args{};
+        args.callback = &DeviceCore::on_comms_timer;
+        args.arg = this;
+        args.dispatch_method = ESP_TIMER_TASK;
+        args.name = "btpdev_comms";
+        args.skip_unhandled_events = true;  // a late pass is not worth two
+        const std::uint64_t period_us = static_cast<std::uint64_t>(device_.comms.period_ms) * 1000ULL;
+        esp_err_t err = esp_timer_create(&args, &comms_timer_);
+        if (err == ESP_OK) err = esp_timer_start_periodic(comms_timer_, period_us);
+        if (err != ESP_OK) {
+            return fail(error_, err, kTag, "could not start the communication timer (%s)", esp_err_to_name(err));
+        }
+    }
     return ESP_OK;
+}
+
+void DeviceCore::on_comms_timer(void* context) noexcept {
+    // esp_timer task context: wake the communication task and return. The
+    // pass itself (sealing, sending, locks) never runs here.
+    static_cast<DeviceCore*>(context)->wake();
+}
+
+bool DeviceCore::claim_manual_task() noexcept {
+    const TaskHandle_t self = xTaskGetCurrentTaskHandle();
+    TaskHandle_t owner = nullptr;
+    if (manual_task_.compare_exchange_strong(owner, self) || owner == self) return true;
+    if (!manual_refused_.exchange(true)) {
+        ESP_LOGE(kTag, "routine()/tick() called from task \"%s\", but task \"%s\" already drives the device: "
+                       "call both from ONE task (Threading::Manual)",
+                 pcTaskGetName(self), pcTaskGetName(owner));
+    }
+    return false;
 }
 
 // ============================================================================
@@ -455,10 +497,13 @@ void DeviceCore::wake() noexcept {
 void DeviceCore::comms_task_entry(void* context) { static_cast<DeviceCore*>(context)->comms_loop(); }
 
 void DeviceCore::comms_loop() noexcept {
+    // Woken at once by received bytes or a finished command; otherwise
+    // once per period for telemetry, the watchdog and link housekeeping --
+    // by the esp_timer with TaskConfig::timer (exact), else by the timeout
+    // (rounded up to whole FreeRTOS ticks).
+    const TickType_t wait = device_.comms.timer ? portMAX_DELAY : ms_to_ticks(device_.comms.period_ms);
     for (;;) {
-        // Woken at once by received bytes or a finished command; otherwise
-        // once per period for telemetry, the watchdog and link housekeeping.
-        ulTaskNotifyTake(pdTRUE, ms_to_ticks(device_.comms.period_ms));
+        ulTaskNotifyTake(pdTRUE, wait);
         routine();
     }
 }
@@ -719,6 +764,7 @@ void DeviceCore::deliver_completion() noexcept {
         node_->complete_command(done.ticket, outcome);
     }
     completion_ready_.store(false, std::memory_order_release);
+    if (shell_task_ != nullptr) xTaskNotifyGive(shell_task_);  // the slot is free
 }
 
 void DeviceCore::report_errors(std::uint32_t now) noexcept {
@@ -739,6 +785,19 @@ bool DeviceCore::publish(const char* topic) noexcept {
 }
 
 bool DeviceCore::write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
+                              std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
+    const bool queued = registry_.write_stream(topic, samples, count, rate_hz, timestamp_us);
+    if (queued) wake();
+    return queued;
+}
+
+bool DeviceCore::publish(Topic topic) noexcept {
+    const bool known = registry_.request_publish(topic);
+    if (known) wake();
+    return known;
+}
+
+bool DeviceCore::write_stream(Topic topic, const std::int16_t* samples, std::size_t count,
                               std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept {
     const bool queued = registry_.write_stream(topic, samples, count, rate_hz, timestamp_us);
     if (queued) wake();
@@ -858,8 +917,10 @@ void DeviceCore::shell_task_entry(void* context) { static_cast<DeviceCore*>(cont
 void DeviceCore::shell_loop() noexcept {
     for (;;) {
         if (xQueueReceive(shell_queue_, &shell_request_, portMAX_DELAY) != pdTRUE) continue;
-        // One completion slot: wait until the comms task took the previous one.
-        while (completion_ready_.load(std::memory_order_acquire)) vTaskDelay(1);
+        // One completion slot: wait until the comms task took the previous
+        // one -- it notifies this task when it does (the timeout is only a
+        // safety net).
+        while (completion_ready_.load(std::memory_order_acquire)) ulTaskNotifyTake(pdTRUE, ms_to_ticks(100));
         capture_length_ = 0U;
         completion_.output[0] = '\0';
         const std::uint8_t status = shell_.run_command_line(shell_request_.line);

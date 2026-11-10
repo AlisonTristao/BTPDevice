@@ -50,8 +50,8 @@ const char* WifiStation::ssid() const noexcept {
                : "";
 }
 
-esp_err_t WifiStation::start(const WifiNetwork* networks, std::size_t count,
-                             ErrorInfo& error) noexcept {
+esp_err_t WifiStation::start(const WifiNetwork* networks, std::size_t count, ErrorInfo& error,
+                             const char* hostname) noexcept {
     if (running_) return ESP_OK;
     if (networks == nullptr || count == 0U) {
         return fail(error, BTPDEV_ERR_CONFIG, kTag,
@@ -60,6 +60,16 @@ esp_err_t WifiStation::start(const WifiNetwork* networks, std::size_t count,
     }
     const esp_err_t err = wifi_core_start(error);
     if (err != ESP_OK) return err;
+    if (hostname != nullptr && hostname[0] != '\0') {
+        // Before the first connection: the DHCP client sends it in DISCOVER.
+        // esp_netif keeps its own copy.
+        esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        const esp_err_t named = netif != nullptr ? esp_netif_set_hostname(netif, hostname) : ESP_FAIL;
+        if (named != ESP_OK) {
+            ESP_LOGW(kTag, "could not set the DHCP hostname \"%s\" (%s): the router shows the default",
+                     hostname, esp_err_to_name(named));
+        }
+    }
 
     if (esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &WifiStation::on_event,
                                             this, &wifi_handler_) != ESP_OK ||
