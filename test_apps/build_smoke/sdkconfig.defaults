@@ -1,0 +1,5 @@
+# Same partition layout as the examples: Wi-Fi + lwIP + mDNS + NimBLE and the
+# library do not fit the 1 MB default app partition.
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
