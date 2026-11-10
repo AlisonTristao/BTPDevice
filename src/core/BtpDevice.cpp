@@ -11,10 +11,10 @@
 #include "core/LogTags.h"
 
 // BTP 2.49 is the first release that is an ESP-IDF component on its own
-// (docs/PLANO.md D15); 2.48 brought the automatic manifest revision and the
-// manifest cache hooks the plan relies on.
-static_assert(btp::kLibraryVersionMajor == 2U && btp::kLibraryVersionMinor >= 49U,
-              "BTPDevice needs BTP 2.49.0 or newer (2.x)");
+// (docs/PLANO.md D15); 2.51 brings btp::NodeWith<> (the presets below the
+// node) and the compile-time check of the NodeConfig has_X()/X() pairs.
+static_assert(btp::kLibraryVersionMajor == 2U && btp::kLibraryVersionMinor >= 51U,
+              "BTPDevice needs BTP 2.51.0 or newer (2.x)");
 
 using btpdev::ErrorInfo;
 

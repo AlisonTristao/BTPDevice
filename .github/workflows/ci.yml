@@ -14,7 +14,7 @@ permissions:
 env:
   # Minimum versions BTPDevice builds against (docs/PLANO.md D15). Bump in
   # the same commit that starts using something newer.
-  BTP_REF: v2.49.0
+  BTP_REF: v2.51.0
   TINYSHELL_REF: v2.1.0
   IDF_VERSION: v6.0.1
 

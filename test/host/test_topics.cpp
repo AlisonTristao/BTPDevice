@@ -36,7 +36,16 @@ struct CaptureConfig : btp::NodeConfig {
     }
 };
 
-using TestNode = btp::StaticNode<2U, 600U, 1024U, 2048U, 8U, 48U, 1536U, 8U, 2U, 256U, 4U>;
+struct TestCapacities : btp::NodeCapacities {
+    static const std::size_t Slots = 2U;
+    static const std::size_t SealBytes = 1024U;
+    static const std::size_t ScratchBytes = 2048U;
+    static const std::size_t CatalogFields = 48U;
+    static const std::size_t MaxCommands = 2U;
+    static const std::size_t CommandBytes = 256U;
+    static const std::size_t CatalogSourceInfo = 4U;
+};
+using TestNode = btp::NodeWith<TestCapacities>;
 
 struct Rig {
     CaptureConfig config;

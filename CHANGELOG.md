@@ -82,6 +82,9 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   dispositivo pelo nome, não como `espressif`.
 
 ### Alterado
+- Requer BTP >= 2.51.0 (CI em `v2.51.0`): os presets de memória usam
+  `btp::NodeWith<>` (capacidades por nome), e o `DeviceCore` passa pela
+  verificação em compilação dos pares `has_X()`/`X()` do `NodeConfig`.
 - `TopicDecl::f64()` não tem mais a forma ligada a uma variável: 8 bytes não
   são lidos de forma atômica pela task de comunicação no outro núcleo. Use a
   forma sem variável e `.fill()`.
