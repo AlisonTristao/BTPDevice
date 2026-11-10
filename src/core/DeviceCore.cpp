@@ -345,7 +345,7 @@ esp_err_t DeviceCore::create_node(BtpDevice::TopicsFn topics) noexcept {
         topics(declared);
         const esp_err_t installed = registry_.install(declared, *node_, *catalog_,
                                                       preset_sizes(device_.memory).catalog_topics, error_,
-                                                      max_stream_payload());
+                                                      max_stream_payload(), max_message_payload());
         if (installed != ESP_OK) return installed;
         ESP_LOGI(tag::kTopic, "%u topic(s) declared", static_cast<unsigned>(registry_.size()));
     }
@@ -743,6 +743,12 @@ bool DeviceCore::write_stream(const char* topic, const std::int16_t* samples, st
     const bool queued = registry_.write_stream(topic, samples, count, rate_hz, timestamp_us);
     if (queued) wake();
     return queued;
+}
+
+std::size_t DeviceCore::max_message_payload() const noexcept {
+    // A (fragmented) message is sealed whole in the node's seal buffer.
+    const std::size_t seal = preset_sizes(device_.memory).seal_bytes;
+    return sealed_ ? seal - kAeadTagBytes : seal;
 }
 
 std::size_t DeviceCore::max_stream_payload() const noexcept {

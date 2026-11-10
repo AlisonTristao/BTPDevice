@@ -55,6 +55,14 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - Tópicos stream (`Topics::stream()` + `BtpDevice::write_stream()`): blocos de
   amostras `int16` (seq, taxa, amostras) enviados todos, em ordem, enquanto há
   assinatura; fila de blocos no dispositivo, contadores em `btp -topics`.
+- Tópicos bytes (`Topics::bytes()`): corpo opaco (`OPAQUE_BYTES`, sem campos)
+  que o receptor decodifica pelo nome e pela versão -- uma imagem, uma grade
+  compactada. Publicado na taxa do assinante; a função devolve 0 quando não há
+  nada novo, e o tópico fica pendente para a próxima passada. Pode passar de um
+  frame (é fragmentado); `begin()` recusa um `max_size` maior que o buffer de
+  selagem do preset de memória.
+- `TopicDecl::version()`: versão de schema do tópico no manifesto e em cada
+  amostra (campos, texto, stream e bytes); padrão 1.
 
 ### Corrigido
 - A task de comunicação girava sem dormir com o tick padrão do IDF (100 Hz):

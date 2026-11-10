@@ -380,6 +380,103 @@ void streams_must_fit_one_frame() {
     }
 }
 
+void bytes_topics_publish_an_opaque_body() {
+    Rig rig;
+    Topics topics;
+    std::vector<std::uint8_t> body;  // empty: nothing new
+    int calls = 0;
+    topics
+        .bytes("camera.matrix", btpdev::Hz(10), 8U,
+               [&](std::uint8_t* out, std::size_t capacity) -> std::size_t {
+                   ++calls;
+                   if (body.empty() || body.size() > capacity) return 0U;
+                   std::memcpy(out, body.data(), body.size());
+                   const std::size_t size = body.size();
+                   body.clear();
+                   return size;
+               })
+        .id(0x0202)
+        .version(2);
+    CHECK(rig.install(topics) == ESP_OK);
+    const btp::CatalogTopic* topic = rig.node.catalog().topic(0x0202);
+    CHECK(topic != nullptr);
+    if (topic != nullptr) {
+        CHECK(topic->field_count == 0U);
+        CHECK(topic->encoding == static_cast<std::uint8_t>(btp::TelemetryEncoding::OpaqueBytes));
+        CHECK(topic->schema_version == 2U);
+        CHECK(topic->max_rate_millihz == 10000U);
+    }
+
+    body = {1, 2, 3};
+    rig.registry.publish_pending(rig.node, 1000U);
+    CHECK(calls == 0 && rig.texts(0x0202).empty());  // not subscribed
+
+    CHECK(rig.subscribe(0x0202));
+    rig.registry.publish_pending(rig.node, 2000U);
+    std::vector<std::string> sent = rig.texts(0x0202);  // the body after schema_version
+    CHECK(sent.size() == 1U && sent[0] == std::string("\x01\x02\x03", 3));
+    CHECK(!rig.config.frames.empty() && rig.config.frames.back().size() > 0U);
+
+    // Nothing new: nothing sent, and the topic stays due -- asked again on
+    // the very next pass, and sent as soon as there is a body.
+    rig.registry.publish_pending(rig.node, 2200U);
+    const int asked = calls;
+    rig.registry.publish_pending(rig.node, 2201U);
+    CHECK(calls == asked + 1);
+    CHECK(rig.texts(0x0202).size() == 1U);
+    body = {9};
+    rig.registry.publish_pending(rig.node, 2202U);
+    sent = rig.texts(0x0202);
+    CHECK(sent.size() == 2U && sent[1] == std::string("\x09", 1));
+
+    // The schema_version prefix is the declared one.
+    btp::DecodedFrame decoded{};
+    CHECK(btp::decode(rig.config.frames.back().data(), rig.config.frames.back().size(), btp::kSerialTransport,
+                      &decoded) == btp::Error::Ok);
+    CHECK(decoded.payload.size == 3U && decoded.payload.data[0] == 2U && decoded.payload.data[1] == 0U);
+}
+
+void bytes_topics_are_checked() {
+    std::string message;
+    {
+        Topics t;
+        t.bytes("img", btpdev::Hz(1), 4000U, [](std::uint8_t*, std::size_t) -> std::size_t { return 0U; });
+        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK_CONTAINS(message.c_str(), "max_size must be 1..2030");
+    }
+    {
+        Topics t;
+        t.bytes("img", btpdev::Hz(1), 16U, [](std::uint8_t*, std::size_t) -> std::size_t { return 0U; })
+            .u8("x", "");
+        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK_CONTAINS(message.c_str(), "cannot have fields");
+    }
+    {
+        Topics t;
+        t.bytes("img", btpdev::Hz(1), 16U, nullptr);
+        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK_CONTAINS(message.c_str(), "has no function");
+    }
+}
+
+void text_topics_carry_their_version() {
+    Rig rig;
+    Topics topics;
+    topics.text("status", btpdev::Hz(1), [](btpdev::Text& out) { out.append("ok"); }).version(3);
+    CHECK(rig.install(topics) == ESP_OK);
+    const btp::CatalogTopic* topic = rig.node.catalog().topic(Topics::kFirstTopicId);
+    CHECK(topic != nullptr && topic->schema_version == 3U);
+    CHECK(rig.subscribe(Topics::kFirstTopicId));
+    rig.registry.publish_pending(rig.node, 1000U);
+    CHECK(!rig.config.frames.empty());
+    if (!rig.config.frames.empty()) {
+        btp::DecodedFrame decoded{};
+        CHECK(btp::decode(rig.config.frames.back().data(), rig.config.frames.back().size(),
+                          btp::kSerialTransport, &decoded) == btp::Error::Ok);
+        CHECK(decoded.payload.size == 4U && decoded.payload.data[0] == 3U);
+    }
+}
+
 void text_buffer_is_bounded() {
     btpdev::Text text;
     const std::string big(3000, 'x');
@@ -402,6 +499,9 @@ int main() {
     mistakes_are_reported_by_name();
     streams_send_every_block_in_order();
     streams_must_fit_one_frame();
+    bytes_topics_publish_an_opaque_body();
+    bytes_topics_are_checked();
+    text_topics_carry_their_version();
     text_buffer_is_bounded();
     return test_result("test_topics");
 }

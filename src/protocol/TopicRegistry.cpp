@@ -81,6 +81,15 @@ TopicDecl& Topics::text(const char* name, Rate rate, TextFn function) {
     return decl;
 }
 
+TopicDecl& Topics::bytes(const char* name, Rate rate, std::uint16_t max_size, BytesFn function) {
+    topics_.push_back(TopicDecl(name, rate));
+    TopicDecl& decl = topics_.back();
+    decl.bytes_ = std::move(function);
+    decl.is_bytes_ = true;
+    decl.bytes_max_ = max_size;
+    return decl;
+}
+
 TopicDecl& Topics::stream(const char* name, std::uint16_t max_samples, const char* unit,
                           std::uint8_t queue_blocks) {
     topics_.push_back(TopicDecl(name, OnEvent));
@@ -151,20 +160,18 @@ void add_field(btp::TopicBuilder& builder, const FieldDecl& field) {
 }
 
 BTPDEV_NOINLINE btp::MessageError add_field_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
-                                                  bool is_text, std::uint32_t rate_millihz,
+                                                  std::uint16_t version, btp::TelemetryEncoding encoding,
+                                                  std::uint32_t rate_millihz,
                                                   const std::vector<FieldDecl>& fields) {
-    btp::TopicBuilder builder =
-        catalog.topic(id, TopicDecl::kSchemaVersion, name,
-                      is_text ? btp::TelemetryEncoding::Utf8 : btp::TelemetryEncoding::PackedLe,
-                      /*subscribable=*/true, rate_millihz);
+    btp::TopicBuilder builder = catalog.topic(id, version, name, encoding, /*subscribable=*/true, rate_millihz);
     for (const FieldDecl& field : fields) add_field(builder, field);
     builder.default_rate(rate_millihz);
     return builder.end();
 }
 
 BTPDEV_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
-                                                   const FieldDecl& seq, const FieldDecl& rate,
-                                                   const FieldDecl& samples) {
+                                                   std::uint16_t version, const FieldDecl& seq,
+                                                   const FieldDecl& rate, const FieldDecl& samples) {
     btp::FieldRecord fields[3] = {btp::u32(seq.name), btp::u32(rate.name, 1.0, rate.unit),
                                   btp::i16(samples.name, 1.0, samples.unit)};
     fields[2].flags = btp::kFieldVariableCount;
@@ -172,7 +179,7 @@ BTPDEV_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::u
     fields[2].max_element_count = samples.max_count;
     fields[2].min_value = samples.min_value;
     fields[2].max_value = samples.max_value;
-    return catalog.add_topic(id, TopicDecl::kSchemaVersion, btp::TelemetryEncoding::PackedLe,
+    return catalog.add_topic(id, version, btp::TelemetryEncoding::PackedLe,
                              /*subscribable=*/true, /*max_rate_millihz=*/0U, name, fields, 3U);
 }
 
@@ -180,10 +187,12 @@ BTPDEV_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::u
 
 esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& catalog,
                                  std::size_t max_topics, ErrorInfo& error,
-                                 std::size_t max_stream_payload) noexcept {
+                                 std::size_t max_stream_payload, std::size_t max_message_payload) noexcept {
     topics_.topics_ = std::move(topics.topics_);
     topics.topics_.clear();
     streams_.clear();
+    bytes_payload_.reset();
+    bytes_capacity_ = 0U;
     std::vector<TopicDecl>& list = topics_.topics_;
 
     if (list.size() > max_topics) {
@@ -220,6 +229,21 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
             if (!t.text_) {
                 return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "text topic \"%s\" has no text function", t.name_);
             }
+        } else if (t.is_bytes_) {
+            if (!t.fields_.empty() || t.fill_) {
+                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "bytes topic \"%s\" cannot have fields", t.name_);
+            }
+            if (!t.bytes_) {
+                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "bytes topic \"%s\" has no function", t.name_);
+            }
+            const std::size_t payload = kBytesHead + t.bytes_max_;
+            if (t.bytes_max_ == 0U || payload > max_message_payload) {
+                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                            "bytes topic \"%s\": max_size must be 1..%u for this memory preset (use a "
+                            "larger preset for more)",
+                            t.name_, static_cast<unsigned>(max_message_payload - kBytesHead));
+            }
+            if (payload > bytes_capacity_) bytes_capacity_ = payload;
         } else {
             if (t.fields_.empty()) {
                 return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\" has no fields", t.name_);
@@ -250,16 +274,26 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
             }
         }
 
+        const btp::TelemetryEncoding encoding = t.is_text_    ? btp::TelemetryEncoding::Utf8
+                                                : t.is_bytes_ ? btp::TelemetryEncoding::OpaqueBytes
+                                                              : btp::TelemetryEncoding::PackedLe;
         const btp::MessageError added =
-            add_field_topic(catalog, t.id_, t.name_, t.is_text_, t.rate_.millihz, t.fields_);
+            add_field_topic(catalog, t.id_, t.name_, t.version_, encoding, t.rate_.millihz, t.fields_);
         if (added != btp::MessageError::Ok) {
             return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
                         "topic \"%s\" does not fit the catalogue (%s): too many fields or names for "
                         "the memory preset, or more than 32 fields in one topic",
                         t.name_, btp::message_error_string(added));
         }
-        if (!t.is_text_ && !node.on_publish(t.id_, &TopicRegistry::fill_fields, &t)) {
+        if (!body_only(t) && !node.on_publish(t.id_, &TopicRegistry::fill_fields, &t)) {
             return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\": the publish registry is full", t.name_);
+        }
+    }
+    if (bytes_capacity_ != 0U) {
+        bytes_payload_.reset(static_cast<std::uint8_t*>(std::malloc(bytes_capacity_)));
+        if (bytes_payload_ == nullptr) {
+            return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the %u-byte bytes topic buffer",
+                        static_cast<unsigned>(bytes_capacity_));
         }
     }
     return ESP_OK;
@@ -290,7 +324,7 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
     }
 
     const btp::MessageError added =
-        add_stream_topic(catalog, t.id_, t.name_, t.fields_[0], t.fields_[1], samples);
+        add_stream_topic(catalog, t.id_, t.name_, t.version_, t.fields_[0], t.fields_[1], samples);
     if (added != btp::MessageError::Ok) {
         return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
                     "stream \"%s\" does not fit the catalogue (%s): too many fields or names for the "
@@ -349,7 +383,7 @@ bool TopicRegistry::write_stream(const char* name, const std::int16_t* samples, 
     put_le64(slot, timestamp_us);
     put_le16(slot + 8, static_cast<std::uint16_t>(payload));
     std::uint8_t* out = slot + kSlotHead;
-    put_le16(out, TopicDecl::kSchemaVersion);
+    put_le16(out, topics_.topics_[stream->topic_index].version_);
     put_le32(out + 2, seq);
     put_le32(out + 6, rate_hz);
     put_le16(out + 10, static_cast<std::uint16_t>(count));
@@ -448,14 +482,24 @@ bool TopicRegistry::subscribed(const char* name) const noexcept {
 bool TopicRegistry::publish_one(btp::Node& node, std::size_t index, std::uint64_t now_ms) noexcept {
     TopicDecl& t = topics_.topics_[index];
     const std::uint64_t timestamp_us = now_ms * 1000ULL;
+    if (t.is_bytes_) {
+        // Body-only OPAQUE_BYTES topic: schema_version (u16 LE) then the body.
+        // A function with nothing new returns 0: nothing goes out and the
+        // topic stays due.
+        std::uint8_t* payload = bytes_payload_.get();
+        if (payload == nullptr) return false;
+        const std::size_t size = t.bytes_(payload + kBytesHead, t.bytes_max_);
+        if (size == 0U || size > t.bytes_max_) return false;
+        put_le16(payload, t.version_);
+        return node.send(btp::MessageType::Telemetry, t.id_, payload, size + kBytesHead, timestamp_us);
+    }
     if (!t.is_text_) {
         return node.publish_named(t.id_, &TopicRegistry::fill_fields, &t, timestamp_us);
     }
     text_.clear();
     t.text_(text_);
     // Body-only UTF-8 topic: schema_version (u16 LE) then the text itself.
-    text_payload_[0] = static_cast<std::uint8_t>(TopicDecl::kSchemaVersion & 0xFFU);
-    text_payload_[1] = static_cast<std::uint8_t>(TopicDecl::kSchemaVersion >> 8);
+    put_le16(text_payload_, t.version_);
     std::memcpy(text_payload_ + 2, text_.data(), text_.size());
     return node.send(btp::MessageType::Telemetry, t.id_, text_payload_, text_.size() + 2U, timestamp_us);
 }
@@ -472,9 +516,10 @@ void TopicRegistry::publish_pending(btp::Node& node, std::uint64_t now_ms) noexc
     subscribed_.store(subscribed, std::memory_order_relaxed);
 
     // Field topics that are due are the node's own job (on_publish); text
-    // topics are not in its registry (no fields to write), so they are here.
+    // and bytes topics are not in its registry (no fields to write), so they
+    // are here.
     for (std::size_t i = 0U; i < list.size(); ++i) {
-        if (!list[i].is_text_ || !subscriptions->due(list[i].id_, now_ms)) continue;
+        if (!body_only(list[i]) || !subscriptions->due(list[i].id_, now_ms)) continue;
         if (publish_one(node, i, now_ms)) subscriptions->note_published(list[i].id_, now_ms);
     }
 

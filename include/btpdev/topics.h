@@ -28,6 +28,12 @@
 //       // blocks of samples (audio, vibration), written with
 //       // BtpDevice::write_stream() -- see Topics::stream()
 //       t.stream("audio.pcm", 1024, "counts").range(-2048, 2047);
+//
+//       // an opaque body the receiver decodes itself (an image, a
+//       // packed grid) -- see Topics::bytes()
+//       t.bytes("camera.matrix", btpdev::Hz(10), 1900, [](uint8_t* out, size_t cap) {
+//           return copy_latest_frame(out, cap);   // 0: nothing new yet
+//       }).version(2);
 //   }
 //
 // Topic ids are given in declaration order from kFirstTopicId, field ids and
@@ -109,6 +115,10 @@ private:
 
 using FillFn = std::function<void(Sample&)>;
 using TextFn = std::function<void(Text&)>;
+/// Writes a bytes topic's body into `out` (at most `capacity` octets) and
+/// returns its size. 0: nothing new this time -- nothing is sent and the
+/// topic stays due, so it is asked again on the next pass.
+using BytesFn = std::function<std::size_t(std::uint8_t* out, std::size_t capacity)>;
 
 struct FieldDecl {
     const char* name;
@@ -199,6 +209,13 @@ public:
         id_ = topic_id;
         return *this;
     }
+    /// The schema version carried in the manifest and in every sample
+    /// (default kSchemaVersion). Bump it when the payload's layout changes,
+    /// so the receiver can tell the old one from the new one.
+    TopicDecl& version(std::uint16_t schema_version) noexcept {
+        version_ = schema_version;
+        return *this;
+    }
 
     const char* name() const noexcept { return name_; }
 
@@ -215,12 +232,16 @@ private:
     const char* name_;
     Rate rate_;
     std::uint16_t id_ = 0U;  // 0 = automatic
+    std::uint16_t version_ = kSchemaVersion;
     std::vector<FieldDecl> fields_;
     FillFn fill_;
     TextFn text_;
+    BytesFn bytes_;
     bool is_text_ = false;
     bool is_stream_ = false;
+    bool is_bytes_ = false;
     std::uint8_t stream_blocks_ = 0U;
+    std::uint16_t bytes_max_ = 0U;
 };
 
 /// What the application's topics function receives.
@@ -247,6 +268,14 @@ public:
     /// the producer for a moment; past that, write_stream() drops.
     TopicDecl& stream(const char* name, std::uint16_t max_samples, const char* unit = "",
                       std::uint8_t queue_blocks = 8U);
+
+    /// A topic whose sample is an opaque body (OPAQUE_BYTES, no fields): the
+    /// receiver knows the layout by the topic's name and version(). Published
+    /// like a text topic -- at the subscriber's rate, up to `rate` -- with
+    /// `function` writing at most `max_size` octets. Larger than one frame is
+    /// fine (it is fragmented); begin() says so when `max_size` does not fit
+    /// the memory preset's send buffer.
+    TopicDecl& bytes(const char* name, Rate rate, std::uint16_t max_size, BytesFn function);
 
     std::size_t size() const noexcept { return topics_.size(); }
 

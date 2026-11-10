@@ -35,7 +35,7 @@ struct NodePreset;
 // library (the link's send queue and the receive queue in front of the node).
 // The HELLO advertises Slots / SlotBytes / MaxSubscriptions / MaxCommands, so
 // they are spelled out, not hidden in the template arguments.
-#define BTPDEV_DEFINE_PRESET(MEM, SLOTS, SLOT_BYTES, SEAL, SCRATCH, TOPICS, FIELDS, STRINGS, SUBS,                              COMMANDS, COMMAND_BYTES, SOURCE_INFO, LINK_QUEUE, RX_QUEUE)              template <>                                                                                      struct NodePreset<MEM> {                                                                             static constexpr std::size_t kSlots = SLOTS;                                                     static constexpr std::size_t kSlotBytes = SLOT_BYTES;                                            static constexpr std::size_t kMaxSubscriptions = SUBS;                                           static constexpr std::size_t kMaxCommands = COMMANDS;                                            static constexpr std::size_t kCatalogTopics = TOPICS;                                            static constexpr std::size_t kCatalogFields = FIELDS;                                            static constexpr std::size_t kSourceInfo = SOURCE_INFO;                                          static constexpr std::size_t kLinkQueueBytes = LINK_QUEUE;                                       static constexpr std::size_t kRxQueueBytes = RX_QUEUE;                                           using Node = btp::StaticNode<SLOTS, SLOT_BYTES, SEAL, SCRATCH, TOPICS, FIELDS, STRINGS,                                       SUBS, COMMANDS, COMMAND_BYTES, SOURCE_INFO>;                    }
+#define BTPDEV_DEFINE_PRESET(MEM, SLOTS, SLOT_BYTES, SEAL, SCRATCH, TOPICS, FIELDS, STRINGS, SUBS,                              COMMANDS, COMMAND_BYTES, SOURCE_INFO, LINK_QUEUE, RX_QUEUE)              template <>                                                                                      struct NodePreset<MEM> {                                                                             static constexpr std::size_t kSlots = SLOTS;                                                     static constexpr std::size_t kSlotBytes = SLOT_BYTES; static constexpr std::size_t kSealBytes = SEAL;                                            static constexpr std::size_t kMaxSubscriptions = SUBS;                                           static constexpr std::size_t kMaxCommands = COMMANDS;                                            static constexpr std::size_t kCatalogTopics = TOPICS;                                            static constexpr std::size_t kCatalogFields = FIELDS;                                            static constexpr std::size_t kSourceInfo = SOURCE_INFO;                                          static constexpr std::size_t kLinkQueueBytes = LINK_QUEUE;                                       static constexpr std::size_t kRxQueueBytes = RX_QUEUE;                                           using Node = btp::StaticNode<SLOTS, SLOT_BYTES, SEAL, SCRATCH, TOPICS, FIELDS, STRINGS,                                       SUBS, COMMANDS, COMMAND_BYTES, SOURCE_INFO>;                    }
 
 // SlotBytes >= 600 everywhere: a COMMAND_REQUEST with a full 512-byte shell
 // line is 532 bytes of logical payload.
@@ -58,6 +58,7 @@ struct PresetSizes {
     std::size_t source_info;
     std::size_t link_queue_bytes;
     std::size_t rx_queue_bytes;
+    std::size_t seal_bytes;  ///< largest message the node seals (and sends), AEAD tag included
 };
 
 template <Memory M>
@@ -65,7 +66,7 @@ constexpr PresetSizes preset_sizes_of() noexcept {
     using P = NodePreset<M>;
     return {sizeof(typename P::Node), alignof(typename P::Node), P::kSlots, P::kSlotBytes,
             P::kMaxSubscriptions, P::kMaxCommands, P::kCatalogTopics, P::kSourceInfo, P::kLinkQueueBytes,
-            P::kRxQueueBytes};
+            P::kRxQueueBytes, P::kSealBytes};
 }
 
 inline PresetSizes preset_sizes(Memory memory) noexcept {

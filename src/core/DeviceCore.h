@@ -195,6 +195,7 @@ private:
     void comms_loop() noexcept;
     /// Largest stream block payload (see TopicRegistry::install()).
     std::size_t max_stream_payload() const noexcept;
+    std::size_t max_message_payload() const noexcept;
 
     const DeviceConfig& device_;
     const StorageConfig& storage_;

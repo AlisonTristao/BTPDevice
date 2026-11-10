@@ -3,7 +3,8 @@
 
 // Turns the application's topic declarations (btpdev::Topics) into the served
 // catalogue and the node's publish registry, and publishes what the node's
-// own registry cannot: text topics, on-demand (event) publishes and streams.
+// own registry cannot: text and bytes topics, on-demand (event) publishes and
+// streams.
 //
 // A stream (Topics::stream()) is a single-producer / single-consumer ring of
 // fixed slots allocated by install(): write_stream() fills the next free slot
@@ -44,6 +45,11 @@ public:
     /// Largest logical payload a stream block may use by default: one Serial
     /// frame (btp::kSerialTransport, 4096 - 40).
     static constexpr std::size_t kDefaultStreamPayload = 4056U;
+    /// A bytes sample's payload without its body: schema_version (u16).
+    static constexpr std::size_t kBytesHead = 2U;
+    /// Largest logical payload any one message may use by default: the
+    /// Medium preset's seal buffer less the AEAD tag (2048 - 16).
+    static constexpr std::size_t kDefaultMessagePayload = 2032U;
 
     struct StreamStats {
         const char* name;
@@ -56,10 +62,13 @@ public:
     /// and adds them to `catalog` / the node's publish registry.
     /// `max_topics` is the memory preset's catalogue capacity;
     /// `max_stream_payload` the largest block a stream may send (one frame of
-    /// the link, and no more than the peer accepts).
+    /// the link, and no more than the peer accepts); `max_message_payload`
+    /// the largest (fragmented) message the node can seal and send, which
+    /// bounds a bytes topic.
     esp_err_t install(Topics& topics, btp::Node& node, btp::Catalog& catalog,
                       std::size_t max_topics, ErrorInfo& error,
-                      std::size_t max_stream_payload = kDefaultStreamPayload) noexcept;
+                      std::size_t max_stream_payload = kDefaultStreamPayload,
+                      std::size_t max_message_payload = kDefaultMessagePayload) noexcept;
 
     /// Text topics that are due for their subscribers, and the topics asked
     /// for by request_publish() (only if someone is subscribed). Every pass.
@@ -113,12 +122,20 @@ private:
     static constexpr std::size_t kSlotHead = 10U;
 
     static void fill_fields(void* context, btp::NamedSampleWriter& writer);
+    /// Text and bytes topics: no fields, published here rather than by the
+    /// node's own registry.
+    static bool body_only(const TopicDecl& t) noexcept { return t.is_text_ || t.is_bytes_; }
     bool publish_one(btp::Node& node, std::size_t index, std::uint64_t now_ms) noexcept;
     esp_err_t add_stream(const TopicDecl& topic, std::size_t index, btp::Catalog& catalog,
                          std::size_t max_stream_payload, ErrorInfo& error) noexcept;
     void send_streams(btp::Node& node, btp::SubscriptionTable& subscriptions) noexcept;
 
     std::vector<std::unique_ptr<Stream>> streams_;
+    // One payload buffer for every bytes topic (they are published one at a
+    // time, on the communication task), sized for the largest; malloc'd by
+    // install() only when a bytes topic is declared.
+    std::unique_ptr<std::uint8_t, FreeDeleter> bytes_payload_;
+    std::size_t bytes_capacity_ = 0U;
     Topics topics_;
     std::atomic<std::uint32_t> requested_{0U};
     std::atomic<std::uint32_t> subscribed_{0U};   // written by publish_pending()

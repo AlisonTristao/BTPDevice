@@ -87,6 +87,14 @@ t.stream("audio.pcm", 1024, "counts").range(-2048, 2047);   // btp_topics.cpp
 device.write_stream("audio.pcm", block, 1024, 83333, esp_timer_get_time());
 ```
 
+Um corpo que só o receptor sabe ler (uma imagem, uma grade compactada) vai num
+tópico **bytes**: a função escreve o corpo e devolve o tamanho, ou 0 quando não
+há nada novo ainda.
+
+```cpp
+t.bytes("camera.matrix", btpdev::Hz(30), 1900, copy_latest_frame).version(2);
+```
+
 ## Chave e arquivos
 
 Os links por rádio (TCP, BLE e ESP-NOW) só sobem com a chave do dispositivo.
