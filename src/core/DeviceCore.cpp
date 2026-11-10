@@ -41,8 +41,12 @@ constexpr const char* kNvsNamespace = "btpdev";
 std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time() / 1000LL); }
 
 // One StaticNode of preset M, placement-new'd into aligned heap storage.
-template <Memory M>
-bool make_node(btp::NodeConfig& config, std::uint64_t reassembly_ms, void** storage,
+// `config` keeps its concrete type (DeviceCore): from BTP 2.51 on, the node's
+// constructor checks at compile time that every has_X() override has its X()
+// (seal() without has_seal() would send in the clear). With an older BTP it
+// converts to NodeConfig& as before.
+template <Memory M, class Config>
+bool make_node(Config& config, std::uint64_t reassembly_ms, void** storage,
                btp::Node** node, btp::Catalog** catalog, void (**destroy)(btp::Node*)) {
     using N = typename NodePreset<M>::Node;
     void* memory = alloc_aligned(alignof(N), sizeof(N));
