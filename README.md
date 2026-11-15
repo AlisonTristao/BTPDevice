@@ -206,7 +206,7 @@ TraceView para o dispositivo.
 | | |
 |---|---|
 | Framework | ESP-IDF 6.0+ (componente) |
-| Chips | ESP32-S3 primeiro. ESP32, ESP32-C3 e ESP32-C6 na sequência ([matriz de links](docs/PLANO.md#42-matriz-de-suporte)). |
+| Chips | ESP32-S3 primeiro. ESP32 clássico pelo link Serial na UART (conversor da placa). ESP32-C3 e ESP32-C6 na sequência ([matriz de links](docs/PLANO.md#42-matriz-de-suporte)). |
 | Links | Serial (USB ou UART), TCP (Wi-Fi), BLE, ESP-NOW (via dongle). **Um link por boot** na v1. |
 | Dependências | [BTP](https://github.com/AlisonTristao/BTP), [TinyShell](https://github.com/AlisonTristao/TinyShell) |
 

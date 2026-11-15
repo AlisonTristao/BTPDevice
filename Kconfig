@@ -38,8 +38,12 @@ menu "BTPDevice"
             begin() falls back to Serial (BTPDEV_ERR_LINK_UNSUPPORTED).
 
         config BTPDEV_LINK_SERIAL
-            bool "Serial (USB CDC)"
+            bool "Serial (native USB CDC or UART)"
             default y
+            help
+                DeviceConfig::serial_port picks the port: the native USB
+                (TinyUSB CDC, ESP32-S2/S3/P4) or a UART, usually the one
+                behind the board's USB-serial bridge.
 
         config BTPDEV_LINK_TCP
             bool "TCP over Wi-Fi"

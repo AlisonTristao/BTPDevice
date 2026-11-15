@@ -37,6 +37,8 @@ void designated_initializers_compile_in_declaration_order() {
         .wifi = {.file = "wifi.txt"},
         .tcp = {.port = 44300},
         .espnow = {.peer_mac = {1, 2, 3, 4, 5, 6}, .channel = 6},
+        .serial_port = btpdev::SerialPort::Uart,
+        .uart = {.port = 0, .baud = 921600},
         .source_info = {{"hw", "Hardware", "rev B"}},
     };
     btpdev::ErrorInfo error;
@@ -114,6 +116,37 @@ void task_and_network_ranges() {
     CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
 }
 
+void uart_serial_ranges() {
+    btpdev::ErrorInfo error;
+    DeviceConfig config = valid_device();
+    // The defaults: Auto port, UART0 on its own pins at 921600, console muted.
+    CHECK(config.serial_port == btpdev::SerialPort::Auto);
+    CHECK(config.uart.port == 0 && config.uart.baud == 921600U);
+    CHECK(config.uart.tx_pin == -1 && config.uart.rx_pin == -1 && config.uart.mute_console);
+
+    config.uart.baud = 1200U;
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK_CONTAINS(error.message, "uart.baud");
+    config.uart.baud = 2000000U;
+    CHECK(check(config, error) == ESP_OK);
+
+    config = valid_device();
+    config.uart.port = 3;
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    config.uart.port = 1;  // no default pins on UART1
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK_CONTAINS(error.message, "tx_pin");
+    config.uart.tx_pin = 17;
+    config.uart.rx_pin = 18;
+    CHECK(check(config, error) == ESP_OK);
+    config.uart.rx_pin = -2;
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+
+    config = valid_device();
+    config.serial_port = static_cast<btpdev::SerialPort>(7);
+    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+}
+
 void source_info_is_filled_from_the_start() {
     btpdev::ErrorInfo error;
     DeviceConfig config = valid_device();
@@ -186,6 +219,7 @@ int main() {
     the_name_is_printable_ascii();
     the_fallback_must_be_a_concrete_link();
     task_and_network_ranges();
+    uart_serial_ranges();
     source_info_is_filled_from_the_start();
     storage_rules();
     link_names();

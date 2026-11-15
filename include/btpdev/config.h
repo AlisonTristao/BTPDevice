@@ -22,7 +22,7 @@ namespace btpdev {
 
 /// How the device talks to TraceView. One link per boot (docs/PLANO.md D4).
 enum class Link : std::uint8_t {
-    Serial,        ///< USB CDC (or UART), 0x00 || COBS || 0x00 framing
+    Serial,        ///< native USB CDC or a UART, 0x00 || COBS || 0x00 framing
     Tcp,           ///< Wi-Fi station + TCP server, found as <name>.local
     Ble,           ///< NimBLE peripheral with the BTP GATT service
     EspNow,        ///< ESP-NOW datagrams through the bally_dongle
@@ -73,6 +73,13 @@ struct ShellConfig {
     std::uint32_t stack_bytes = 8192U;
 };
 
+/// Which port Link::Serial uses (DeviceConfig::serial_port).
+enum class SerialPort : std::uint8_t {
+    Auto,  ///< the native USB when this build has it (TinyUSB CDC), else the UART
+    Usb,   ///< the native USB (TinyUSB CDC): ESP32-S2/S3/P4 only
+    Uart,  ///< a UART: on most boards UART0, wired to the USB-serial bridge
+};
+
 /// Link::Serial on the native USB port.
 struct UsbConfig {
     /// false: the application installs TinyUSB itself (a composite device,
@@ -80,6 +87,25 @@ struct UsbConfig {
     /// begin(); the library only opens the CDC port. The USB names are then
     /// the application's.
     bool install_driver = true;
+};
+
+/// Link::Serial on a UART (a board's USB-serial bridge: CP210x, CH340...).
+struct UartConfig {
+    /// UART number. 0 is the one wired to the bridge on most dev boards, and
+    /// usually the ESP_LOG console too (see mute_console).
+    int port = 0;
+    /// The device in TraceView must be set to the same rate. 115200 is too
+    /// slow for an audio stream; CP210x and CH340 handle 921600 fine.
+    std::uint32_t baud = 921600U;
+    /// -1 keeps the port's current pins (UART0: the bridge pins). Other ports
+    /// have no default pins: give both.
+    int tx_pin = -1;
+    int rx_pin = -1;
+    /// When `port` is the ESP_LOG console, ESP_LOG output is discarded while
+    /// the link runs: a log line written in the middle of a frame would
+    /// corrupt it. Logs still reach TraceView through btpdev::log(). Plain
+    /// printf() to stdout is not caught: do not use it on that port.
+    bool mute_console = true;
 };
 
 struct WifiConfig {
@@ -128,7 +154,10 @@ struct DeviceConfig {
     WifiConfig wifi{};
     TcpConfig tcp{};
     EspNowConfig espnow{};
+    /// Link::Serial: native USB or UART (Auto picks USB when the build has it).
+    SerialPort serial_port = SerialPort::Auto;
     UsbConfig usb{};
+    UartConfig uart{};
     /// Serial without encryption even with a key: whoever holds the cable
     /// already has the device in hand. The radio links always follow the key.
     bool serial_cleartext = false;

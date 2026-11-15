@@ -220,13 +220,26 @@ void app_commands(btpdev::Commands& c) {
 |---|---|---|---|---|---|
 | Serial | TinyUSB CDC | ✅ v1 | — | — | — |
 | Serial | USB-Serial-JTAG | depois | — | depois | depois |
-| Serial | UART (conversor USB) | depois | depois | depois | depois |
+| Serial | UART (conversor USB) | ✅ | ✅ (compila; teste em bancada pendente) | depois | depois |
 | TCP | Wi-Fi STA + mDNS | ✅ v1 | depois | depois | depois |
 | BLE | NimBLE GATT | ✅ v1 | depois | depois | depois |
 | ESP-NOW | via bally_dongle | ✅ v1 | depois | depois | depois |
 
 O link Serial tem três backends atrás da mesma interface, escolhidos pelo chip e
 pela configuração. O TraceView trata os três igual (porta serial com COBS).
+
+**UART.** `DeviceConfig::serial_port = Auto` usa a USB nativa quando o build tem
+TinyUSB CDC e a UART nos outros casos (`Uart` força a UART num S3). A UART não
+tem estado de linha visível ao dispositivo: a sessão abre com os primeiros bytes
+recebidos e fecha pelo watchdog de sessão (`disconnect_peer()`). Um HELLO novo
+numa conexão aberta já reinicia a sessão, então reabrir a porta no TraceView
+funciona. Com a UART do console (UART0 na maioria das placas), o `ESP_LOG` fica
+mudo enquanto o link roda (`uart.mute_console`); `printf()` direto no stdout não
+é interceptado. O TraceView liga DTR e RTS juntos ao abrir a porta, o que não
+aciona o reset automático (EN/IO0) das placas com conversor; mesmo assim, o
+comportamento de cada placa ao abrir a porta deve ser conferido em bancada. O
+baud do dispositivo no TraceView precisa ser igual a `uart.baud` (921600 por
+padrão; 115200 não comporta um stream de áudio).
 
 ### 4.3 Os links
 

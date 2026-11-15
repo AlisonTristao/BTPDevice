@@ -80,6 +80,12 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   timer só notifica a task.
 - Hostname DHCP com o nome do dispositivo no link TCP: o roteador lista o
   dispositivo pelo nome, não como `espressif`.
+- Link Serial por UART (`UartSerialLink`), para o conversor USB-serial da placa
+  (CP210x, CH340): `DeviceConfig::serial_port` (`Auto`, `Usb`, `Uart`) e
+  `DeviceConfig::uart` (porta, baud — padrão 921600 — pinos e `mute_console`).
+  `Auto` usa a USB nativa quando o build tem TinyUSB CDC; senão, a UART. É o
+  primeiro link do ESP32 clássico. Com a UART do console, o `ESP_LOG` fica mudo
+  enquanto o link roda, para nenhuma linha de log cair no meio de um quadro.
 
 ### Alterado
 - Requer BTP >= 2.51.0 (CI em `v2.51.0`): os presets de memória usam

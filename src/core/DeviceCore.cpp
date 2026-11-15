@@ -30,6 +30,7 @@
 #include "transport/BleLink.h"
 #include "transport/EspNowLink.h"
 #include "transport/TcpLink.h"
+#include "transport/UartSerialLink.h"
 #include "transport/UsbSerialLink.h"
 
 namespace btpdev {
@@ -285,6 +286,24 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
             break;
         }
         default: {
+            // Auto: the native USB when this build has TinyUSB CDC (S2/S3/P4
+            // with it enabled), else the UART behind the board's bridge.
+#if CONFIG_TINYUSB_CDC_ENABLED
+            const bool use_uart = device_.serial_port == SerialPort::Uart;
+#else
+            const bool use_uart = device_.serial_port != SerialPort::Usb;
+#endif
+            if (use_uart) {
+                UartSerialConfig config;
+                config.port = device_.uart.port;
+                config.baud = device_.uart.baud;
+                config.tx_pin = device_.uart.tx_pin;
+                config.rx_pin = device_.uart.rx_pin;
+                config.mute_console = device_.uart.mute_console;
+                config.send_queue_bytes = sizes.link_queue_bytes;
+                link_ = new (std::nothrow) UartSerialLink(config);
+                break;
+            }
             UsbSerialConfig config;
             config.product_name = device_.name;
             config.install_driver = device_.usb.install_driver;
