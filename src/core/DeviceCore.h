@@ -38,6 +38,7 @@
 #include "core/FrameQueue.h"
 #include "core/Memory.h"
 #include "core/NodePresets.h"
+#include "core/PeerLink.h"
 #include "core/RuntimeErrors.h"
 #include "core/StreamFraming.h"
 #include "protocol/ShellText.h"
@@ -102,6 +103,9 @@ public:
     /// Saves the link for Link::FromSettings (applies at the next boot).
     esp_err_t set_link(Link link) noexcept;
     btp::Node* node() noexcept { return node_; }
+
+    /// The peer link (DeviceConfig::peer), or nullptr when there is none.
+    PeerLink* peer() noexcept { return peer_; }
 
     // ---- btp::NodeConfig (called by node_, on the comms context) ----------
     bool send(const std::uint8_t* frame, std::size_t frame_size) override;
@@ -238,6 +242,7 @@ private:
 
     // Link.
     LinkDriver* link_ = nullptr;
+    PeerLink* peer_ = nullptr;   // link 1 of the node (DeviceConfig::peer)
     WifiNetwork networks_[kMaxWifiNetworks] = {};
     std::size_t network_count_ = 0U;
 

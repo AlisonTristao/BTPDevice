@@ -18,6 +18,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <btpdev/peer.h>
+
 namespace btpdev {
 
 /// How the device talks to TraceView. One link per boot (docs/PLANO.md D4).
@@ -163,6 +165,9 @@ struct DeviceConfig {
     bool serial_cleartext = false;
     /// Unused entries keep key == nullptr.
     SourceInfo source_info[kMaxSourceInfo] = {};
+    /// A second link, device to device, over the application's own transport
+    /// (include/btpdev/peer.h). Off unless `peer.transport` is set.
+    PeerConfig peer{};
 };
 
 /// Where the provisioned key lives once imported (docs/PLANO.md section 4.9).

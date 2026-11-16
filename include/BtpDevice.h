@@ -153,6 +153,25 @@ public:
     /// Saves the link Link::FromSettings uses from the next boot on.
     esp_err_t set_link(btpdev::Link link) noexcept;
 
+    // ---- peer link (DeviceConfig::peer, include/btpdev/peer.h) -------------
+
+    /// The transport received one datagram from the peer. Any task, never
+    /// blocks; the message is opened on the communication task. False: no
+    /// peer link, or its receive queue is full.
+    bool peer_receive(const std::uint8_t* datagram, std::size_t size) noexcept;
+    /// Queues one message for the peer on `channel` (the receiver gets it in
+    /// PeerConfig::on_message). Any task, never blocks. False: no peer link,
+    /// no password set, larger than max_peer_message(), or the queue is full.
+    bool peer_send(std::uint16_t channel, const std::uint8_t* data, std::size_t size) noexcept;
+    /// Largest message peer_send() takes (one datagram); 0 without a peer link.
+    std::size_t max_peer_message() const noexcept;
+    btpdev::PeerStats peer_stats() const noexcept;
+    /// Sets the peer-link password (every device of the group uses the same),
+    /// saves the derived key in NVS and applies it at once; nullptr or ""
+    /// erases it. Any task. Same as `btp -peer_password <text>`.
+    esp_err_t set_peer_password(const char* password) noexcept;
+    bool has_peer_key() const noexcept;
+
     /// Advanced. The shell behind the terminal and COMMAND_REQUEST (register
     /// commands on it after begin()); nullptr before begin().
     TinyShell* shell() noexcept;

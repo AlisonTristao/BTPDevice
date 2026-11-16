@@ -266,6 +266,30 @@ bool verify_tag_matches(const std::uint8_t* key, std::size_t key_size,
 
 }  // namespace
 
+void derive_password_key(const char* password, std::size_t password_size, const char* salt,
+                         std::uint32_t iterations, std::uint8_t* out, std::size_t out_size) noexcept {
+    if (out == nullptr || out_size == 0U) return;
+    if (out_size > kShaDigestSize) out_size = kShaDigestSize;
+    const auto* key = reinterpret_cast<const std::uint8_t*>(password != nullptr ? password : "");
+    // U1 = HMAC(P, S || INT(1)); Ui = HMAC(P, U(i-1)); T = U1 ^ U2 ^ ... ^ Uc.
+    std::uint8_t first[64] = {};
+    const std::size_t salt_size = salt != nullptr ? std::strlen(salt) : 0U;
+    const std::size_t head = salt_size < sizeof(first) - 4U ? salt_size : sizeof(first) - 4U;
+    if (head != 0U) std::memcpy(first, salt, head);
+    first[head + 3U] = 1U;
+    std::uint8_t u[kShaDigestSize] = {};
+    std::uint8_t t[kShaDigestSize] = {};
+    hmac_sha256(key, password_size, first, head + 4U, u);
+    std::memcpy(t, u, sizeof(t));
+    for (std::uint32_t i = 1U; i < iterations; ++i) {
+        hmac_sha256(key, password_size, u, sizeof(u), u);
+        for (std::size_t j = 0U; j < sizeof(t); ++j) t[j] = static_cast<std::uint8_t>(t[j] ^ u[j]);
+    }
+    std::memcpy(out, t, out_size);
+    wipe(u, sizeof(u));
+    wipe(t, sizeof(t));
+}
+
 KeyStore::Error KeyStore::parse(const std::uint8_t* data, std::size_t size,
                                 Contents* out) noexcept {
     if (data == nullptr || size != kFileSize) return Error::Size;

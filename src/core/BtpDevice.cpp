@@ -173,3 +173,33 @@ esp_err_t BtpDevice::set_link(btpdev::Link link) noexcept {
 TinyShell* BtpDevice::shell() noexcept { return core_ != nullptr ? &core_->shell() : nullptr; }
 
 btp::Node* BtpDevice::node() noexcept { return core_ != nullptr ? core_->node() : nullptr; }
+
+bool BtpDevice::peer_receive(const std::uint8_t* datagram, std::size_t size) noexcept {
+    btpdev::PeerLink* peer = core_ != nullptr ? core_->peer() : nullptr;
+    return peer != nullptr && peer->push_rx(datagram, size);
+}
+
+bool BtpDevice::peer_send(std::uint16_t channel, const std::uint8_t* data, std::size_t size) noexcept {
+    btpdev::PeerLink* peer = core_ != nullptr ? core_->peer() : nullptr;
+    return peer != nullptr && peer->push_tx(channel, data, size);
+}
+
+std::size_t BtpDevice::max_peer_message() const noexcept {
+    btpdev::PeerLink* peer = core_ != nullptr ? core_->peer() : nullptr;
+    return peer != nullptr ? peer->max_message() : 0U;
+}
+
+btpdev::PeerStats BtpDevice::peer_stats() const noexcept {
+    btpdev::PeerLink* peer = core_ != nullptr ? core_->peer() : nullptr;
+    return peer != nullptr ? peer->stats() : btpdev::PeerStats{};
+}
+
+esp_err_t BtpDevice::set_peer_password(const char* password) noexcept {
+    btpdev::PeerLink* peer = core_ != nullptr ? core_->peer() : nullptr;
+    return peer != nullptr ? peer->set_password(password) : ESP_ERR_INVALID_STATE;
+}
+
+bool BtpDevice::has_peer_key() const noexcept {
+    btpdev::PeerLink* peer = core_ != nullptr ? core_->peer() : nullptr;
+    return peer != nullptr && peer->has_key();
+}

@@ -201,6 +201,13 @@ private:
     Error last_error_ = Error::Ok;
 };
 
+/// PBKDF2-HMAC-SHA256 (RFC 8018), first block only: `out_size` <= 32 bytes
+/// of key from a password and a salt. Used for the peer-link key
+/// (include/btpdev/peer.h), where every device derives the same key from the
+/// same password, so the salt is a fixed label.
+void derive_password_key(const char* password, std::size_t password_size, const char* salt,
+                         std::uint32_t iterations, std::uint8_t* out, std::size_t out_size) noexcept;
+
 }  // namespace btpdev
 
 #endif  // BTPDEV_KEY_STORE_H

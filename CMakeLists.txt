@@ -36,6 +36,7 @@ set(btpdev_srcs
     "src/core/BtpDevice.cpp"
     "src/core/ConfigCheck.cpp"
     "src/core/DeviceCore.cpp"
+    "src/core/PeerLink.cpp"
     "src/core/Error.cpp"
     "src/core/FrameQueue.cpp"
     "src/core/Identity.cpp"

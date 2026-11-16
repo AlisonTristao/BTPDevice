@@ -98,6 +98,7 @@ DeviceCore::~DeviceCore() {
         delete link_;
     }
     if (node_ != nullptr && destroy_node_ != nullptr) destroy_node_(node_);
+    delete peer_;
     free_buffer(node_storage_);
     if (shell_queue_ != nullptr) vQueueDelete(shell_queue_);
 }
@@ -123,6 +124,12 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     if (has_key_ && !sealed_) ESP_LOGI(tag::kKey, "Serial in clear (DeviceConfig::serial_cleartext)");
     err = create_node(topics);
     if (err != ESP_OK) return err;
+    if (device_.peer.transport != nullptr) {
+        peer_ = new (std::nothrow) PeerLink(device_.peer);
+        if (peer_ == nullptr) return fail(error_, ESP_ERR_NO_MEM, kTag, "no memory for the peer link");
+        err = peer_->start(*node_, [](void* self) { static_cast<DeviceCore*>(self)->wake(); }, this, error_);
+        if (err != ESP_OK) return err;
+    }
 
     terminal_.configure(
         [this](const std::string& input, std::string* out, std::size_t max) -> std::size_t {
@@ -536,6 +543,7 @@ void DeviceCore::routine() noexcept {
     if (state != State::Ready && state != State::Connected) return;
     const std::uint64_t now = now_ms();
     drain_rx(now);
+    if (peer_ != nullptr) peer_->drain(*node_, now);
     deliver_completion();
     drain_prints();
     drain_logs(now);
@@ -1009,6 +1017,36 @@ void DeviceCore::register_builtin_commands() noexcept {
             return RESULT_OK;
         },
         "errors", "Runtime error counters since boot", "btp");
+    if (peer_ != nullptr) {
+        shell_.add(
+            [this]() -> std::uint8_t {
+                const PeerStats s = peer_->stats();
+                char text[384];
+                std::snprintf(text, sizeof(text),
+                              "peer link  datagram %u B, message up to %u B, key %s\n"
+                              "sent       %lu (refused %lu)\n"
+                              "received   %lu\n"
+                              "dropped    auth %lu, cleartext %lu, malformed %lu, queue full %lu\n",
+                              static_cast<unsigned>(peer_->max_datagram()), static_cast<unsigned>(peer_->max_message()),
+                              peer_->has_key() ? "set" : "NOT SET (btp -peer_password <text>)",
+                              static_cast<unsigned long>(s.sent), static_cast<unsigned long>(s.send_refused),
+                              static_cast<unsigned long>(s.received), static_cast<unsigned long>(s.auth_failed),
+                              static_cast<unsigned long>(s.cleartext), static_cast<unsigned long>(s.malformed),
+                              static_cast<unsigned long>(s.queue_full));
+                shell_print(text);
+                return RESULT_OK;
+            },
+            "peer", "Peer link: key, messages and drops", "btp");
+        shell_.add(
+            [this](const char* password) -> std::uint8_t {
+                const esp_err_t err = peer_->set_password(password);
+                // The password itself is never echoed or logged.
+                shell_print(err == ESP_OK ? (password[0] != '\0' ? "peer password set (saved)\n" : "peer password erased\n")
+                                          : "peer password applied, but NVS failed to save it\n");
+                return err == ESP_OK ? RESULT_OK : RESULT_ERROR;
+            },
+            "peer_password", "Set the peer-link password (same on every device; empty erases)", "btp");
+    }
     shell_.add(
         [this]() -> std::uint8_t {
             if (registry_.size() == 0U) {
