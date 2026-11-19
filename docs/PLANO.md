@@ -688,7 +688,12 @@ Branch `feature/recovery`. Decisões D19–D27, desenho em [4.14](#414-recovery-
 - [x] Rede própria com portal cativo e página de upload no navegador (D27). Recovery: **ESP32-S3 758 KB, ESP32 763 KB, ESP32-C3 802 KB** (era 696–754 KB). Na placa: a rede `btp-btpdev` sobe sem Wi-Fi espelhado.
 - [x] Em hardware (ESP32-S3 N16R8, sem chave, link Serial pela USB-Serial-JTAG com `tools/btp_term.py`): crash loop (`demo -crash` ×3 → recovery, que espera firmware), rede própria do recovery, `btp -bootloader` (entra no modo download e volta sozinho em 30 s sem contar como crash), `btp -status/-mem/-recovery_info`, `chip -temp`.
 - [x] Em hardware com chave e Wi-Fi (`tools/btp_term.py` por TCP cifrado): `btp -recovery` → o recovery entra na mesma rede e responde como `<nome>.local`; senha errada recusada antes de apagar (401, app intacto); upload de 1,17 MB em ~9 s; conexão cortada no meio e chip resetado no meio (equivale a faltar energia): o recovery volta, reporta `app none` e aceita o envio seguinte; o fluxo da página (JavaScript servido pela placa, rodado no Node) grava e volta ao app; a sondagem de portal cativo redireciona para `/`.
-- [ ] Ver a página no celular (só a parte visual falta).
+- [ ] **Testes pendentes em hardware:**
+  - [ ] Página no celular, servida pela placa (o visual já foi conferido no PC com um `/status` simulado).
+  - [ ] Portal cativo num celular de verdade: com a placa sem acesso ao Wi-Fi conhecido, conectar em `btp-<nome>` e ver se a página abre sozinha (o redirecionamento de `/generate_204` para `/` já foi testado).
+  - [ ] `btp -bootloader` num app com TinyUSB (exemplo 01 ou 03): o PHY volta para a USB-Serial-JTAG e o esptool grava.
+  - [ ] Recovery em outros chips: ESP32 clássico, C3 e C6 compilam; nenhum foi testado em placa.
+  - [ ] Senha WPA2 na rede própria (`CONFIG_BTPDEV_RECOVERY_AP_PASSWORD`).
 - [ ] TraceView (outro repositório): HMAC na aba OTA e botão "recovery" no dispositivo.
 - [ ] Depois: página de configuração. No recovery, só o Wi-Fi (é quando ele faz falta: o app não conecta). Arquivos do LittleFS ou do SD e outras configurações ficam no app, que já monta os volumes e tem espaço.
 
