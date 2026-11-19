@@ -311,7 +311,7 @@ esp_err_t reply(httpd_req_t* req, const char* status, const char* text) {
 }
 
 esp_err_t handle_status(httpd_req_t* req) {
-    char name[64], project[64], app_version[64], firmware[160], nonce[2U * ota::kNonceSize + 1U];
+    char name[64], project[64], app_version[64], firmware[256], nonce[2U * ota::kNonceSize + 1U];
     bool app_valid, busy;
     {
         Lock lock;
@@ -328,7 +328,7 @@ esp_err_t handle_status(httpd_req_t* req) {
         std::snprintf(firmware, sizeof(firmware), "recovery %s (no app)", version());
     }
     const bool ready = !busy && (g.has_key || kInsecure);
-    char body[640];
+    char body[1024];
     std::snprintf(body, sizeof(body),
                   "{\"ota_ready\":%s,\"firmware\":\"%s\",\"mode\":\"recovery\",\"recovery\":\"%s\","
                   "\"name\":\"%s\",\"nonce\":\"%s\",\"auth\":\"%s\",\"reason\":\"%s\","
