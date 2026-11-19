@@ -35,6 +35,7 @@ target_compile_definitions(tinyshell PUBLIC TINYSHELL_COLOR)
 # portable; anything touching drivers stays in the component only.
 add_library(btpdev_portable STATIC
     ${BTPDEV_ROOT}/src/core/ConfigCheck.cpp
+    ${BTPDEV_ROOT}/src/core/DebugReport.cpp
     ${BTPDEV_ROOT}/src/core/Error.cpp
     ${BTPDEV_ROOT}/src/core/FrameQueue.cpp
     ${BTPDEV_ROOT}/src/core/Identity.cpp
@@ -65,7 +66,7 @@ enable_testing()
 
 foreach(test_name test_error test_config_check test_frame_queue test_stream_framing test_wifi
                   test_core_pieces test_terminal test_node_presets test_topics
-                  test_keystore test_filesystem)
+                  test_keystore test_filesystem test_debug_report)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE btpdev_portable)
     btpdev_warnings(${test_name})

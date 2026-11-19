@@ -82,6 +82,13 @@ public:
     virtual void disconnect_peer() noexcept {}
 
     virtual LinkStats stats() const noexcept = 0;
+
+    /// The link's own FreeRTOS task (a TaskHandle_t), for the memory report
+    /// (DeviceConfig::debug_log, `btp -mem`); null when the link has none or
+    /// it belongs to someone else (NimBLE, TinyUSB, Wi-Fi).
+    virtual void* task_handle() const noexcept { return nullptr; }
+    /// That task's stack size in bytes (0 with no task).
+    virtual std::uint32_t task_stack_bytes() const noexcept { return 0U; }
 };
 
 }  // namespace btpdev

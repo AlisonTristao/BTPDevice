@@ -168,6 +168,11 @@ struct DeviceConfig {
     /// A second link, device to device, over the application's own transport
     /// (include/btpdev/peer.h). Off unless `peer.transport` is set.
     PeerConfig peer{};
+    /// Debug log on the serial CONSOLE only (ESP_LOG, never TraceView): each
+    /// begin() step with its time since boot and the heap it took, then the
+    /// heap and the stack every task has used. `btp -mem` prints the same
+    /// report at any time, with or without this.
+    bool debug_log = false;
 };
 
 /// Where the provisioned key lives once imported (docs/PLANO.md section 4.9).

@@ -35,6 +35,7 @@
 #endif
 #include <TinyShell.h>
 
+#include "core/DebugReport.h"
 #include "core/FrameQueue.h"
 #include "core/Memory.h"
 #include "core/NodePresets.h"
@@ -308,6 +309,20 @@ private:
     std::atomic<TaskHandle_t> manual_task_{nullptr};  // Threading::Manual owner
     std::atomic<bool> manual_refused_{false};         // logged once
     std::uint32_t last_tick_ms_ = 0U;
+
+    // DeviceConfig::debug_log: one console line per begin() step, then the
+    // memory report. `btp -mem` reuses memory_report().
+    std::int64_t boot_started_us_ = 0;
+    std::size_t boot_heap_start_ = 0U;     // free heap when begin() started
+    std::size_t boot_heap_ = 0U;           // free heap after the previous step
+    TaskHandle_t begin_task_ = nullptr;    // the task that ran begin()
+    void boot_step(const char* step, const char* format, ...) noexcept
+#if defined(__GNUC__)
+        __attribute__((format(printf, 3, 4)))
+#endif
+        ;
+    /// Heap and per-task stack usage, one `line` call per line.
+    void memory_report(ReportLineFn line, void* context) noexcept;
 };
 
 }  // namespace btpdev

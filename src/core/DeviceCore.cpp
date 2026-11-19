@@ -110,25 +110,50 @@ DeviceCore::~DeviceCore() {
 esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics) noexcept {
     state_.store(State::Starting);
     const PresetSizes sizes = preset_sizes(device_.memory);
+    boot_started_us_ = esp_timer_get_time();
+    boot_heap_start_ = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    boot_heap_ = boot_heap_start_;
+    begin_task_ = xTaskGetCurrentTaskHandle();
+    {
+        const esp_app_desc_t* app = esp_app_get_description();
+        boot_step("boot", "BTPDevice %s, %s, IDF %s, fw %s", BTPDEV_VERSION_STRING, CONFIG_IDF_TARGET,
+                  app != nullptr ? app->idf_ver : "?", app != nullptr ? app->version : "?");
+    }
 
     load_identity();
+    boot_step("identity", "source %08lx, boot #%lu, MAC %02x:%02x:%02x:%02x:%02x:%02x",
+              static_cast<unsigned long>(source_id), static_cast<unsigned long>(boot_id),
+              static_cast<unsigned>(mac_[0]), static_cast<unsigned>(mac_[1]), static_cast<unsigned>(mac_[2]),
+              static_cast<unsigned>(mac_[3]), static_cast<unsigned>(mac_[4]), static_cast<unsigned>(mac_[5]));
     mount_storage();
+    boot_step("storage", "LittleFS %s, SD %s, app %s", fs_.mounted() ? fs_.root() : "-",
+              sd_.mounted() ? sd_.root() : "-", app_.mounted() ? app_.root() : "-");
     load_key();
+    boot_step("key", "%s", has_key_ ? "loaded" : "none: traffic in clear, Serial only");
     const Link requested = resolve_link();
+    boot_step("link", "%s requested%s", link_name(requested),
+              device_.link == Link::FromSettings ? " (saved setting)"
+              : requested != device_.link        ? " (no key: Serial instead)"
+                                                 : "");
 
     esp_err_t err = allocate(sizes);
     if (err != ESP_OK) return err;
+    boot_step("buffers", "preset %s", memory_name(device_.memory));
     err = start_link_with_fallback(requested, sizes);
     if (err != ESP_OK) return err;
     sealed_ = has_key_ && !(active_link_ == Link::Serial && device_.serial_cleartext);
     if (has_key_ && !sealed_) ESP_LOGI(tag::kKey, "Serial in clear (DeviceConfig::serial_cleartext)");
+    boot_step("link", "%s started%s, %s", link_name(active_link_),
+              active_link_ != requested ? " (fallback)" : "", sealed_ ? "sealed" : "in clear");
     err = create_node(topics);
     if (err != ESP_OK) return err;
+    boot_step("node", "%u topic(s)", static_cast<unsigned>(registry_.size()));
     if (device_.peer.transport != nullptr) {
         peer_ = new (std::nothrow) PeerLink(device_.peer);
         if (peer_ == nullptr) return fail(error_, ESP_ERR_NO_MEM, kTag, "no memory for the peer link");
         err = peer_->start(*node_, [](void* self) { static_cast<DeviceCore*>(self)->wake(); }, this, error_);
         if (err != ESP_OK) return err;
+        boot_step("peer", "peer link started");
     }
 
     terminal_.configure(
@@ -178,16 +203,133 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     }
     log_queue_.bind(log_storage_.data(), log_storage_.size(), 0U);
     active_ = this;
+    if (device_.debug_log) {
+        // complete_line("") lists the modules; it allocates, so only here.
+        boot_step("shell", "%u module(s), terminal and log queues",
+                  static_cast<unsigned>(shell_.complete_line("", 64U).size()));
+    }
 
     err = start_tasks();
     if (err != ESP_OK) return err;
+    if (device_.debug_log) {
+        const auto core_of = [](TaskHandle_t task) {
+            const BaseType_t core = xTaskGetCoreID(task);
+            return core == tskNO_AFFINITY ? -1 : static_cast<int>(core);
+        };
+        if (comms_task_ != nullptr) {
+            boot_step("tasks", "comms core %d prio %u, shell core %d prio %u", core_of(comms_task_),
+                      static_cast<unsigned>(uxTaskPriorityGet(comms_task_)), core_of(shell_task_),
+                      static_cast<unsigned>(uxTaskPriorityGet(shell_task_)));
+        } else {
+            boot_step("tasks", "comms by the application (Threading::Manual), shell core %d prio %u",
+                      core_of(shell_task_), static_cast<unsigned>(uxTaskPriorityGet(shell_task_)));
+        }
+    }
 
     state_.store(State::Ready);
+    if (device_.debug_log) {
+        const std::size_t heap_now = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        char took[16];
+        format_kb(took, sizeof(took), boot_heap_start_ > heap_now ? boot_heap_start_ - heap_now : 0U);
+        boot_step("ready", "in %lu ms, BTPDevice took %s KB",
+                  static_cast<unsigned long>((esp_timer_get_time() - boot_started_us_) / 1000), took);
+        memory_report([](void*, const char* line) { ESP_LOGI(tag::kCore, "%s", line); }, nullptr);
+    }
     ESP_LOGI(kTag, "\"%s\" ready on %s (source %08lx, boot %lu, memory %s)%s", device_.name,
              link_name(active_link_), static_cast<unsigned long>(source_id),
              static_cast<unsigned long>(boot_id), memory_name(device_.memory),
              sealed_ ? "" : ", traffic in clear");
     return ESP_OK;
+}
+
+void DeviceCore::boot_step(const char* step, const char* format, ...) noexcept {
+    if (!device_.debug_log) return;
+    // The heap the step took: another task allocating meanwhile (Wi-Fi) shows
+    // up here too, so read it as an estimate.
+    const std::size_t heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    const long long used = static_cast<long long>(boot_heap_) - static_cast<long long>(heap);
+    boot_heap_ = heap;
+    char detail[96];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(detail, sizeof(detail), format, args);
+    va_end(args);
+    char line[kReportLineMax];
+    format_boot_step(line, sizeof(line), static_cast<std::uint64_t>(esp_timer_get_time()), step, detail, used);
+    ESP_LOGI(tag::kCore, "%s", line);
+}
+
+void DeviceCore::memory_report(ReportLineFn line, void* context) noexcept {
+    constexpr std::uint32_t kInternal = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    HeapUsage heap;
+    heap.free_bytes = heap_caps_get_free_size(kInternal);
+    heap.total_bytes = heap_caps_get_total_size(kInternal);
+    heap.minimum_bytes = heap_caps_get_minimum_free_size(kInternal);
+    heap.largest_block = heap_caps_get_largest_free_block(kInternal);
+    heap.psram_total = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    if (heap.psram_total != 0U) heap.psram_free = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+
+    // Tasks whose stack size this library knows; any other shows "-".
+    struct Known {
+        TaskHandle_t task;
+        std::uint32_t stack_bytes;
+    };
+    const char* begin_name = begin_task_ != nullptr ? pcTaskGetName(begin_task_) : nullptr;
+    const Known known[] = {
+        {begin_task_,
+         begin_name != nullptr && std::strcmp(begin_name, "main") == 0 ? CONFIG_ESP_MAIN_TASK_STACK_SIZE : 0U},
+        {comms_task_, device_.comms.stack_bytes},
+        {shell_task_, device_.shell.stack_bytes},
+        {link_ != nullptr ? static_cast<TaskHandle_t>(link_->task_handle()) : nullptr,
+         link_ != nullptr ? link_->task_stack_bytes() : 0U},
+    };
+    const auto stack_of = [&known](TaskHandle_t task) -> std::uint32_t {
+        for (const Known& k : known) {
+            if (k.task != nullptr && k.task == task) return k.stack_bytes;
+        }
+        return 0U;
+    };
+    const auto usage_of = [&stack_of](TaskHandle_t task, const char* name, unsigned priority,
+                                      std::uint32_t min_free) {
+        TaskUsage u;
+        u.name = name;
+        const BaseType_t core = xTaskGetCoreID(task);
+        u.core = core == tskNO_AFFINITY ? -1 : static_cast<int>(core);
+        u.priority = priority;
+        u.stack_total = stack_of(task);
+        u.stack_min_free = min_free;  // ESP-IDF: StackType_t is a byte
+        return u;
+    };
+
+#if CONFIG_FREERTOS_USE_TRACE_FACILITY
+    // Every task in the system (wifi, tiT, ipc...). Debug-only path, so the
+    // snapshot comes from the heap rather than the caller's stack.
+    const UBaseType_t capacity = uxTaskGetNumberOfTasks() + 2U;
+    TaskStatus_t* all = new (std::nothrow) TaskStatus_t[capacity];
+    TaskUsage* tasks = new (std::nothrow) TaskUsage[capacity];
+    std::size_t count = 0U;
+    if (all != nullptr && tasks != nullptr) {
+        const UBaseType_t n = uxTaskGetSystemState(all, capacity, nullptr);
+        for (UBaseType_t i = 0U; i < n; ++i) {
+            tasks[count++] = usage_of(all[i].xHandle, all[i].pcTaskName,
+                                      static_cast<unsigned>(all[i].uxCurrentPriority),
+                                      static_cast<std::uint32_t>(all[i].usStackHighWaterMark));
+        }
+    }
+    write_memory_report(heap, tasks, count, line, context);
+    delete[] tasks;
+    delete[] all;
+#else
+    // Without the trace facility FreeRTOS cannot list tasks: the library's own.
+    TaskUsage tasks[sizeof(known) / sizeof(known[0])];
+    std::size_t count = 0U;
+    for (const Known& k : known) {
+        if (k.task == nullptr) continue;
+        tasks[count++] = usage_of(k.task, pcTaskGetName(k.task), static_cast<unsigned>(uxTaskPriorityGet(k.task)),
+                                  static_cast<std::uint32_t>(uxTaskGetStackHighWaterMark(k.task)));
+    }
+    write_memory_report(heap, tasks, count, line, context);
+#endif
 }
 
 void DeviceCore::load_identity() noexcept {
@@ -1044,6 +1186,18 @@ void DeviceCore::register_builtin_commands() noexcept {
             return RESULT_OK;
         },
         "errors", "Runtime error counters since boot", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            memory_report(
+                [](void* context, const char* line) {
+                    auto* self = static_cast<DeviceCore*>(context);
+                    self->shell_print(line);
+                    self->shell_print("\n");
+                },
+                this);
+            return RESULT_OK;
+        },
+        "mem", "Heap and the stack each task has used", "btp");
     if (peer_ != nullptr) {
         shell_.add(
             [this]() -> std::uint8_t {

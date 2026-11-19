@@ -73,6 +73,8 @@ public:
     void poll(std::uint32_t now_ms) noexcept override;
     void disconnect_peer() noexcept override { close_client(); }
     LinkStats stats() const noexcept override;
+    void* task_handle() const noexcept override { return task_; }
+    std::uint32_t task_stack_bytes() const noexcept override { return task_ != nullptr ? config_.task_stack_bytes : 0U; }
 
     void set_pending_handler(const PendingHandler& handler) noexcept { pending_handler_ = handler; }
     /// One best-effort write to the pending connection (the BUSY reply).

@@ -56,6 +56,8 @@ public:
     bool connected() const noexcept override { return connected_.load(); }
     void disconnect_peer() noexcept override;
     LinkStats stats() const noexcept override;
+    void* task_handle() const noexcept override { return task_; }
+    std::uint32_t task_stack_bytes() const noexcept override;
 
 private:
     static void task_entry(void* arg) noexcept;

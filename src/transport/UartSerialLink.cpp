@@ -299,4 +299,6 @@ LinkStats UartSerialLink::stats() const noexcept {
     return s;
 }
 
+std::uint32_t UartSerialLink::task_stack_bytes() const noexcept { return task_ != nullptr ? kTaskStackBytes : 0U; }
+
 }  // namespace btpdev

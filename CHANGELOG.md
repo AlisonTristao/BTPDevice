@@ -94,6 +94,13 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   progresso, então a função do trabalho não precisa incluir o BtpDevice: o
   registro do comando liga os dois. Exemplo em `01_minimal` (`demo -progress`).
   Usa `ShellLineEditor::writeProgress()` da TinyShell 2.2.0.
+- `DeviceConfig::debug_log`: o `begin()` descreve o boot no console serial (só
+  `ESP_LOG`, nunca o TraceView). Cada etapa sai com o tempo desde o boot e o heap
+  que consumiu (identidade, armazenamento, chave, link, buffers, nó, shell,
+  tasks), e no fim vem o heap livre, mínimo e o maior bloco, mais a stack usada e
+  total de cada task (todas as do sistema com
+  `CONFIG_FREERTOS_USE_TRACE_FACILITY`). Desligado por padrão.
+- `btp -mem`: o mesmo relatório de memória e tasks, a qualquer hora, no terminal.
 
 ### Alterado
 - Requer TinyShell >= 2.2.0 (CI em `v2.2.0`) para `btpdev::progress()`. As

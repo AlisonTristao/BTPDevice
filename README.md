@@ -212,6 +212,50 @@ xTaskCreatePinnedToCore(control_loop, "control", 4096, nullptr, 20, nullptr, 1);
   outro núcleo. `float` e inteiros de até 4 bytes alinhados são lidos de forma
   atômica. `f64` não tem forma ligada (8 bytes não são atômicos): use `.fill()`.
 
+## Debug pelo serial
+
+Com `debug_log = true`, o `begin()` descreve o boot no **console serial** (o
+`ESP_LOG` de sempre: UART0 ou USB-JTAG). Isso nunca vai para o TraceView. Cada
+etapa mostra o tempo desde o boot e quanto heap ela consumiu, e no fim sai a
+memória e a stack de cada task:
+
+```cpp
+const btpdev::DeviceConfig device_config = {
+    .name = "sensor",
+    .debug_log = true,
+};
+```
+
+```
+I (312) btpdev: [  0.012] boot      BTPDevice 0.1.0, esp32s3, IDF v6.0.1, fw 1.2.0
+I (313) btpdev: [  0.013] identity  source 3a1f22c0, boot #42, MAC 24:6f:28:aa:bb:cc
+I (331) btpdev: [  0.031] storage   LittleFS /fs, SD -, app -                  heap   -4.1 KB
+I (344) btpdev: [  0.044] buffers   preset Medium                              heap  -61.2 KB
+I (420) btpdev: [  0.120] link      TCP started, sealed                        heap  -38.7 KB
+I (451) btpdev: [  0.151] ready     in 151 ms, BTPDevice took 133.9 KB
+I (451) btpdev: heap      182.4 KB free of 320.0 KB, min 180.9 KB, largest block 110.0 KB
+I (451) btpdev: task              core prio  stack peak / total min free
+I (451) btpdev: main                 0    1    2.3 / 3.5 KB       1.2 KB
+I (451) btpdev: btpdev_comms         0   10    3.1 / 8.0 KB       4.9 KB
+I (451) btpdev: btpdev_shell         -    9    1.4 / 8.0 KB       6.6 KB
+I (451) btpdev: btpdev_tcp           0    5    2.2 / 6.0 KB       3.8 KB
+```
+
+- **`peak`** é o máximo de stack que a task já usou desde que nasceu. Se o
+  `min free` chegar perto de zero, aumente a stack dela.
+- **Todas as tasks do sistema** (wifi, tiT, ipc...) entram na tabela quando o
+  projeto tem `CONFIG_FREERTOS_USE_TRACE_FACILITY`. Nas que não são da
+  biblioteca, o tamanho total não é conhecido e aparece `-`.
+- **O heap por etapa é uma estimativa:** outra task alocando ao mesmo tempo
+  (o Wi-Fi, por exemplo) também entra na conta.
+- **As etapas assíncronas** (scan do Wi-Fi, IP, `nome.local`) continuam saindo
+  pelos logs normais da biblioteca, depois do `ready`.
+- Com o link Serial **na mesma UART do console**, o console fica mudo enquanto o
+  link roda (`UartConfig::mute_console`), e o debug some junto.
+
+O mesmo relatório de memória sai a qualquer hora pelo comando **`btp -mem`**,
+no terminal do TraceView, com ou sem `debug_log`.
+
 ## Chave e arquivos
 
 Os links por rádio (TCP, BLE e ESP-NOW) só sobem com a chave do dispositivo.

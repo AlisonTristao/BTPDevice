@@ -21,7 +21,7 @@
 // Commands run one at a time on the library's shell task, never on the
 // communication task, so a slow command does not stall telemetry.
 //
-// The module "btp" is the library's own (btp -status, -errors, -topics,
+// The module "btp" is the library's own (btp -status, -errors, -mem, -topics,
 // -reboot); "help" is TinyShell's. Mistakes (a duplicate name, a full table)
 // are reported by begin() as BTPDEV_ERR_BAD_COMMAND.
 
