@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include <ShellStyle.h>
+
 #include "check.h"
 
 using btpdev::Terminal;
@@ -143,6 +145,63 @@ void async_lines_print_above_the_prompt() {
     CHECK(contains(h.out, "dev> "));  // prompt and the typed "a" come back
 }
 
+std::size_t find_plain(const std::string& haystack, const char* needle) {
+    return shell_strip_sgr(haystack).find(needle);
+}
+
+void progress_redraws_during_a_command_and_the_response_lands_below() {
+    Harness h;
+    h.type("flash\r");
+    h.out.clear();
+    h.terminal.progress("flash", 40U);
+    h.terminal.pump(10U);
+    CHECK(find_plain(h.out, "\r! flash  40% [") != std::string::npos);
+    CHECK(find_plain(h.out, "\n") == std::string::npos);  // no newline: redrawn in place
+    CHECK(!contains(h.out, "dev> "));
+
+    // The last update and the result arrive in the same pass.
+    h.out.clear();
+    h.terminal.progress("flash", 100U);
+    h.terminal.deliver(1U, 1U, "flashed\n", 0U);
+    h.terminal.pump(20U);
+    const std::size_t bar = find_plain(h.out, "! flash 100% [");
+    const std::size_t response = find_plain(h.out, "! flashed\r\n");
+    const std::size_t prompt = find_plain(h.out, "dev> ");
+    CHECK(bar != std::string::npos && response != std::string::npos && prompt != std::string::npos);
+    CHECK(bar < response && response < prompt);
+}
+
+void only_the_latest_progress_value_is_drawn() {
+    Harness h;
+    h.type("x\r");
+    h.out.clear();
+    h.terminal.progress("job", 10U);
+    h.terminal.progress("job", 20U);
+    h.terminal.progress("job", 30U);
+    h.terminal.pump(10U);
+    CHECK(find_plain(h.out, " 30% ") != std::string::npos);
+    CHECK(find_plain(h.out, " 10% ") == std::string::npos);
+    h.out.clear();
+    h.terminal.pump(20U);  // nothing new: nothing sent
+    CHECK(h.out.empty());
+}
+
+void background_progress_gives_the_prompt_back_when_done() {
+    Harness h;
+    h.type("ab");  // sitting at the prompt, no command running
+    h.out.clear();
+    h.terminal.progress("sync", 50U);
+    h.terminal.pump(100U);
+    CHECK(find_plain(h.out, "\r\n\r! sync  50% [") != std::string::npos);  // broke off the prompt
+
+    h.out.clear();
+    h.terminal.progress("sync", 100U);
+    h.terminal.pump(110U);
+    h.terminal.pump(110U + Terminal::kPromptRestoreMs);
+    CHECK(find_plain(h.out, "! sync 100% [") != std::string::npos);
+    CHECK(find_plain(h.out, "dev> ab") != std::string::npos);  // prompt and typed text back
+}
+
 }  // namespace
 
 int main() {
@@ -156,5 +215,8 @@ int main() {
     output_is_cut_into_link_sized_chunks();
     reset_forgets_every_origin();
     async_lines_print_above_the_prompt();
+    progress_redraws_during_a_command_and_the_response_lands_below();
+    only_the_latest_progress_value_is_drawn();
+    background_progress_gives_the_prompt_back_when_done();
     return test_result("test_terminal");
 }

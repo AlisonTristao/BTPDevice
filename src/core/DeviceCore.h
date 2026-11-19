@@ -79,6 +79,9 @@ public:
     bool claim_manual_task() noexcept;
     /// Any task: text for TraceView's terminal (btpdev::printf()).
     void print(const char* text) noexcept;
+    /// Any task: a progress bar for TraceView's terminal (btpdev::progress()).
+    /// Lock-free, never blocks; `label` must outlive the job.
+    void progress(const char* label, std::uint8_t percent) noexcept;
     /// Any task: a shell line from the application (BtpDevice::run()).
     bool run(const char* line) noexcept;
     /// Any task: a line for TraceView's log panel (btpdev::log()). True when queued.
@@ -276,6 +279,16 @@ private:
     Buffer print_storage_;
     FrameQueue print_queue_;   // guarded by print_mutex_
     void drain_prints() noexcept;
+
+    // btpdev::progress(): any task -> comms -> terminal. Not a queue: only the
+    // latest value matters, so a job may report as often as it likes.
+    static constexpr std::uint32_t kProgressPeriodMs = 100U;  // link redraw cap
+    std::atomic<std::uint8_t> progress_percent_{0U};
+    std::atomic<const char*> progress_label_{nullptr};
+    std::atomic<std::uint32_t> progress_seq_{0U};  // bumped on every new value
+    std::uint32_t progress_drawn_seq_ = 0U;        // comms task only
+    std::uint32_t progress_drawn_ms_ = 0U;         // comms task only
+    void drain_progress(std::uint64_t now_ms) noexcept;
 
     // btpdev::log(): any task -> comms -> LOG message.
     // Entry: level (1), timestamp_us (8, little-endian), text.

@@ -4,6 +4,8 @@
 #include <cstring>
 #include <utility>
 
+#include <ShellStyle.h>
+
 namespace btpdev {
 
 std::string render_command_output(const char* text, std::uint8_t status) {
@@ -83,6 +85,9 @@ Terminal::Slot* Terminal::find_or_alloc(std::uint32_t source_id, std::uint32_t b
     victim->awaiting_result = false;
     victim->result_ready = false;
     victim->async_dirty = false;
+    victim->progress_dirty = false;
+    victim->progress_done = false;
+    victim->progress_line.clear();
     victim->in.clear();
     victim->result.clear();
     victim->async_out.clear();
@@ -139,6 +144,19 @@ void Terminal::submit(Slot& slot, const std::string& line, std::string& out) {
     slot.editor.writeResponse("! busy, command dropped", out);
 }
 
+void Terminal::progress(const char* label, std::uint8_t percent) {
+    char bar[96];
+    shell_format_progress(bar, sizeof(bar), percent, label != nullptr ? label : "");
+    std::string line = "! ";
+    line += bar;
+    for (Slot& slot : slots_) {
+        if (!slot.used) continue;
+        slot.progress_line = line;
+        slot.progress_dirty = true;
+        slot.progress_done = percent >= 100U;
+    }
+}
+
 void Terminal::pump(std::uint32_t now_ms) {
     for (Slot& slot : slots_) {
         if (!slot.used) continue;
@@ -146,6 +164,18 @@ void Terminal::pump(std::uint32_t now_ms) {
         if (!slot.prompt_painted) {
             slot.editor.setPrompt(prompt_, out);
             slot.prompt_painted = true;
+        }
+        // Before the result: a command's last update must land above its
+        // response, not on the fresh prompt line.
+        if (slot.progress_dirty) {
+            slot.progress_dirty = false;
+            slot.editor.writeProgress(slot.progress_line, out);
+            if (slot.progress_done && !slot.awaiting_result) {
+                // A background job finished: bring the prompt back, the same
+                // way a burst of async lines does.
+                slot.async_dirty = true;
+                slot.last_async_ms = now_ms;
+            }
         }
         if (slot.result_ready) {
             slot.result_ready = false;

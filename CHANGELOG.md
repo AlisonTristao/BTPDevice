@@ -86,8 +86,20 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   `Auto` usa a USB nativa quando o build tem TinyUSB CDC; senão, a UART. É o
   primeiro link do ESP32 clássico. Com a UART do console, o `ESP_LOG` fica mudo
   enquanto o link roda, para nenhuma linha de log cair no meio de um quadro.
+- `btpdev::progress(label, percent)`: barra de progresso no terminal do
+  TraceView, redesenhada na mesma linha. Aparece enquanto o comando ainda roda
+  (a resposta sai abaixo dela) e funciona de qualquer task. Só o último valor
+  é guardado (sem fila), no máximo ~10 redesenhos por segundo e 100% sempre
+  enviado. A sobrecarga `(void*, uint8_t)` tem o formato de um callback C de
+  progresso, então a função do trabalho não precisa incluir o BtpDevice: o
+  registro do comando liga os dois. Exemplo em `01_minimal` (`demo -progress`).
+  Usa `ShellLineEditor::writeProgress()` da TinyShell 2.2.0.
 
 ### Alterado
+- Requer TinyShell >= 2.2.0 (CI em `v2.2.0`) para `btpdev::progress()`. As
+  mensagens da shell agora saem em inglês (`robot -pwm: success`,
+  `nope: module not found`) e os argumentos digitados deixam de ser pretos
+  (sumiam em fundo escuro).
 - Requer BTP >= 2.51.0 (CI em `v2.51.0`): os presets de memória usam
   `btp::NodeWith<>` (capacidades por nome), e o `DeviceCore` passa pela
   verificação em compilação dos pares `has_X()`/`X()` do `NodeConfig`.

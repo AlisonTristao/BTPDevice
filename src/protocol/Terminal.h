@@ -75,6 +75,13 @@ public:
     /// live origin, printed above the prompt.
     void async_line(const char* text);
 
+    /// A progress bar for every live origin, redrawn in place on one line
+    /// ("! label  42% [=====>   ]", ShellLineEditor::writeProgress()). Only
+    /// the latest value per origin is kept until the next pump(). While a
+    /// command runs, its response lands below the bar; outside a command the
+    /// bar breaks off the prompt, which comes back once it reaches 100%.
+    void progress(const char* label, std::uint8_t percent);
+
     /// Runs the editors, submits lines, sends echo / output. Every pass.
     void pump(std::uint32_t now_ms);
 
@@ -95,7 +102,10 @@ private:
         bool awaiting_result = false;
         bool result_ready = false;
         bool async_dirty = false;
+        bool progress_dirty = false;
+        bool progress_done = false;   // the pending bar is at 100%
         std::uint32_t last_async_ms = 0U;
+        std::string progress_line;
         std::string in;
         std::string result;
         std::string async_out;

@@ -544,6 +544,7 @@ void DeviceCore::routine() noexcept {
     const std::uint64_t now = now_ms();
     drain_rx(now);
     if (peer_ != nullptr) peer_->drain(*node_, now);
+    drain_progress(now);  // before the completion: a command's bar sits above its response
     deliver_completion();
     drain_prints();
     drain_logs(now);
@@ -847,6 +848,32 @@ std::size_t DeviceCore::max_stream_payload() const noexcept {
     std::size_t limit = btp::max_payload_size(transport);
     if (limit > kPeerLogicalPayload) limit = kPeerLogicalPayload;
     return sealed_ ? limit - kAeadTagBytes : limit;
+}
+
+void DeviceCore::progress(const char* label, std::uint8_t percent) noexcept {
+    if (percent > 100U) percent = 100U;
+    const std::uint8_t previous = progress_percent_.exchange(percent, std::memory_order_relaxed);
+    const char* previous_label = progress_label_.exchange(label, std::memory_order_relaxed);
+    // A loop reports far more often than the integer percentage changes: only
+    // a new value is worth waking the communication task for.
+    if (previous == percent && previous_label == label && progress_seq_.load() != 0U) return;
+    progress_seq_.fetch_add(1U, std::memory_order_release);
+    wake();
+}
+
+void DeviceCore::drain_progress(std::uint64_t now) noexcept {
+    const std::uint32_t seq = progress_seq_.load(std::memory_order_acquire);
+    if (seq == progress_drawn_seq_) return;
+    const std::uint8_t percent = progress_percent_.load(std::memory_order_relaxed);
+    const std::uint32_t now32 = static_cast<std::uint32_t>(now);
+    // At most one redraw per period over the link. Never held back: the last
+    // value (100%), or the one a just-finished command left -- its response
+    // goes out in this same pass and must land below the bar.
+    const bool final = percent >= 100U || completion_ready_.load(std::memory_order_acquire);
+    if (!final && progress_drawn_seq_ != 0U && now32 - progress_drawn_ms_ < kProgressPeriodMs) return;
+    progress_drawn_seq_ = seq;
+    progress_drawn_ms_ = now32;
+    terminal_.progress(progress_label_.load(std::memory_order_relaxed), percent);
 }
 
 void DeviceCore::print(const char* text) noexcept {
@@ -1409,6 +1436,15 @@ void printf(const char* format, ...) noexcept {
     std::vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     core->print(text);
+}
+
+void progress(const char* label, std::uint8_t percent) noexcept {
+    DeviceCore* core = DeviceCore::active();
+    if (core != nullptr) core->progress(label, percent);
+}
+
+void progress(void* label, std::uint8_t percent) noexcept {
+    progress(static_cast<const char*>(label), percent);
 }
 
 }  // namespace btpdev

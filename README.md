@@ -121,6 +121,33 @@ device.publish("relay");                                      // amostra agora (
 device.run("relay -set 0");                                   // um comando, como se digitado
 ```
 
+Um trabalho longo mostra uma **barra de progresso** no terminal, redesenhada na
+mesma linha enquanto o comando ainda roda (a resposta sai abaixo dela):
+
+```
+dev> sensor -calibrate 200
+! calibrate  47% [=============>                ]
+```
+
+`btpdev::progress` tem o formato de um callback C de progresso
+(`void (*)(void* ctx, uint8_t percent)`), então a função do trabalho não
+precisa conhecer o BtpDevice nem a shell. Quem liga os dois é o registro do
+comando:
+
+```cpp
+// calibrate.h: não inclui o BtpDevice
+using ProgressFn = void (*)(void* ctx, uint8_t percent);
+uint8_t calibrate(int samples, ProgressFn on_progress = nullptr, void* ctx = nullptr);
+
+// btp_commands.cpp
+c.module("sensor", "Sensor").add("calibrate", [](int samples) {
+    return calibrate(samples, btpdev::progress, (void*)"calibrate");
+});
+```
+
+Pode chamar com a frequência que quiser: só o último valor é guardado, o link
+recebe no máximo ~10 redesenhos por segundo e o 100% sempre sai.
+
 Toda declaração de tópico vira um `btpdev::Topic`. Com ele, `publish()`,
 `subscribed()` e `write_stream()` não procuram o tópico pelo nome, e um nome
 errado deixa de ser um `false` silencioso em tempo de execução:

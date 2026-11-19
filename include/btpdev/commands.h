@@ -107,6 +107,29 @@ void printf(const char* format, ...) noexcept
 #endif
     ;
 
+/// A progress bar on every open TraceView terminal -- one line redrawn in
+/// place, "label  42% [=====>    ]". Unlike printf(), it shows up while a
+/// command is still running (its response then lands below the bar), and it
+/// works from any task. Call it as often as you like: repeated values are
+/// dropped, the link gets at most ~10 redraws a second, 100% always goes out.
+///
+/// The `(void*, uint8_t)` overload is the shape of a plain C progress
+/// callback, so the job itself never includes BtpDevice -- the command's
+/// registration connects the two, with the label as the callback context:
+///
+///   // calibrate.h -- knows nothing about BtpDevice or the shell
+///   using ProgressFn = void (*)(void* ctx, uint8_t percent);
+///   uint8_t calibrate(int samples, ProgressFn on_progress = nullptr, void* ctx = nullptr);
+///
+///   // btp_commands.cpp
+///   c.module("sensor").add("calibrate", [](int samples) {
+///       return calibrate(samples, btpdev::progress, (void*)"calibrate");
+///   });
+///
+/// `label` must outlive the job (a string literal); null for none.
+void progress(void* label, std::uint8_t percent) noexcept;
+void progress(const char* label, std::uint8_t percent) noexcept;
+
 }  // namespace btpdev
 
 #endif  // BTPDEV_COMMANDS_H
