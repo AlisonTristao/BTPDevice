@@ -30,6 +30,7 @@
 #include "transport/BleLink.h"
 #include "transport/EspNowLink.h"
 #include "transport/TcpLink.h"
+#include "transport/JtagSerialLink.h"
 #include "transport/UartSerialLink.h"
 #include "transport/UsbSerialLink.h"
 
@@ -37,6 +38,8 @@ namespace btpdev {
 namespace {
 
 constexpr const char* kTag = tag::kCore;
+// Stack begin() needs from its caller (measured: ~2.4 KB on an ESP32-S3).
+constexpr UBaseType_t kBeginStackBytes = 2560U;
 constexpr const char* kNvsNamespace = "btpdev";
 
 std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time() / 1000LL); }
@@ -114,6 +117,18 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     boot_heap_start_ = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     boot_heap_ = boot_heap_start_;
     begin_task_ = xTaskGetCurrentTaskHandle();
+    {
+        // begin() runs on the caller's stack and needs about 2.5 KB of it.
+        // A task stack lives in the heap: an overflow here silently corrupts
+        // a heap block and the crash comes much later, somewhere else.
+        const UBaseType_t free_bytes = uxTaskGetStackHighWaterMark(nullptr);
+        if (free_bytes < kBeginStackBytes) {
+            ESP_LOGW(kTag,
+                     "begin() runs with %u bytes of stack left in this task and needs about %u: raise it "
+                     "(app_main: CONFIG_ESP_MAIN_TASK_STACK_SIZE, 6144 is plenty)",
+                     static_cast<unsigned>(free_bytes), static_cast<unsigned>(kBeginStackBytes));
+        }
+    }
     {
         const esp_app_desc_t* app = esp_app_get_description();
         boot_step("boot", "BTPDevice %s, %s, IDF %s, fw %s", BTPDEV_VERSION_STRING, CONFIG_IDF_TARGET,
@@ -449,13 +464,23 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
         }
         default: {
             // Auto: the native USB when this build has TinyUSB CDC (S2/S3/P4
-            // with it enabled), else the UART behind the board's bridge.
+            // with it enabled); else the USB-Serial-JTAG port when a computer
+            // is on it now; else the UART behind the board's bridge.
+            SerialPort port = device_.serial_port;
+            if (port == SerialPort::Auto) {
 #if CONFIG_TINYUSB_CDC_ENABLED
-            const bool use_uart = device_.serial_port == SerialPort::Uart;
+                port = SerialPort::Usb;
 #else
-            const bool use_uart = device_.serial_port != SerialPort::Usb;
+                port = jtag_serial_host_present() ? SerialPort::UsbJtag : SerialPort::Uart;
 #endif
-            if (use_uart) {
+            }
+            if (port == SerialPort::UsbJtag) {
+                JtagSerialConfig config;
+                config.send_queue_bytes = sizes.link_queue_bytes;
+                link_ = new (std::nothrow) JtagSerialLink(config);
+                break;
+            }
+            if (port == SerialPort::Uart) {
                 UartSerialConfig config;
                 config.port = device_.uart.port;
                 config.baud = device_.uart.baud;
@@ -1285,6 +1310,22 @@ void DeviceCore::register_builtin_commands() noexcept {
             return RESULT_OK;
         },
         "reboot", "Restart the device", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            if (!download_mode_supported()) {
+                shell_print("this chip cannot enter the download mode from software: hold BOOT and press EN\n");
+                return RESULT_ERROR;
+            }
+            char text[192];
+            std::snprintf(text, sizeof(text),
+                          "restarting into the USB download mode (like holding BOOT): flash within %u s with "
+                          "pio run -t upload or esptool. With no flash it boots normally again.\n",
+                          static_cast<unsigned>(kDownloadModeTimeoutS));
+            shell_print(text);
+            Recovery::expect_reset();  // the timeout's watchdog reset is not a crash
+            return enter_download_mode(800U) == ESP_OK ? RESULT_OK : RESULT_ERROR;
+        },
+        "bootloader", "Restart into the ROM download mode, to flash over USB without the BOOT button", "btp");
 }
 
 // ============================================================================

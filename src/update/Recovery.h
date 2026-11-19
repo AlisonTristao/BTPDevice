@@ -50,6 +50,10 @@ public:
 
     std::uint32_t crash_count() const noexcept;
 
+    /// The next reset is the library's own doing (a watchdog it armed on
+    /// purpose): do not count it as a crash.
+    static void expect_reset() noexcept;
+
 private:
     void find_partitions() noexcept;
 

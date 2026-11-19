@@ -49,6 +49,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
+#include "update/DownloadMode.h"
 #include "update/Recovery.h"
 
 #include <btpdev/filesystem.h>

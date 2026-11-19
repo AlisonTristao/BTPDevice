@@ -43,7 +43,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Python tools
         run: |
-          python -m py_compile BTPDevice/tools/link_echo_test.py BTPDevice/tools/pio_recovery.py
+          python -m py_compile BTPDevice/tools/link_echo_test.py BTPDevice/tools/pio_recovery.py BTPDevice/tools/btp_term.py
           python BTPDevice/tools/test_btp_ota.py
 
   idf-build:

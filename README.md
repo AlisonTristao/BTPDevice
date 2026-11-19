@@ -250,8 +250,9 @@ I (451) btpdev: btpdev_tcp           0    5    2.2 / 6.0 KB       3.8 KB
   (o Wi-Fi, por exemplo) também entra na conta.
 - **As etapas assíncronas** (scan do Wi-Fi, IP, `nome.local`) continuam saindo
   pelos logs normais da biblioteca, depois do `ready`.
-- Com o link Serial **na mesma UART do console**, o console fica mudo enquanto o
-  link roda (`UartConfig::mute_console`), e o debug some junto.
+- Com o link Serial **na mesma porta do console** (a UART0, ou a USB-Serial-JTAG
+  de um S3/C3/C6), o `ESP_LOG` fica mudo enquanto o link roda e o debug some
+  junto. Os logs continuam chegando ao TraceView por `btpdev::log()`.
 
 O mesmo relatório de memória sai a qualquer hora pelo comando **`btp -mem`**,
 no terminal do TraceView, com ou sem `debug_log`.
@@ -284,7 +285,9 @@ O upload é autenticado pela chave E (a senha nunca sai do PC). Sem upload, o
 recovery volta ao app em 10 minutos. Um app que trava três vezes seguidas antes
 de ficar estável cai sozinho no recovery (`DeviceConfig::recovery.crash_loop`).
 `btp -factory_reset yes` apaga o app e o LittleFS e mantém chave e Wi-Fi;
-`btp -factory_reset all` apaga também o NVS. Detalhes em
+`btp -factory_reset all` apaga também o NVS.
+Para gravar por USB sem apertar BOOT, `btp -bootloader` reinicia no modo download
+da ROM; sem gravação, a placa volta sozinha ao app em 30 s. Detalhes em
 [docs/PLANO.md](docs/PLANO.md#414-recovery-e-ota) e no exemplo
 [06_recovery_s3](examples/06_recovery_s3).
 
@@ -310,7 +313,7 @@ TraceView para o dispositivo.
 |---|---|
 | Framework | ESP-IDF 6.0+ (componente) |
 | Chips | ESP32-S3 primeiro. ESP32 clássico pelo link Serial na UART (conversor da placa). ESP32-C3 e ESP32-C6 na sequência ([matriz de links](docs/PLANO.md#42-matriz-de-suporte)). |
-| Links | Serial (USB ou UART), TCP (Wi-Fi), BLE, ESP-NOW (via dongle). **Um link por boot** na v1. |
+| Links | Serial (USB TinyUSB, USB-Serial-JTAG ou UART), TCP (Wi-Fi), BLE, ESP-NOW (via dongle). **Um link por boot** na v1. |
 | Dependências | [BTP](https://github.com/AlisonTristao/BTP), [TinyShell](https://github.com/AlisonTristao/TinyShell) |
 
 ## Documentação

@@ -238,8 +238,13 @@ void app_commands(btpdev::Commands& c) {
 O link Serial tem três backends atrás da mesma interface, escolhidos pelo chip e
 pela configuração. O TraceView trata os três igual (porta serial com COBS).
 
-**UART.** `DeviceConfig::serial_port = Auto` usa a USB nativa quando o build tem
-TinyUSB CDC e a UART nos outros casos (`Uart` força a UART num S3). A UART não
+**UART e USB-Serial-JTAG.** `DeviceConfig::serial_port = Auto` usa a USB nativa quando o build tem
+TinyUSB CDC; senão, a porta USB-Serial-JTAG do chip (S3, C3, C6...) quando há um computador
+nela no `begin()`; senão, a UART (`Uart` e `UsbJtag` forçam uma delas). A USB-Serial-JTAG é a
+porta por onde o esptool grava e o console escreve, e a única de placas C3/C6 sem conversor;
+ela se comporta como a UART (sessão pelos primeiros bytes) e fecha a sessão quando o cabo sai.
+Antes dela, um S3 sem TinyUSB caía na UART0, do outro conector da DevKitC, e ficava
+inalcançável pela porta USB em uso. A UART não
 tem estado de linha visível ao dispositivo: a sessão abre com os primeiros bytes
 recebidos e fecha pelo watchdog de sessão (`disconnect_peer()`). Um HELLO novo
 numa conexão aberta já reinicia a sessão, então reabrir a porta no TraceView
@@ -348,7 +353,7 @@ Cada transição sai em `ESP_LOGI`.
 - O TinyShell fica por baixo. **O mesmo registro atende o terminal do TraceView
   (TERMINAL_IN) e o COMMAND_REQUEST.**
 - Módulo embutido **`btp`** (um só, para não colidir com os módulos do usuário):
-  `btp -status`, `-link`, `-errors`, `-key`, `-wifi`, `-fs`, `-reboot`. Cada
+  `btp -status`, `-link`, `-errors`, `-key`, `-wifi`, `-fs`, `-reboot`, `-bootloader`. Cada
   subcomando pode ser desligado.
 - A execução é assíncrona: o comando entra na fila da `btpdev_shell` e a resposta
   sai pelo link por onde o pedido chegou, com proteção contra resposta para uma
@@ -681,7 +686,8 @@ Branch `feature/recovery`. Decisões D19–D27, desenho em [4.14](#414-recovery-
 - [x] `tools/pio_recovery.py`: compila e grava o recovery junto com o app (`pio run -t recovery` grava só ele).
 - [x] **Exemplo `06_recovery_s3`**: temperatura interna e LED RGB da DevKitC-1, por TCP com chave (compila; app de 1,19 MB).
 - [x] Rede própria com portal cativo e página de upload no navegador (D27). Recovery: **ESP32-S3 758 KB, ESP32 763 KB, ESP32-C3 802 KB** (era 696–754 KB). Na placa: a rede `btp-btpdev` sobe sem Wi-Fi espelhado.
-- [ ] **Teste em hardware** (ESP32-S3 N16R8): página pelo celular, entrar por comando, upload, queda de energia no meio, crash loop, os dois factory resets.
+- [x] Em hardware (ESP32-S3 N16R8, sem chave, link Serial pela USB-Serial-JTAG com `tools/btp_term.py`): crash loop (`demo -crash` ×3 → recovery, que espera firmware), rede própria do recovery, `btp -bootloader` (entra no modo download e volta sozinho em 30 s sem contar como crash), `btp -status/-mem/-recovery_info`, `chip -temp`.
+- [ ] **Teste em hardware** com chave e Wi-Fi: página pelo celular, upload, queda de energia no meio, volta ao app por tempo limite.
 - [ ] TraceView (outro repositório): HMAC na aba OTA e botão "recovery" no dispositivo.
 - [ ] Depois: página de configuração. No recovery, só o Wi-Fi (é quando ele faz falta: o app não conecta). Arquivos do LittleFS ou do SD e outras configurações ficam no app, que já monta os volumes e tem espaço.
 

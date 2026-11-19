@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <new>
 #include <utility>
 
@@ -146,31 +147,42 @@ std::uint64_t get_le64(const std::uint8_t* in) noexcept {
 #define BTPDEV_NOINLINE
 #endif
 
-void add_field(btp::TopicBuilder& builder, const FieldDecl& field) {
+btp::FieldRecord field_record(const FieldDecl& field) {
+    btp::FieldRecord record;
     switch (field.type) {
-        case FieldType::F32: builder.f32(field.name, field.unit, field.nullable); break;
-        case FieldType::F64: builder.f64(field.name, field.unit, field.nullable); break;
-        case FieldType::I8: builder.i8(field.name, 1.0, field.unit, field.nullable); break;
-        case FieldType::I16: builder.i16(field.name, 1.0, field.unit, field.nullable); break;
-        case FieldType::I32: builder.i32(field.name, 1.0, field.unit, field.nullable); break;
-        case FieldType::U8: builder.u8(field.name, 1.0, field.unit, field.nullable); break;
-        case FieldType::U16: builder.u16(field.name, 1.0, field.unit, field.nullable); break;
-        case FieldType::U32: builder.u32(field.name, 1.0, field.unit, field.nullable); break;
-        case FieldType::Bool: builder.boolean(field.name, field.nullable); break;
+        case FieldType::F32: record = btp::f32(field.name, field.unit); break;
+        case FieldType::F64: record = btp::f64(field.name, field.unit); break;
+        case FieldType::I8: record = btp::i8(field.name, 1.0, field.unit); break;
+        case FieldType::I16: record = btp::i16(field.name, 1.0, field.unit); break;
+        case FieldType::I32: record = btp::i32(field.name, 1.0, field.unit); break;
+        case FieldType::U8: record = btp::u8(field.name, 1.0, field.unit); break;
+        case FieldType::U16: record = btp::u16(field.name, 1.0, field.unit); break;
+        case FieldType::U32: record = btp::u32(field.name, 1.0, field.unit); break;
+        case FieldType::Bool:
+        default: record = btp::boolean(field.name); break;
     }
+    if (field.nullable) record.flags |= btp::kFieldNullable;
     if (!std::isnan(field.min_value) || !std::isnan(field.max_value)) {
-        builder.range(field.min_value, field.max_value);
+        record.min_value = field.min_value;
+        record.max_value = field.max_value;
     }
+    return record;
 }
 
+// Not btp::TopicBuilder: it holds 32 FieldRecords (~2.5 KB) on the stack, and
+// begin() runs on the caller's stack -- app_main's is 3.5 KB by default. The
+// overflow went past the stack into the heap block next to it (an assert in
+// the allocator much later, on the first malloc that walked over it).
 BTPDEV_NOINLINE btp::MessageError add_field_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
                                                   std::uint16_t version, btp::TelemetryEncoding encoding,
                                                   std::uint32_t rate_millihz,
                                                   const std::vector<FieldDecl>& fields) {
-    btp::TopicBuilder builder = catalog.topic(id, version, name, encoding, /*subscribable=*/true, rate_millihz);
-    for (const FieldDecl& field : fields) add_field(builder, field);
-    builder.default_rate(rate_millihz);
-    return builder.end();
+    if (fields.size() > btp::TopicBuilder::kMaxFields) return btp::MessageError::CountTooLarge;
+    std::unique_ptr<btp::FieldRecord[]> records(new (std::nothrow) btp::FieldRecord[fields.size()]);
+    if (records == nullptr) return btp::MessageError::BufferTooSmall;
+    for (std::size_t i = 0U; i < fields.size(); ++i) records[i] = field_record(fields[i]);
+    return catalog.add_topic(id, version, encoding, /*subscribable=*/true, rate_millihz, name, records.get(),
+                             fields.size(), /*min_rate_millihz=*/0U, /*default_rate_millihz=*/rate_millihz);
 }
 
 BTPDEV_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,

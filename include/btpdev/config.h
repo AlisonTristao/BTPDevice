@@ -77,9 +77,14 @@ struct ShellConfig {
 
 /// Which port Link::Serial uses (DeviceConfig::serial_port).
 enum class SerialPort : std::uint8_t {
-    Auto,  ///< the native USB when this build has it (TinyUSB CDC), else the UART
+    /// The native USB when this build has it (TinyUSB CDC); else the chip's
+    /// USB-Serial-JTAG port when a computer is on it at begin(); else the UART.
+    Auto,
     Usb,   ///< the native USB (TinyUSB CDC): ESP32-S2/S3/P4 only
     Uart,  ///< a UART: on most boards UART0, wired to the USB-serial bridge
+    /// The chip's USB-Serial-JTAG port (S3, C3, C5, C6, H2...): the one
+    /// esptool flashes through. ESP_LOG is muted while the link runs.
+    UsbJtag,
 };
 
 /// Link::Serial on the native USB port.

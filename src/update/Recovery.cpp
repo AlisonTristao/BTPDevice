@@ -23,6 +23,10 @@ constexpr std::uint32_t kMagic = 0xB7D0C0A5U;
 // a crash loop is made of. The magic tells garbage after power-on apart.
 RTC_NOINIT_ATTR std::uint32_t s_magic;
 RTC_NOINIT_ATTR std::uint32_t s_crashes;
+// Set right before a reset the library causes on purpose through a watchdog
+// (btp -bootloader's timeout): the next boot does not count it as a crash.
+RTC_NOINIT_ATTR std::uint32_t s_expected;
+constexpr std::uint32_t kExpectedMagic = 0xB7D0E5E7U;
 
 bool abnormal(esp_reset_reason_t reason) noexcept {
     switch (reason) {
@@ -65,6 +69,8 @@ void restart_after(std::uint32_t delay_ms) noexcept {
 }
 
 }  // namespace
+
+void Recovery::expect_reset() noexcept { s_expected = kExpectedMagic; }
 
 std::uint32_t Recovery::crash_count() const noexcept { return s_magic == kMagic ? s_crashes : 0U; }
 
@@ -109,7 +115,9 @@ void Recovery::boot(const RecoveryConfig& config) noexcept {
         s_magic = kMagic;
         s_crashes = 0U;
     }
-    s_crashes = abnormal(reason) ? s_crashes + 1U : 0U;
+    const bool expected = s_expected == kExpectedMagic;
+    s_expected = 0U;
+    if (!expected) s_crashes = abnormal(reason) ? s_crashes + 1U : 0U;
     if (s_crashes != 0U) {
         ESP_LOGW(kTag, "reset by %s: %lu abnormal reset(s) in a row (recovery at %u)", reset_name(reason),
                  static_cast<unsigned long>(s_crashes), static_cast<unsigned>(config_.crash_loop));

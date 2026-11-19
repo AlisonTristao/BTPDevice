@@ -95,7 +95,7 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
         return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::tcp.port is 0");
     }
     if (config.serial_port != SerialPort::Auto && config.serial_port != SerialPort::Usb &&
-        config.serial_port != SerialPort::Uart) {
+        config.serial_port != SerialPort::Uart && config.serial_port != SerialPort::UsbJtag) {
         return fail(out, BTPDEV_ERR_CONFIG, tag::kSerial,
                     "DeviceConfig::serial_port is not a valid SerialPort");
     }

@@ -16,6 +16,11 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - Recovery: rede própria `btp-<nome>` com portal cativo quando nenhuma rede conhecida responde, e
   página em `/` para enviar o `.bin` pelo navegador, com a assinatura HMAC calculada na página
   (`CONFIG_BTPDEV_RECOVERY_AP`, `CONFIG_BTPDEV_RECOVERY_AP_PASSWORD`).
+- Link Serial pela **USB-Serial-JTAG** (`SerialPort::UsbJtag`; o `Auto` a escolhe quando há um
+  computador nela): a porta USB de gravação do S3, C3 e C6.
+- `btp -bootloader`: reinicia no modo download da ROM para gravar por USB sem o botão BOOT;
+  sem gravação, volta ao app em 30 s (watchdog do RTC), sem contar como crash.
+- `tools/btp_term.py`: terminal BTP mínimo pela serial, para testes de bancada sem o TraceView.
 - `src/security/Sha256`: SHA-256 incremental e HMAC compartilhados (antes dentro do KeyStore).
 - Estrutura inicial do repositório: licença MIT, README, CONTRIBUTING e o plano de
   implementação em [docs/PLANO.md](docs/PLANO.md).
@@ -128,6 +133,13 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   uma vez no log), em vez de correr em paralelo sobre o nó BTP.
 
 ### Corrigido
+- **Corrupção de heap no `begin()` com a stack padrão do `app_main` (3,5 KB):** o
+  `btp::TopicBuilder` punha 32 `FieldRecord` (~2,5 KB) na stack de quem chama o `begin()`, e o
+  estouro sobrescrevia o bloco do heap vizinho (assert no alocador bem depois, em outro lugar;
+  no exemplo 06 virava crash loop). Os campos agora vão para o heap, e o `begin()` avisa quando a
+  task chamadora tem menos de 2,5 KB de stack livre.
+- Um S3 sem TinyUSB caía, sem chave, no link Serial da UART0 (o outro conector da DevKitC) e
+  ficava inalcançável pela USB em uso: agora usa a USB-Serial-JTAG.
 - A task de shell esperava o slot de conclusão girando em `vTaskDelay(1)` (10 ms
   por volta): agora a task de comunicação a notifica.
 - A task de comunicação girava sem dormir com o tick padrão do IDF (100 Hz):
