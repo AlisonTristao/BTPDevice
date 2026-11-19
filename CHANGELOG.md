@@ -20,7 +20,8 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   computador nela): a porta USB de gravação do S3, C3 e C6.
 - `btp -bootloader`: reinicia no modo download da ROM para gravar por USB sem o botão BOOT;
   sem gravação, volta ao app em 30 s (watchdog do RTC), sem contar como crash.
-- `tools/btp_term.py`: terminal BTP mínimo pela serial, para testes de bancada sem o TraceView.
+- `tools/btp_term.py`: terminal BTP mínimo por Serial ou TCP, em claro ou cifrado com a chave E
+  (`--password-e`), para testes de bancada sem o TraceView.
 - `src/security/Sha256`: SHA-256 incremental e HMAC compartilhados (antes dentro do KeyStore).
 - Estrutura inicial do repositório: licença MIT, README, CONTRIBUTING e o plano de
   implementação em [docs/PLANO.md](docs/PLANO.md).
