@@ -49,6 +49,7 @@ set(btpdev_srcs
     "src/protocol/TopicRegistry.cpp"
     "src/security/DeviceKey.cpp"
     "src/security/KeyStore.cpp"
+    "src/security/Sha256.cpp"
     "src/storage/FileSystem.cpp"
     "src/storage/Mount.cpp"
     "src/transport/BleLink.cpp"
@@ -59,7 +60,8 @@ set(btpdev_srcs
     "src/transport/WifiCore.cpp"
     "src/transport/WifiLogic.cpp"
     "src/transport/WifiNetworks.cpp"
-    "src/transport/WifiStation.cpp")
+    "src/transport/WifiStation.cpp"
+    "src/update/OtaAuth.cpp")
 
 # `bt` unconditionally: CONFIG_* values are not known yet when ESP-IDF
 # expands component requirements, so an if(CONFIG_BT_NIMBLE_ENABLED) here is

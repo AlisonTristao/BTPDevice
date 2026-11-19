@@ -1,5 +1,7 @@
 #include "security/KeyStore.h"
 
+#include "security/Sha256.h"
+
 #include <cstring>
 
 // btp::crc32 is CRC-32/ISO-HDLC (poly 0xEDB88320 reflected, 0xFFFFFFFF seed,
@@ -40,227 +42,17 @@ std::uint32_t read_u32_le(const std::uint8_t* data) noexcept {
            (static_cast<std::uint32_t>(data[3]) << 24U);
 }
 
-// Fixed-time compare. The verify tags are public, so this is not guarding a
-// secret; it is here so that copying this helper for something that is secret
-// stays safe by default.
-bool equal_bytes(const std::uint8_t* left, const std::uint8_t* right,
-                 std::size_t size) noexcept {
-    std::uint8_t diff = 0U;
-    for (std::size_t i = 0U; i < size; ++i) {
-        diff = static_cast<std::uint8_t>(diff | (left[i] ^ right[i]));
-    }
-    return diff == 0U;
-}
-
-// Overwrite through a volatile pointer so the compiler cannot drop the store
-// as dead on a buffer that is about to go out of scope or be reused.
-void wipe(std::uint8_t* data, std::size_t size) noexcept {
-    volatile std::uint8_t* target = data;
-    for (std::size_t i = 0U; i < size; ++i) target[i] = 0U;
-}
-
-// ---------------------------------------------------------------------------
-// SHA-256 (FIPS 180-4) and HMAC (RFC 2104), self-contained.
-//
-// Why not mbedtls, which does ship with the SDK: on ESP-IDF 6.0.1 mbedtls is
-// 4.x / TF-PSA-Crypto, where the legacy digest API became private.
-// <mbedtls/md.h> still exists, but every mbedtls_md_hmac* declaration in it
-// sits inside "#if defined(MBEDTLS_DECLARE_PRIVATE_IDENTIFIERS)", which only
-// mbedtls's own translation units define, and <mbedtls/sha256.h> moved to
-// <mbedtls/private/sha256.h>. The supported replacement is PSA
-// (psa_mac_compute), whose headers need MBEDTLS_CONFIG_FILE and
-// TF_PSA_CRYPTO_USER_CONFIG_FILE on the command line to configure themselves
-// the same way the linked library was built -- and PlatformIO compiles lib/*
-// outside the IDF component graph, without those defines. Depending on that
-// would be depending on a mismatch that only shows up at run time.
-//
-// The code below needs no configuration, is allocation-free, and also builds
-// in env:native -- which is what lets the unit test actually exercise the
-// verify_e/verify_l failures instead of skipping them off-target. Its
-// correctness is not taken on faith: the golden vector in test/test_keystore
-// was produced by Python's hmac/hashlib over the real key and label, so any
-// deviation here surfaces immediately as Error::VerifyE. It was also checked
-// against RFC 4231 test cases 1, 2 and 7 -- case 7 covering both the
-// longer-than-block-size key and a multi-block message, neither of which the
-// key file itself ever reaches.
-//
-// Only ever used on a 13-octet message with a 16-octet key, twice per boot.
-// ---------------------------------------------------------------------------
-
-constexpr std::size_t kShaDigestSize = 32U;
-constexpr std::size_t kShaBlockSize = 64U;
-
-constexpr std::uint32_t kShaRoundConstants[64] = {
-    0x428A2F98U, 0x71374491U, 0xB5C0FBCFU, 0xE9B5DBA5U,
-    0x3956C25BU, 0x59F111F1U, 0x923F82A4U, 0xAB1C5ED5U,
-    0xD807AA98U, 0x12835B01U, 0x243185BEU, 0x550C7DC3U,
-    0x72BE5D74U, 0x80DEB1FEU, 0x9BDC06A7U, 0xC19BF174U,
-    0xE49B69C1U, 0xEFBE4786U, 0x0FC19DC6U, 0x240CA1CCU,
-    0x2DE92C6FU, 0x4A7484AAU, 0x5CB0A9DCU, 0x76F988DAU,
-    0x983E5152U, 0xA831C66DU, 0xB00327C8U, 0xBF597FC7U,
-    0xC6E00BF3U, 0xD5A79147U, 0x06CA6351U, 0x14292967U,
-    0x27B70A85U, 0x2E1B2138U, 0x4D2C6DFCU, 0x53380D13U,
-    0x650A7354U, 0x766A0ABBU, 0x81C2C92EU, 0x92722C85U,
-    0xA2BFE8A1U, 0xA81A664BU, 0xC24B8B70U, 0xC76C51A3U,
-    0xD192E819U, 0xD6990624U, 0xF40E3585U, 0x106AA070U,
-    0x19A4C116U, 0x1E376C08U, 0x2748774CU, 0x34B0BCB5U,
-    0x391C0CB3U, 0x4ED8AA4AU, 0x5B9CCA4FU, 0x682E6FF3U,
-    0x748F82EEU, 0x78A5636FU, 0x84C87814U, 0x8CC70208U,
-    0x90BEFFFAU, 0xA4506CEBU, 0xBEF9A3F7U, 0xC67178F2U,
-};
-
-std::uint32_t rotate_right(std::uint32_t value, unsigned bits) noexcept {
-    return (value >> bits) | (value << (32U - bits));
-}
-
-struct Sha256 {
-    std::uint32_t state[8] = {0x6A09E667U, 0xBB67AE85U, 0x3C6EF372U,
-                              0xA54FF53AU, 0x510E527FU, 0x9B05688CU,
-                              0x1F83D9ABU, 0x5BE0CD19U};
-    std::uint8_t block[kShaBlockSize] = {};
-    std::size_t pending = 0U;
-    std::uint64_t total = 0U;  // message length in octets
-};
-
-void sha256_compress(Sha256& sha) noexcept {
-    std::uint32_t w[64] = {};
-    for (std::size_t i = 0U; i < 16U; ++i) {
-        w[i] = (static_cast<std::uint32_t>(sha.block[i * 4U]) << 24U) |
-               (static_cast<std::uint32_t>(sha.block[i * 4U + 1U]) << 16U) |
-               (static_cast<std::uint32_t>(sha.block[i * 4U + 2U]) << 8U) |
-               static_cast<std::uint32_t>(sha.block[i * 4U + 3U]);
-    }
-    for (std::size_t i = 16U; i < 64U; ++i) {
-        const std::uint32_t s0 = rotate_right(w[i - 15U], 7U) ^
-                                 rotate_right(w[i - 15U], 18U) ^
-                                 (w[i - 15U] >> 3U);
-        const std::uint32_t s1 = rotate_right(w[i - 2U], 17U) ^
-                                 rotate_right(w[i - 2U], 19U) ^
-                                 (w[i - 2U] >> 10U);
-        w[i] = w[i - 16U] + s0 + w[i - 7U] + s1;
-    }
-
-    std::uint32_t a = sha.state[0], b = sha.state[1], c = sha.state[2];
-    std::uint32_t d = sha.state[3], e = sha.state[4], f = sha.state[5];
-    std::uint32_t g = sha.state[6], h = sha.state[7];
-
-    for (std::size_t i = 0U; i < 64U; ++i) {
-        const std::uint32_t sigma1 =
-            rotate_right(e, 6U) ^ rotate_right(e, 11U) ^ rotate_right(e, 25U);
-        const std::uint32_t choose = (e & f) ^ (~e & g);
-        const std::uint32_t t1 =
-            h + sigma1 + choose + kShaRoundConstants[i] + w[i];
-        const std::uint32_t sigma0 =
-            rotate_right(a, 2U) ^ rotate_right(a, 13U) ^ rotate_right(a, 22U);
-        const std::uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
-        const std::uint32_t t2 = sigma0 + majority;
-
-        h = g;
-        g = f;
-        f = e;
-        e = d + t1;
-        d = c;
-        c = b;
-        b = a;
-        a = t1 + t2;
-    }
-
-    sha.state[0] += a;
-    sha.state[1] += b;
-    sha.state[2] += c;
-    sha.state[3] += d;
-    sha.state[4] += e;
-    sha.state[5] += f;
-    sha.state[6] += g;
-    sha.state[7] += h;
-}
-
-void sha256_update(Sha256& sha, const std::uint8_t* data,
-                   std::size_t size) noexcept {
-    sha.total += size;
-    for (std::size_t i = 0U; i < size; ++i) {
-        sha.block[sha.pending++] = data[i];
-        if (sha.pending == kShaBlockSize) {
-            sha256_compress(sha);
-            sha.pending = 0U;
-        }
-    }
-}
-
-void sha256_finish(Sha256& sha, std::uint8_t* digest) noexcept {
-    const std::uint64_t bits = sha.total * 8U;
-
-    const std::uint8_t padding = 0x80U;
-    sha256_update(sha, &padding, 1U);
-    const std::uint8_t zero = 0x00U;
-    while (sha.pending != kShaBlockSize - 8U) sha256_update(sha, &zero, 1U);
-
-    for (std::size_t i = 0U; i < 8U; ++i) {
-        sha.block[kShaBlockSize - 8U + i] =
-            static_cast<std::uint8_t>(bits >> (56U - (8U * i)));
-    }
-    sha256_compress(sha);
-
-    for (std::size_t i = 0U; i < 8U; ++i) {
-        digest[i * 4U] = static_cast<std::uint8_t>(sha.state[i] >> 24U);
-        digest[i * 4U + 1U] = static_cast<std::uint8_t>(sha.state[i] >> 16U);
-        digest[i * 4U + 2U] = static_cast<std::uint8_t>(sha.state[i] >> 8U);
-        digest[i * 4U + 3U] = static_cast<std::uint8_t>(sha.state[i]);
-    }
-}
-
-// HMAC-SHA256 of one contiguous message. Keys longer than the block size are
-// hashed first, per RFC 2104; the keys used here are 16 octets, so that branch
-// never runs on the robot but is kept so the helper is not silently wrong if
-// reused.
-void hmac_sha256(const std::uint8_t* key, std::size_t key_size,
-                 const std::uint8_t* message, std::size_t message_size,
-                 std::uint8_t* digest) noexcept {
-    std::uint8_t padded_key[kShaBlockSize] = {};
-    if (key_size > kShaBlockSize) {
-        Sha256 shrink;
-        sha256_update(shrink, key, key_size);
-        sha256_finish(shrink, padded_key);
-    } else {
-        std::memcpy(padded_key, key, key_size);
-    }
-
-    std::uint8_t pad[kShaBlockSize] = {};
-
-    for (std::size_t i = 0U; i < kShaBlockSize; ++i) {
-        pad[i] = static_cast<std::uint8_t>(padded_key[i] ^ 0x36U);
-    }
-    Sha256 inner;
-    sha256_update(inner, pad, sizeof(pad));
-    sha256_update(inner, message, message_size);
-    std::uint8_t inner_digest[kShaDigestSize] = {};
-    sha256_finish(inner, inner_digest);
-
-    for (std::size_t i = 0U; i < kShaBlockSize; ++i) {
-        pad[i] = static_cast<std::uint8_t>(padded_key[i] ^ 0x5CU);
-    }
-    Sha256 outer;
-    sha256_update(outer, pad, sizeof(pad));
-    sha256_update(outer, inner_digest, sizeof(inner_digest));
-    sha256_finish(outer, digest);
-
-    // Everything above is derived from a key; none of it stays on the stack.
-    wipe(padded_key, sizeof(padded_key));
-    wipe(pad, sizeof(pad));
-    wipe(inner_digest, sizeof(inner_digest));
-}
-
 // True when HMAC-SHA256(key, label) starts with the expected tag.
 bool verify_tag_matches(const std::uint8_t* key, std::size_t key_size,
                         const char* label, std::size_t label_size,
                         const std::uint8_t* expected,
                         std::size_t expected_size) noexcept {
-    std::uint8_t digest[kShaDigestSize] = {};
+    std::uint8_t digest[Sha256::kDigestSize] = {};
     hmac_sha256(key, key_size,
                 reinterpret_cast<const std::uint8_t*>(label), label_size,
                 digest);
     const bool matches = equal_bytes(digest, expected, expected_size);
-    wipe(digest, sizeof(digest));
+    secure_wipe(digest, sizeof(digest));
     return matches;
 }
 
@@ -269,7 +61,7 @@ bool verify_tag_matches(const std::uint8_t* key, std::size_t key_size,
 void derive_password_key(const char* password, std::size_t password_size, const char* salt,
                          std::uint32_t iterations, std::uint8_t* out, std::size_t out_size) noexcept {
     if (out == nullptr || out_size == 0U) return;
-    if (out_size > kShaDigestSize) out_size = kShaDigestSize;
+    if (out_size > Sha256::kDigestSize) out_size = Sha256::kDigestSize;
     const auto* key = reinterpret_cast<const std::uint8_t*>(password != nullptr ? password : "");
     // U1 = HMAC(P, S || INT(1)); Ui = HMAC(P, U(i-1)); T = U1 ^ U2 ^ ... ^ Uc.
     std::uint8_t first[64] = {};
@@ -277,8 +69,8 @@ void derive_password_key(const char* password, std::size_t password_size, const 
     const std::size_t head = salt_size < sizeof(first) - 4U ? salt_size : sizeof(first) - 4U;
     if (head != 0U) std::memcpy(first, salt, head);
     first[head + 3U] = 1U;
-    std::uint8_t u[kShaDigestSize] = {};
-    std::uint8_t t[kShaDigestSize] = {};
+    std::uint8_t u[Sha256::kDigestSize] = {};
+    std::uint8_t t[Sha256::kDigestSize] = {};
     hmac_sha256(key, password_size, first, head + 4U, u);
     std::memcpy(t, u, sizeof(t));
     for (std::uint32_t i = 1U; i < iterations; ++i) {
@@ -286,8 +78,8 @@ void derive_password_key(const char* password, std::size_t password_size, const 
         for (std::size_t j = 0U; j < sizeof(t); ++j) t[j] = static_cast<std::uint8_t>(t[j] ^ u[j]);
     }
     std::memcpy(out, t, out_size);
-    wipe(u, sizeof(u));
-    wipe(t, sizeof(t));
+    secure_wipe(u, sizeof(u));
+    secure_wipe(t, sizeof(t));
 }
 
 KeyStore::Error KeyStore::parse(const std::uint8_t* data, std::size_t size,
@@ -368,16 +160,16 @@ bool KeyStore::load(const std::uint8_t* data, std::size_t size) noexcept {
     }
 
     contents_ = parsed;
-    wipe(parsed.key_e, sizeof(parsed.key_e));
-    wipe(parsed.key_l, sizeof(parsed.key_l));
+    secure_wipe(parsed.key_e, sizeof(parsed.key_e));
+    secure_wipe(parsed.key_l, sizeof(parsed.key_l));
     loaded_ = true;
     last_error_ = Error::Ok;
     return true;
 }
 
 void KeyStore::unload() noexcept {
-    wipe(contents_.key_e, sizeof(contents_.key_e));
-    wipe(contents_.key_l, sizeof(contents_.key_l));
+    secure_wipe(contents_.key_e, sizeof(contents_.key_e));
+    secure_wipe(contents_.key_l, sizeof(contents_.key_l));
     contents_ = Contents{};
     loaded_ = false;
 }
