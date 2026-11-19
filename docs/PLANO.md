@@ -1,7 +1,7 @@
 # Plano de implementação da BTPDevice
 
 **Criado em:** 2026-09-26
-**Estado:** Fase 5 (segurança e armazenamento)
+**Estado:** Fase 5 (segurança e armazenamento) · Fase R (recovery e OTA) em andamento na branch `feature/recovery`
 
 Este é o documento vivo do projeto: decisões, arquitetura e tarefas. Quem conclui
 uma tarefa marca o checkbox no mesmo commit (ver [CONTRIBUTING](../CONTRIBUTING.md#6-commits-versões-e-plano)).
@@ -30,7 +30,8 @@ comunicação, e nenhum deveria resolvê-los de novo.
 - Mais de um link ativo ao mesmo tempo (ver [D4](#2-decisões)).
 - Papel de hub ou roteador (o que o bally_dongle faz).
 - Drivers de sensores, atuadores ou LED/buzzer. O hardware é do usuário.
-- OTA, máquina de estados da aplicação e agendador de tarefas. São do produto.
+- Máquina de estados da aplicação e agendador de tarefas. São do produto.
+  O OTA deixou de ser não-objetivo: virou o recovery da [Fase R](#fase-r-recovery-e-ota) (D19).
 
 ### De onde vem o código
 
@@ -64,6 +65,14 @@ A [seção 5](#5-origem-do-código) mapeia o que vem de onde.
 | D16 | O `PeerCache` fica **para depois da v1**, com o desenho fixado em [4.13](#413-peercache-futuro) | O produtor não precisa dele. |
 | D17 | O protocolo usa os recursos do `btp::Node` diretamente: comandos assíncronos (`pending` + `complete_command`), `emit_status`, registro de publicação e catálogo | Achado da Fase 0. `CommandProcessor`, `StatusReporter`, `TelemetryPublisher` e `ManifestCatalog` do bally_OS **não são portados**. |
 | D18 | Os presets de memória são **três instanciações de `btp::StaticNode`**. A escolhida é criada no `begin()` com `heap_caps_malloc` + placement new. "Bytes explícitos" sai da v1 | O `StaticNode` é dimensionado por template. Ajuste fino fica para um Kconfig depois. |
+| D19 | **Recovery e OTA entram na lib.** O app do usuário fica na partição `factory` e um firmware mínimo de recovery (~1 MB) fica na `ota_0` | Revisa o não-objetivo "OTA". Com o app no `factory`, a gravação por USB (`pio run -t upload`, `idf.py flash`) não muda: o otadata em branco sobe o app. O recovery só sobe quando alguém o escolhe pelo otadata, então estar nele é sempre um pedido explícito. O `esp_ota_begin` recusa o `factory`, então o recovery grava com `esp_partition_write`, e quem valida a imagem é o `esp_ota_set_boot_partition`. Ver [4.14](#414-recovery-e-ota). |
+| D20 | O recovery fala o **protocolo HTTP da aba OTA do TraceView** (`GET /status`, `POST /update` com o binário cru), na porta 80, como `<nome>.local` | O TraceView já tem a aba e o resolvedor mDNS. Um firmware não cabe num datagrama BTP, e um dispositivo no meio de uma gravação não deve segurar uma sessão. |
+| D21 | **Upload autenticado pela chave E, por desafio:** o `/status` dá um nonce e o upload leva `HMAC-SHA256(key_E, "btp-ota-1" ‖ nonce ‖ ação ‖ sha256(imagem))`. A autenticação é conferida **antes** de apagar qualquer coisa. Sem chave, o recovery recusa, a não ser com `CONFIG_BTPDEV_RECOVERY_INSECURE` (bancada) | A senha nunca trafega, a mesma regra do `provision_key.py`. O `X-OTA-Password` em texto do bally_OS não é usado. O TraceView ganha o cálculo do HMAC (ele já deriva a chave E da senha). |
+| D22 | O **contrato app ↔ recovery é o NVS**: a chave em `btpdev/keyfile` (já existe) e o namespace `btprec` (versão do contrato, nome, redes Wi-Fi, motivo da entrada). A lib espelha ali o nome e as redes a cada boot | Os dois firmwares evoluem em versões diferentes. O recovery não monta LittleFS. |
+| D23 | **Entradas no recovery:** `btp -recovery` (o TraceView ganha um botão que manda esse comando), detector de crash loop (contador em RTC: N resets anormais seguidos antes de o app ficar estável) e `btp -factory_reset` | O recovery só serve se for alcançável com o app quebrado. O rollback e o GPIO do bootloader não se aplicam ao app no `factory`. |
+| D24 | **Factory reset em dois níveis:** `btp -factory_reset yes` apaga o app e o LittleFS e mantém o NVS (chave e Wi-Fi: o dispositivo continua alcançável); `btp -factory_reset all` apaga também o NVS (volta a precisar de USB e de provisionar a chave) | Decidido com a dona do projeto. |
+| D25 | **Volta sozinho:** entrando por comando, o recovery volta ao app depois de 10 min sem upload. Entrando por crash loop ou factory reset, fica até chegar um firmware ou um `POST /reboot` autenticado | Um `btp -recovery` esquecido não deixa o dispositivo fora do ar; um app quebrado não volta a entrar em loop. |
+| D26 | **Suporte do recovery:** chips com Wi-Fi (ESP32, S2, S3, C3, C5, C6) e flash ≥ 4 MB. Tabelas prontas em `partitions/` (4, 8 e 16 MB). O recovery é um projeto IDF em `recovery/`, e um script do PlatformIO (`tools/pio_recovery.py`) o compila e o grava junto com o app | C2 e placas de 2 MB não comportam 1 MB de recovery mais o app; H2 e P4 não têm Wi-Fi próprio. Um componente não consegue impor a tabela de partições, então ela vem pronta e a lib confere no `begin()`. |
 
 ---
 
@@ -442,6 +451,53 @@ próprio: responde NOT_MODIFIED e o TraceView guarda o cache.
 - Implementa os hooks `manifest_load / manifest_store / manifest_evict` do
   `NodeConfig` (BTP 2.48).
 
+### 4.14 Recovery e OTA
+
+```
+┌─────────┬────────┬─────────┬──────────────────────────┬──────────────────┬──────────────────┐
+│ bootldr │ ptable │ nvs     │ factory = APP do usuário │ ota_0 = RECOVERY │ storage LittleFS │
+│         │        │ otadata │ (o resto da flash)       │ (1 MB)           │                  │
+└─────────┴────────┴─────────┴──────────────────────────┴──────────────────┴──────────────────┘
+```
+
+| Flash | app (`factory`) | recovery (`ota_0`) | storage |
+|---|---|---|---|
+| 4 MB | 2,69 MB | 1 MB | 256 KB |
+| 8 MB | 5 MB | 1 MB | 1,9 MB |
+| 16 MB | 8 MB | 1 MB | 6,9 MB |
+
+**Fluxo de um update pelo TraceView:**
+
+1. O usuário aperta "recovery" no TraceView, que manda `btp -recovery` pela sessão BTP (cifrada).
+2. A lib grava o motivo no NVS, aponta o otadata para a `ota_0` e reinicia.
+3. O recovery conecta no Wi-Fi (as redes que o app espelhou no NVS) e anuncia `<nome>.local`.
+4. A aba OTA do TraceView vê o `/status` responder, com o nonce e o app atual.
+5. O upload chega com `X-OTA-SHA256` e `X-OTA-Auth`. O recovery confere o HMAC e o cabeçalho da imagem (magic, chip) antes de apagar o app, grava enquanto calcula o SHA-256 e compara. Então o `esp_ota_set_boot_partition(factory)` valida a imagem e apaga o otadata.
+6. Reinicia no app novo. Se faltar energia no meio, o otadata ainda aponta para o recovery: ele volta e espera outro upload.
+
+**Endpoints do recovery** (porta 80):
+
+| | Pedido | Resposta |
+|---|---|---|
+| `GET /status` | — | JSON: `ota_ready`, `firmware` (o que a aba do TraceView mostra), `mode: "recovery"`, `name`, `nonce` (32 hex), `auth` (`"hmac-sha256"`, `"none"` ou `"unavailable"`), `reason`, `app` (`project`, `version`, `valid`), `max_size` |
+| `POST /update` | corpo = o `.bin`; `X-OTA-SHA256: <64 hex>`, `X-OTA-Auth: <64 hex>` | 200 e reinicia no app; 401 autenticação, 400 imagem, 413 grande demais, 500 flash |
+| `POST /reboot` | `X-OTA-Auth` com a ação `B` e sha256 de zeros | 200 e volta ao app (se ele for válido) |
+
+**Autenticação** (`src/update/OtaAuth.h`, `tools/btp_ota.py`):
+
+```
+mensagem   = "btp-ota-1" (9 octetos ASCII) ‖ nonce (16) ‖ ação (1: 'U' update, 'B' reboot) ‖ sha256 (32)
+X-OTA-Auth = hex(HMAC-SHA256(key_E, mensagem))
+```
+
+O nonce muda a cada tentativa, certa ou errada, então um pedido capturado não serve duas vezes.
+
+**NVS `btprec`** (contrato versão 1, `src/update/RecoveryContract.h`): `abi` (u8), `name` (str), `wifi` (blob: contagem + redes de 33 + 65 octetos), `reason` (u8: 1 comando, 2 crash loop, 3 factory reset, 4 factory reset total).
+
+**Gravação inicial:** o `pio run -t upload` grava o app no `factory`, como sempre. O `tools/pio_recovery.py` (uma linha em `extra_scripts`) compila o `recovery/` para o mesmo chip, se ainda não estiver compilado, e o acrescenta às imagens gravadas no offset da `ota_0`.
+
+**No app:** `btp -recovery` (entra), `btp -recovery_info` (versão do recovery, partição em uso, contador de crash), `btp -factory_reset yes|all`. O `begin()` diz no log se a tabela não tem recovery ou se a `ota_0` está vazia. `DeviceConfig::recovery` liga e desliga o detector de crash loop e define o limite.
+
 ---
 
 ## 5. Origem do código
@@ -609,6 +665,23 @@ O teste por BLE e TCP cifrados fica para a Fase 5; até lá o `02_weather_statio
 - [ ] **Teste em hardware**: provisionar pela pasta `data/` (`pio run -t uploadfs`), BLE e TCP cifrados com o TraceView, ESP-NOW com o dongle.
 
 **Pronto quando:** um dispositivo novo sai do zero para cifrado e conectado seguindo só o README do exemplo.
+
+### Fase R: recovery e OTA
+
+Branch `feature/recovery`. Decisões D19–D26, desenho em [4.14](#414-recovery-e-ota).
+
+- [x] Plano (este bloco) e decisões.
+- [ ] `Sha256` com API incremental, compartilhado pelo `KeyStore` e pelo OTA; `OtaAuth` (mensagem, HMAC, hex, comparação em tempo constante), testado no host.
+- [ ] Tabelas `partitions/btpdev_{4,8,16}mb.csv`.
+- [ ] Firmware `recovery/`: NVS, Wi-Fi STA, mDNS, `/status`, `/update`, `/reboot`, timeout, factory reset. Medir o tamanho em ESP32, S3 e C3.
+- [ ] Na lib: espelho de nome e Wi-Fi no `btprec`, `btp -recovery`, `btp -recovery_info`, `btp -factory_reset`, detector de crash loop, checagem da tabela no `begin()`.
+- [ ] `tools/btp_ota.py` (status, upload, reboot) e o teste dele contra o vetor do host.
+- [ ] `tools/pio_recovery.py`: compila e grava o recovery junto com o app.
+- [ ] **Exemplo `06_recovery_s3`**: temperatura interna e LED RGB da DevKitC-1, por TCP com chave.
+- [ ] **Teste em hardware** (ESP32-S3 N16R8): entrar por comando, upload, queda de energia no meio, crash loop, os dois factory resets.
+- [ ] TraceView (outro repositório): HMAC na aba OTA e botão "recovery" no dispositivo.
+
+**Pronto quando:** um dispositivo com o app quebrado volta a funcionar só pelo TraceView, sem cabo.
 
 ### Fase 6: primeiro produto real (bally_OS)
 
