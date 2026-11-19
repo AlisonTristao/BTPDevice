@@ -42,7 +42,9 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
       - name: Python tools
-        run: python -m py_compile BTPDevice/tools/link_echo_test.py
+        run: |
+          python -m py_compile BTPDevice/tools/link_echo_test.py BTPDevice/tools/pio_recovery.py
+          python BTPDevice/tools/test_btp_ota.py
 
   idf-build:
     runs-on: ubuntu-latest
@@ -57,6 +59,8 @@ jobs:
           - examples/03_relay_actuator
           - examples/04_ble_secure
           - examples/05_espnow_dongle
+          - examples/06_recovery_s3
+          - recovery
         target:
           - esp32s3
     steps:

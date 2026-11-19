@@ -671,13 +671,13 @@ O teste por BLE e TCP cifrados fica para a Fase 5; até lá o `02_weather_statio
 Branch `feature/recovery`. Decisões D19–D26, desenho em [4.14](#414-recovery-e-ota).
 
 - [x] Plano (este bloco) e decisões.
-- [ ] `Sha256` com API incremental, compartilhado pelo `KeyStore` e pelo OTA; `OtaAuth` (mensagem, HMAC, hex, comparação em tempo constante), testado no host.
-- [ ] Tabelas `partitions/btpdev_{4,8,16}mb.csv`.
-- [ ] Firmware `recovery/`: NVS, Wi-Fi STA, mDNS, `/status`, `/update`, `/reboot`, timeout, factory reset. Medir o tamanho em ESP32, S3 e C3.
-- [ ] Na lib: espelho de nome e Wi-Fi no `btprec`, `btp -recovery`, `btp -recovery_info`, `btp -factory_reset`, detector de crash loop, checagem da tabela no `begin()`.
-- [ ] `tools/btp_ota.py` (status, upload, reboot) e o teste dele contra o vetor do host.
-- [ ] `tools/pio_recovery.py`: compila e grava o recovery junto com o app.
-- [ ] **Exemplo `06_recovery_s3`**: temperatura interna e LED RGB da DevKitC-1, por TCP com chave.
+- [x] `Sha256` com API incremental, compartilhado pelo `KeyStore` e pelo OTA; `OtaAuth` (mensagem, HMAC, hex, comparação em tempo constante), testado no host.
+- [x] Tabelas `partitions/btpdev_{4,8,16}mb.csv` (label `btp_recovery`: `recovery` é nome de subtipo no IDF 6 e gera aviso).
+- [x] Firmware `recovery/`: NVS, Wi-Fi STA, mDNS, `/status`, `/update`, `/reboot`, timeout, factory reset. Tamanho (IDF 6.0.1, `-Os`): **ESP32-S3 712 KB, ESP32 715 KB, ESP32-C3 754 KB** na partição de 1 MB.
+- [x] Na lib: espelho de nome e Wi-Fi no `btprec`, `btp -recovery`, `btp -recovery_info`, `btp -factory_reset`, detector de crash loop, checagem da tabela no `begin()`.
+- [x] `tools/btp_ota.py` (status, upload, reboot) e o teste dele contra o vetor do host.
+- [x] `tools/pio_recovery.py`: compila e grava o recovery junto com o app (`pio run -t recovery` grava só ele).
+- [x] **Exemplo `06_recovery_s3`**: temperatura interna e LED RGB da DevKitC-1, por TCP com chave (compila; app de 1,19 MB).
 - [ ] **Teste em hardware** (ESP32-S3 N16R8): entrar por comando, upload, queda de energia no meio, crash loop, os dois factory resets.
 - [ ] TraceView (outro repositório): HMAC na aba OTA e botão "recovery" no dispositivo.
 

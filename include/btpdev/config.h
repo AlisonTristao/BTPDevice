@@ -137,6 +137,21 @@ struct SourceInfo {
     const char* value = nullptr;
 };
 
+/// The recovery firmware in `ota_0` (docs/PLANO.md D19-D26, section 4.14).
+/// Needs one of the partitions/btpdev_<size>.csv tables; with another table
+/// the library works as before and `btp -recovery` explains why it cannot.
+struct RecoveryConfig {
+    /// Mirror the name and Wi-Fi networks for the recovery, register
+    /// `btp -recovery` / `-recovery_info` / `-factory_reset` and run the
+    /// crash-loop detector.
+    bool enabled = true;
+    /// Abnormal resets (panic, watchdog) in a row before the application is
+    /// stable that send the device to the recovery. 0 = detector off.
+    std::uint8_t crash_loop = 3U;
+    /// Running this long after begin() clears the count.
+    std::uint32_t stable_ms = 30000U;
+};
+
 struct DeviceConfig {
     /// Longest name BLE can advertise (31-octet scan response minus the
     /// 2-octet AD header). The same name feeds mDNS, USB and the manifest.
@@ -173,6 +188,8 @@ struct DeviceConfig {
     /// heap and the stack every task has used. `btp -mem` prints the same
     /// report at any time, with or without this.
     bool debug_log = false;
+    /// Updates over Wi-Fi through the recovery firmware (RecoveryConfig).
+    RecoveryConfig recovery{};
 };
 
 /// Where the provisioned key lives once imported (docs/PLANO.md section 4.9).

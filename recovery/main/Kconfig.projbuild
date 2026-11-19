@@ -1,0 +1,18 @@
+menu "BTPDevice recovery"
+
+    config BTPDEV_RECOVERY_TIMEOUT_MIN
+        int "Minutes without an upload before going back to the application"
+        default 10
+        range 1 1440
+        help
+            Only when entered by `btp -recovery`. After a crash loop or a
+            factory reset the recovery waits for a firmware (docs/PLANO.md D25).
+
+    config BTPDEV_RECOVERY_INSECURE
+        bool "DEVELOPMENT ONLY: accept uploads without the device key"
+        default n
+        help
+            Without a key in NVS the recovery refuses every upload. This lets
+            it accept them unauthenticated, for a bench before a key is
+            provisioned. Anyone on the network can then flash the device.
+endmenu

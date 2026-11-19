@@ -49,6 +49,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
+#include "update/Recovery.h"
 
 #include <btpdev/filesystem.h>
 
@@ -178,6 +179,7 @@ private:
     void register_builtin_commands() noexcept;
     void shell_print(const char* text) noexcept;  // shell task, inside a command
     void register_storage_commands() noexcept;
+    void register_recovery_commands() noexcept;
 
     // Keys (docs/PLANO.md 4.9): which one seals / opens a message.
     bool channel_b(const btp::Header& header) const noexcept;
@@ -248,6 +250,7 @@ private:
     LinkDriver* link_ = nullptr;
     PeerLink* peer_ = nullptr;   // link 1 of the node (DeviceConfig::peer)
     WifiNetwork networks_[kMaxWifiNetworks] = {};
+    Recovery recovery_;
     std::size_t network_count_ = 0U;
 
     // Receive side.

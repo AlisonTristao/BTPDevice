@@ -125,11 +125,20 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
               static_cast<unsigned long>(source_id), static_cast<unsigned long>(boot_id),
               static_cast<unsigned>(mac_[0]), static_cast<unsigned>(mac_[1]), static_cast<unsigned>(mac_[2]),
               static_cast<unsigned>(mac_[3]), static_cast<unsigned>(mac_[4]), static_cast<unsigned>(mac_[5]));
+    // Before anything that can crash: a crash loop has to be counted (and
+    // may end here, in the recovery). NVS is up since load_identity().
+    recovery_.boot(device_.recovery);
     mount_storage();
     boot_step("storage", "LittleFS %s, SD %s, app %s", fs_.mounted() ? fs_.root() : "-",
               sd_.mounted() ? sd_.root() : "-", app_.mounted() ? app_.root() : "-");
     load_key();
     boot_step("key", "%s", has_key_ ? "loaded" : "none: traffic in clear, Serial only");
+    if (device_.recovery.enabled && recovery_.available()) {
+        // The recovery joins the same Wi-Fi as the application (D22).
+        load_wifi_networks();
+        recovery_.mirror(device_.name, networks_, network_count_);
+        boot_step("recovery", "installed, %u network(s) mirrored", static_cast<unsigned>(network_count_));
+    }
     const Link requested = resolve_link();
     boot_step("link", "%s requested%s", link_name(requested),
               device_.link == Link::FromSettings ? " (saved setting)"
@@ -182,6 +191,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     shell_.begin();
     register_builtin_commands();
     register_storage_commands();
+    if (device_.recovery.enabled) register_recovery_commands();
     if (commands != nullptr) {
         Commands declared(shell_);
         commands(declared);
@@ -227,6 +237,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     }
 
     state_.store(State::Ready);
+    recovery_.arm_stable_timer();
     if (device_.debug_log) {
         const std::size_t heap_now = heap_caps_get_free_size(MALLOC_CAP_8BIT);
         char took[16];
@@ -406,7 +417,9 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
     link_ = nullptr;
     switch (link) {
         case Link::Tcp: {
-            load_wifi_networks();  // the config's network first, then the networks file
+            // The config's network first, then the networks file (already
+            // loaded when the recovery mirrored them).
+            if (network_count_ == 0U) load_wifi_networks();
             TcpLinkConfig config;
             config.device_name = device_.name;
             config.port = device_.tcp.port;
@@ -1429,6 +1442,67 @@ void DeviceCore::reply_seal(const btp::Header& request_header, btp::EndpointSeal
 }
 
 // ---- btp -key / -link / -wifi / -fs ---------------------------------------------
+
+// ============================================================================
+// Recovery (docs/PLANO.md D19-D26, 4.14)
+// ============================================================================
+
+void DeviceCore::register_recovery_commands() noexcept {
+    shell_.add(
+        [this]() -> std::uint8_t {
+            if (!recovery_.available()) {
+                char text[160];
+                std::snprintf(text, sizeof(text), "no recovery: %s\n", recovery_.unavailable_reason());
+                shell_print(text);
+                return RESULT_ERROR;
+            }
+            char host[64] = "";
+            mdns_host_from_name(device_.name, host, sizeof(host));
+            char text[256];
+            std::snprintf(text, sizeof(text),
+                          "restarting into the recovery: http://%s.local/ in a few seconds.\n"
+                          "Upload with TraceView's OTA tab or tools/btp_ota.py; with no upload it returns here "
+                          "after its timeout.\n",
+                          host);
+            shell_print(text);
+            // Later: the reply has to leave before the reset.
+            return recovery_.enter(recovery::Reason::Command, 800U) == ESP_OK ? RESULT_OK : RESULT_ERROR;
+        },
+        "recovery", "Restart into the recovery to receive a firmware over Wi-Fi", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char text[512];
+            recovery_.describe(text, sizeof(text));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "recovery_info", "Recovery partition, version and crash-loop count", "btp");
+    shell_.add(
+        [this](const char* what) -> std::uint8_t {
+            const bool keep_nvs = what != nullptr && std::strcmp(what, "yes") == 0;
+            const bool all = what != nullptr && std::strcmp(what, "all") == 0;
+            if (!keep_nvs && !all) {
+                shell_print("btp -factory_reset yes  erases the application and the file system; keeps the key and "
+                            "Wi-Fi, so a new firmware can come over Wi-Fi\n"
+                            "btp -factory_reset all  erases those AND NVS (key, Wi-Fi): only USB brings it back\n");
+                return RESULT_ERROR;
+            }
+            if (!recovery_.available()) {
+                char text[160];
+                std::snprintf(text, sizeof(text), "no recovery: %s\n", recovery_.unavailable_reason());
+                shell_print(text);
+                return RESULT_ERROR;
+            }
+            shell_print(all ? "factory reset (all): the recovery erases the application, the file system and NVS\n"
+                            : "factory reset: the recovery erases the application and the file system, then waits "
+                              "for a firmware\n");
+            return recovery_.enter(all ? recovery::Reason::FactoryResetAll : recovery::Reason::FactoryReset, 800U) ==
+                           ESP_OK
+                       ? RESULT_OK
+                       : RESULT_ERROR;
+        },
+        "factory_reset", "Erase the application (yes) or everything (all), through the recovery", "btp");
+}
 
 void DeviceCore::register_storage_commands() noexcept {
     shell_.add(

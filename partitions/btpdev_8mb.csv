@@ -2,10 +2,10 @@
 # The application goes to `factory` (where `pio run -t upload` and
 # `idf.py flash` already write it); the recovery firmware lives in `ota_0`
 # and only runs when the otadata points at it. Keep the labels: the library
-# and the recovery look for "recovery" and "storage".
+# and the recovery look for "btp_recovery" and "storage".
 # Name,    Type, SubType,  Offset,   Size
 nvs,       data, nvs,      0x9000,   0x5000,
 otadata,   data, ota,      0xe000,   0x2000,
 app,       app,  factory,  0x10000,  0x500000,
-recovery,  app,  ota_0,    0x510000, 0x100000,
+btp_recovery, app, ota_0,    0x510000, 0x100000,
 storage,   data, littlefs, 0x610000, 0x1f0000,

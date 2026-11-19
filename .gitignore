@@ -9,6 +9,7 @@ sdkconfig.*
 !sdkconfig.defaults.*
 examples/*/dependencies.lock
 test_apps/*/dependencies.lock
+recovery/dependencies.lock
 
 # Host test build trees
 /test/host/build/
@@ -26,3 +27,6 @@ __pycache__/
 
 # Secrets: provisioned key files must never be committed
 *.key
+
+# Wi-Fi credentials in example data folders
+examples/*/data/wifi.txt

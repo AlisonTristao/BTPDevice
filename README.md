@@ -256,6 +256,33 @@ I (451) btpdev: btpdev_tcp           0    5    2.2 / 6.0 KB       3.8 KB
 O mesmo relatório de memória sai a qualquer hora pelo comando **`btp -mem`**,
 no terminal do TraceView, com ou sem `debug_log`.
 
+## Atualização pela rede (recovery)
+
+Com uma das tabelas de [partitions/](partitions/), o app fica no `factory` e um
+firmware pequeno de **recovery** (~0,7 MB) fica na `ota_0`. O `pio run -t upload`
+grava os dois quando o `platformio.ini` tem uma linha a mais:
+
+```ini
+board_build.partitions = ../../partitions/btpdev_16mb.csv   ; 4, 8 ou 16 MB
+extra_scripts = post:../../tools/pio_recovery.py
+```
+
+Para atualizar sem cabo, mande `btp -recovery` pelo terminal do TraceView. O
+dispositivo reinicia no recovery, entra no mesmo Wi-Fi do app e espera o
+firmware como `<nome>.local`:
+
+```text
+python tools/btp_ota.py estacao-quintal.local .pio/build/esp32-s3/firmware.bin
+```
+
+O upload é autenticado pela chave E (a senha nunca sai do PC). Sem upload, o
+recovery volta ao app em 10 minutos. Um app que trava três vezes seguidas antes
+de ficar estável cai sozinho no recovery (`DeviceConfig::recovery.crash_loop`).
+`btp -factory_reset yes` apaga o app e o LittleFS e mantém chave e Wi-Fi;
+`btp -factory_reset all` apaga também o NVS. Detalhes em
+[docs/PLANO.md](docs/PLANO.md#414-recovery-e-ota) e no exemplo
+[06_recovery_s3](examples/06_recovery_s3).
+
 ## Chave e arquivos
 
 Os links por rádio (TCP, BLE e ESP-NOW) só sobem com a chave do dispositivo.

@@ -7,6 +7,13 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Adicionado
+- **Recovery e OTA** (Fase R, [PLANO 4.14](docs/PLANO.md#414-recovery-e-ota)): o app fica no
+  `factory` e um firmware de recovery (`recovery/`, ~0,7 MB) na `ota_0`. `btp -recovery`,
+  `btp -recovery_info`, `btp -factory_reset yes|all`, detector de crash loop
+  (`DeviceConfig::recovery`), upload pela rede autenticado por HMAC com a chave E
+  (`tools/btp_ota.py`, protocolo da aba OTA do TraceView), tabelas `partitions/btpdev_{4,8,16}mb.csv`,
+  `tools/pio_recovery.py` e o exemplo `06_recovery_s3` (temperatura interna e LED RGB).
+- `src/security/Sha256`: SHA-256 incremental e HMAC compartilhados (antes dentro do KeyStore).
 - Estrutura inicial do repositório: licença MIT, README, CONTRIBUTING e o plano de
   implementação em [docs/PLANO.md](docs/PLANO.md).
 - Componente ESP-IDF (`CMakeLists.txt`, `idf_component.yml`, `Kconfig`) que
