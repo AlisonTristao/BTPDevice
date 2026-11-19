@@ -8,5 +8,6 @@ idf_component_register(
          "${_src}/transport/WifiNetworks.cpp"
          "${_src}/update/OtaAuth.cpp"
     INCLUDE_DIRS "." "${_src}"
+    EMBED_TXTFILES "page.html"
     PRIV_REQUIRES nvs_flash esp_wifi esp_netif esp_event esp_http_server app_update esp_partition
-                  bootloader_support esp_timer esp_app_format BTP)
+                  bootloader_support esp_timer esp_app_format lwip BTP)

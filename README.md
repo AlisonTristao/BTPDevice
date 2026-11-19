@@ -275,6 +275,11 @@ firmware como `<nome>.local`:
 python tools/btp_ota.py estacao-quintal.local .pio/build/esp32-s3/firmware.bin
 ```
 
+Ou pelo navegador: `http://<nome>.local/` abre uma página para escolher o `.bin`.
+Se nenhuma rede conhecida responder, o recovery cria a própria, `btp-<nome>`:
+conecte o celular nela e a página abre sozinha (ou abra `http://192.168.4.1/`).
+A senha E é digitada na página e não sai do aparelho.
+
 O upload é autenticado pela chave E (a senha nunca sai do PC). Sem upload, o
 recovery volta ao app em 10 minutos. Um app que trava três vezes seguidas antes
 de ficar estável cai sozinho no recovery (`DeviceConfig::recovery.crash_loop`).

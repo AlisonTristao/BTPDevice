@@ -4,7 +4,9 @@
 // the otadata at it (`btp -recovery`, the crash-loop detector, a factory
 // reset). It joins the Wi-Fi the application mirrored into NVS, answers as
 // <name>.local on port 80 with the protocol of TraceView's OTA tab, writes an
-// authenticated image into the `factory` partition and boots it.
+// authenticated image into the `factory` partition and boots it. When no known
+// network answers it also raises its own ("btp-<name>", http://192.168.4.1/)
+// with a captive portal; the page at / signs uploads in the browser.
 //
 // Kept deliberately small: no BTP session, no file system, no Bluetooth.
 
@@ -29,10 +31,15 @@
 #include <freertos/event_groups.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#include <lwip/sockets.h>
 #include <mdns.h>
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <sdkconfig.h>
+
+#ifdef CONFIG_BTPDEV_RECOVERY_AP
+#include <dhcpserver/dhcpserver.h>
+#endif
 
 #include "security/KeyStore.h"
 #include "security/Sha256.h"
@@ -60,6 +67,10 @@ constexpr std::int64_t kReturnTimeoutUs =
 constexpr std::size_t kChunk = 4096U;
 constexpr std::size_t kEraseBlock = 64U * 1024U;
 
+// The page at / (page.html, embedded by main/CMakeLists.txt).
+extern const char page_start[] asm("_binary_page_html_start");
+extern const char page_end[] asm("_binary_page_html_end");
+
 constexpr EventBits_t kGotIp = BIT0;
 constexpr EventBits_t kDisconnected = BIT1;
 
@@ -83,6 +94,8 @@ struct State {
     bool busy = false;
     std::int64_t last_activity_us = 0;
     char ip[16] = "";
+    char ap_ssid[33] = "";
+    esp_netif_t* ap = nullptr;
     SemaphoreHandle_t lock = nullptr;
     EventGroupHandle_t events = nullptr;
 };
@@ -230,6 +243,9 @@ void start_wifi() {
     esp_event_loop_create_default();
     esp_netif_t* netif = esp_netif_create_default_wifi_sta();
     esp_netif_set_hostname(netif, g.host);
+#ifdef CONFIG_BTPDEV_RECOVERY_AP
+    g.ap = esp_netif_create_default_wifi_ap();
+#endif
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&init);
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
@@ -245,16 +261,120 @@ void start_wifi() {
     mdns_service_add(nullptr, "_http", "_tcp", rec::kHttpPort, txt, 2);
 }
 
+// ---------------------------------------------------------------------------
+// Own network (CONFIG_BTPDEV_RECOVERY_AP) and its captive-portal DNS
+// ---------------------------------------------------------------------------
+
+#ifdef CONFIG_BTPDEV_RECOVERY_AP
+// Answers every A query with the access point's address, so a phone that
+// joins the network finds "no internet" behind a portal and opens the page.
+void dns_task(void*) {
+    const int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(53);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (sock < 0 || bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+        ESP_LOGW(TAG, "captive DNS did not start: open http://192.168.4.1/ by hand");
+        if (sock >= 0) close(sock);
+        vTaskDelete(nullptr);
+        return;
+    }
+    esp_netif_ip_info_t info{};
+    esp_netif_get_ip_info(g.ap, &info);
+    static std::uint8_t packet[512];
+    while (true) {
+        sockaddr_in from{};
+        socklen_t from_len = sizeof(from);
+        const int n = recvfrom(sock, packet, sizeof(packet) - 16, 0, reinterpret_cast<sockaddr*>(&from), &from_len);
+        if (n < 12 || (packet[2] & 0x80U) != 0U) continue;  // too short, or not a query
+        // One question: walk its name to find where it ends.
+        int end = 12;
+        while (end < n && packet[end] != 0U) end += packet[end] + 1;
+        end += 5;  // the root label, then QTYPE and QCLASS
+        if (end > n || packet[4] != 0U || packet[5] != 1U) continue;
+        const bool type_a = packet[end - 4] == 0U && packet[end - 3] == 1U;
+        packet[2] = 0x84U;  // response, authoritative, opcode 0
+        packet[3] = 0x00U;  // no error
+        packet[6] = 0U;
+        packet[7] = type_a ? 1U : 0U;  // answers
+        std::memset(packet + 8, 0, 4);  // no authority, no additional records
+        int len = end;
+        if (type_a) {
+            const std::uint8_t answer[12] = {0xC0, 0x0C, 0, 1, 0, 1, 0, 0, 0, 30, 0, 4};
+            std::memcpy(packet + len, answer, sizeof(answer));
+            std::memcpy(packet + len + 12, &info.ip.addr, 4);  // already in network order
+            len += 16;
+        }
+        sendto(sock, packet, len, 0, reinterpret_cast<sockaddr*>(&from), from_len);
+    }
+}
+
+void start_ap() {
+    if (g.ap_ssid[0] != '\0') return;
+    std::snprintf(g.ap_ssid, sizeof(g.ap_ssid), "btp-%.28s", g.host);
+    wifi_config_t config{};
+    const std::size_t ssid_len = std::strlen(g.ap_ssid);
+    std::memcpy(config.ap.ssid, g.ap_ssid, ssid_len);
+    config.ap.ssid_len = static_cast<std::uint8_t>(ssid_len);
+    config.ap.channel = 1;
+    config.ap.max_connection = 2;
+    const char* password = CONFIG_BTPDEV_RECOVERY_AP_PASSWORD;
+    const std::size_t password_len = std::strlen(password);
+    if (password_len >= 8U && password_len < sizeof(config.ap.password)) {
+        std::memcpy(config.ap.password, password, password_len);
+        config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+    } else {
+        if (password_len != 0U) {
+            ESP_LOGW(TAG, "CONFIG_BTPDEV_RECOVERY_AP_PASSWORD needs 8 to 63 characters: network left open");
+        }
+        config.ap.authmode = WIFI_AUTH_OPEN;
+    }
+
+    // Offer ourselves as the DNS server, for the captive portal.
+    esp_netif_ip_info_t info{};
+    esp_netif_get_ip_info(g.ap, &info);
+    esp_netif_dhcps_stop(g.ap);
+    esp_netif_dns_info_t dns{};
+    dns.ip.type = ESP_IPADDR_TYPE_V4;
+    dns.ip.u_addr.ip4.addr = info.ip.addr;
+    std::uint8_t offer = OFFER_DNS;
+    esp_netif_dhcps_option(g.ap, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER, &offer, sizeof(offer));
+    esp_netif_set_dns_info(g.ap, ESP_NETIF_DNS_MAIN, &dns);
+    esp_netif_dhcps_start(g.ap);
+
+    esp_wifi_set_mode(WIFI_MODE_APSTA);
+    esp_wifi_set_config(WIFI_IF_AP, &config);
+    xTaskCreate(&dns_task, "rec_dns", 3072, nullptr, 4, nullptr);
+    ESP_LOGW(TAG, "own network \"%s\" (%s): join it and open http://" IPSTR "/", g.ap_ssid,
+             config.ap.authmode == WIFI_AUTH_OPEN ? "open" : "WPA2", IP2STR(&info.ip));
+}
+
+std::size_t ap_clients() {
+    wifi_sta_list_t list{};
+    return esp_wifi_ap_get_sta_list(&list) == ESP_OK ? static_cast<std::size_t>(list.num) : 0U;
+}
+#endif
+
 // Tries the known networks in order until one gives an address; then waits
-// for a disconnection and starts over. Runs forever on its own task.
+// for a disconnection and starts over. When a whole round fails (or there is
+// no network at all) the own network comes up; while someone is connected to
+// it the station stops retrying, because a retry hops channels and would drop
+// them. Runs forever on its own task.
 void wifi_task(void*) {
     if (g.wifi.count == 0U) {
+#ifdef CONFIG_BTPDEV_RECOVERY_AP
+        ESP_LOGW(TAG, "no Wi-Fi network known (the application never mirrored one)");
+        start_ap();
+#else
         ESP_LOGE(TAG, "no Wi-Fi network known: the application never mirrored one (Link::Tcp, wifi.txt). "
                       "Waiting for a USB flash.");
+#endif
         vTaskDelete(nullptr);
         return;
     }
     while (true) {
+        bool was_connected = false;
         for (std::size_t i = 0U; i < g.wifi.count; ++i) {
             wifi_config_t config{};
             std::snprintf(reinterpret_cast<char*>(config.sta.ssid), sizeof(config.sta.ssid), "%s",
@@ -277,9 +397,20 @@ void wifi_task(void*) {
             xEventGroupClearBits(g.events, kDisconnected);
             xEventGroupWaitBits(g.events, kDisconnected, pdTRUE, pdFALSE, portMAX_DELAY);
             ESP_LOGW(TAG, "Wi-Fi lost, reconnecting");
+            was_connected = true;
             break;
         }
+        if (was_connected) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+#ifdef CONFIG_BTPDEV_RECOVERY_AP
+        start_ap();
+        // Retry the known networks every 30 s, but not while someone uses ours.
+        for (int i = 0; i < 30 || ap_clients() > 0U; ++i) vTaskDelay(pdMS_TO_TICKS(1000));
+#else
         vTaskDelay(pdMS_TO_TICKS(1000));
+#endif
     }
 }
 
@@ -333,10 +464,10 @@ esp_err_t handle_status(httpd_req_t* req) {
                   "{\"ota_ready\":%s,\"firmware\":\"%s\",\"mode\":\"recovery\",\"recovery\":\"%s\","
                   "\"name\":\"%s\",\"nonce\":\"%s\",\"auth\":\"%s\",\"reason\":\"%s\","
                   "\"app\":{\"valid\":%s,\"project\":\"%s\",\"version\":\"%s\"},\"max_size\":%" PRIu32
-                  ",\"chip\":\"%s\"}",
+                  ",\"chip\":\"%s\",\"chip_id\":%d,\"ap\":\"%s\"}",
                   ready ? "true" : "false", firmware, version(), name, nonce, auth_mode(), rec::reason_name(g.reason),
                   app_valid ? "true" : "false", project, app_version, g.app != nullptr ? g.app->size : 0U,
-                  CONFIG_IDF_TARGET);
+                  CONFIG_IDF_TARGET, CONFIG_IDF_FIRMWARE_CHIP_ID, g.ap_ssid);
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, body);
 }
@@ -498,12 +629,17 @@ esp_err_t handle_reboot(httpd_req_t* req) {
 }
 
 esp_err_t handle_root(httpd_req_t* req) {
-    char text[256];
-    std::snprintf(text, sizeof(text),
-                  "BTPDevice recovery %s on \"%s\"\n\nGET  /status\nPOST /update  (tools/btp_ota.py %s.local "
-                  "firmware.bin)\nPOST /reboot\n",
-                  version(), g.name, g.host);
-    return reply(req, "200 OK", text);
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return httpd_resp_send(req, page_start, page_end - page_start - 1);  // EMBED_TXTFILES adds a NUL
+}
+
+// Anything else goes to the page: this is what makes a phone's captive-portal
+// probe (generate_204, hotspot-detect.html...) open it.
+esp_err_t handle_not_found(httpd_req_t* req, httpd_err_code_t) {
+    httpd_resp_set_status(req, "302 Found");
+    httpd_resp_set_hdr(req, "Location", "/");
+    return httpd_resp_send(req, nullptr, 0);
 }
 
 void start_http() {
@@ -524,6 +660,7 @@ void start_http() {
         {"/", HTTP_GET, handle_root, nullptr},
     };
     for (const httpd_uri_t& uri : uris) httpd_register_uri_handler(server, &uri);
+    httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, handle_not_found);
 }
 
 }  // namespace

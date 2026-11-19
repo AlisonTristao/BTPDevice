@@ -13,6 +13,9 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   (`DeviceConfig::recovery`), upload pela rede autenticado por HMAC com a chave E
   (`tools/btp_ota.py`, protocolo da aba OTA do TraceView), tabelas `partitions/btpdev_{4,8,16}mb.csv`,
   `tools/pio_recovery.py` e o exemplo `06_recovery_s3` (temperatura interna e LED RGB).
+- Recovery: rede própria `btp-<nome>` com portal cativo quando nenhuma rede conhecida responde, e
+  página em `/` para enviar o `.bin` pelo navegador, com a assinatura HMAC calculada na página
+  (`CONFIG_BTPDEV_RECOVERY_AP`, `CONFIG_BTPDEV_RECOVERY_AP_PASSWORD`).
 - `src/security/Sha256`: SHA-256 incremental e HMAC compartilhados (antes dentro do KeyStore).
 - Estrutura inicial do repositório: licença MIT, README, CONTRIBUTING e o plano de
   implementação em [docs/PLANO.md](docs/PLANO.md).

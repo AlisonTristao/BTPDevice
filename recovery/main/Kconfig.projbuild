@@ -8,6 +8,25 @@ menu "BTPDevice recovery"
             Only when entered by `btp -recovery`. After a crash loop or a
             factory reset the recovery waits for a firmware (docs/PLANO.md D25).
 
+    config BTPDEV_RECOVERY_AP
+        bool "Own Wi-Fi network when no known network answers"
+        default y
+        select ESP_WIFI_SOFTAP_SUPPORT
+        help
+            With no network mirrored by the application, or after every known
+            network failed once, the recovery also raises "btp-<name>" and
+            serves its page at http://192.168.4.1/ (a phone opens it by
+            itself: captive portal). Uploads stay authenticated by the key.
+            Costs about 50 KB.
+
+    config BTPDEV_RECOVERY_AP_PASSWORD
+        string "Password of the own network (empty: open network)"
+        default ""
+        depends on BTPDEV_RECOVERY_AP
+        help
+            8 to 63 characters for WPA2. The upload is signed with the key
+            either way; this only keeps strangers off the network.
+
     config BTPDEV_RECOVERY_INSECURE
         bool "DEVELOPMENT ONLY: accept uploads without the device key"
         default n
