@@ -72,8 +72,12 @@ A [seção 5](#5-origem-do-código) mapeia o que vem de onde.
 | D23 | **Entradas no recovery:** `btp -recovery` (o TraceView ganha um botão que manda esse comando), detector de crash loop (contador em RTC: N resets anormais seguidos antes de o app ficar estável) e `btp -factory_reset` | O recovery só serve se for alcançável com o app quebrado. O rollback e o GPIO do bootloader não se aplicam ao app no `factory`. |
 | D24 | **Factory reset em dois níveis:** `btp -factory_reset yes` apaga o app e o LittleFS e mantém o NVS (chave e Wi-Fi: o dispositivo continua alcançável); `btp -factory_reset all` apaga também o NVS (volta a precisar de USB e de provisionar a chave) | Decidido com a dona do projeto. |
 | D25 | **Volta sozinho:** entrando por comando, o recovery volta ao app depois de 10 min sem upload. Entrando por crash loop ou factory reset, fica até chegar um firmware ou um `POST /reboot` autenticado | Um `btp -recovery` esquecido não deixa o dispositivo fora do ar; um app quebrado não volta a entrar em loop. |
-| D27 | **Rede própria e página no navegador.** Sem rede conhecida (nenhuma espelhada, ou todas falharam uma vez), o recovery sobe também `btp-<nome>` (aberta por padrão; senha WPA2 opcional por Kconfig) com portal cativo, e serve em `/` uma página que escolhe o `.bin` e assina o upload no navegador. Enquanto alguém está conectado nela, o recovery para de tentar as redes conhecidas | Atualiza pelo celular, sem PC e sem roteador. Quem protege o upload continua sendo o HMAC, não a senha do Wi-Fi. O navegador não oferece `crypto.subtle` em `http://`, então a página traz SHA-256, HMAC e PBKDF2 em JavaScript (testados contra o Python). Custa ~62 KB (rede própria ~48 KB, página ~14 KB). Por ora a página só atualiza o firmware; configurar Wi-Fi e arquivos fica para depois. |
 | D26 | **Suporte do recovery:** chips com Wi-Fi (ESP32, S2, S3, C3, C5, C6) e flash ≥ 4 MB. Tabelas prontas em `partitions/` (4, 8 e 16 MB). O recovery é um projeto IDF em `recovery/`, e um script do PlatformIO (`tools/pio_recovery.py`) o compila e o grava junto com o app | C2 e placas de 2 MB não comportam 1 MB de recovery mais o app; H2 e P4 não têm Wi-Fi próprio. Um componente não consegue impor a tabela de partições, então ela vem pronta e a lib confere no `begin()`. |
+| D27 | **Rede própria e página no navegador.** Sem rede conhecida (nenhuma espelhada, ou todas falharam uma vez), o recovery sobe também `btp-<nome>` (aberta por padrão; senha WPA2 opcional por Kconfig) com portal cativo, e serve em `/` uma página que escolhe o `.bin` e assina o upload no navegador. Enquanto alguém está conectado nela, o recovery para de tentar as redes conhecidas | Atualiza pelo celular, sem PC e sem roteador. Quem protege o upload continua sendo o HMAC, não a senha do Wi-Fi. O navegador não oferece `crypto.subtle` em `http://`, então a página traz SHA-256, HMAC e PBKDF2 em JavaScript (testados contra o Python). Custa ~62 KB (rede própria ~48 KB, página ~14 KB). Por ora a página só atualiza o firmware; configurar Wi-Fi e arquivos fica para depois. |
+| D28 | **Configurações persistentes declaradas como os tópicos:** `App::settings(Settings&)` liga variáveis do app a entradas no NVS (namespace `btpcfg`), com padrão, faixa, unidade e `.reboot()` para as que só valem no próximo boot. A lib carrega os valores **antes** de `commands()` e `topics()` e cria o módulo `cfg` (`-list`, `-get`, `-set`, `-reset`) | O `DeviceConfig` é código compilado: mudar exige recompilar. O que o app precisa ajustar em campo (setpoint, intervalo, pino) não tinha onde ficar. O nome vira a chave do NVS, então tem até 15 caracteres. `factory_reset yes` mantém, `all` apaga. |
+| D29 | **Hora:** SNTP quando o Wi-Fi tem internet (link TCP), `btp -time` para ver e acertar, `btp -tz` para o fuso (salvo no NVS; padrão de `DeviceConfig::time.tz`, Brasília `<-03>3`). `device.time_valid()`, `now()` e a fonte (`Sntp`, `Manual`). O TraceView acerta sozinho mandando `btp -time` ao conectar | O ESP32 não tem RTC com bateria: a hora sobrevive a reboot e ao sono profundo, mas não à falta de energia. `time_valid()` é o que impede gravar "1970" num log. Um RTC externo (DS3231) pode entrar depois como outra fonte. |
+| D30 | **Economia sem desconectar:** `DeviceConfig::power = PowerMode::Saving` liga o modem sleep do Wi-Fi e o light sleep automático (`esp_pm`). No link Serial a lib segura um lock de PM (a USB e a UART não acordam o chip) | O TraceView continua conectado e o consumo cai. Precisa de `CONFIG_PM_ENABLE` e `CONFIG_FREERTOS_USE_TICKLESS_IDLE`, que um componente não liga sozinho: a lib confere e avisa, e os exemplos trazem no `sdkconfig.defaults`. |
+| D31 | **Sono profundo:** `device.sleep_for(ms)` (e `sleep_until()`, com hora válida) esvazia as filas, fecha a sessão, desliga o rádio e dorme; ao acordar é um boot novo, e `device.wake_reason()` diz o motivo. O `boot_id` e o canal/BSSID do Wi-Fi ficam na memória do RTC entre os ciclos; o NVS só reserva blocos de `boot_id` | Sensor a bateria. Gravar o contador de boots no NVS a cada ciclo de 1 min seriam ~500 mil escritas por ano; mas o `boot_id` não pode repetir com a mesma chave (é parte do nonce), então o NVS guarda o teto de um bloco reservado e uma falta de energia pula para o próximo bloco. Para alcançar um dispositivo que dorme: `btp -awake <min>` e um GPIO opcional que o mantém acordado (entrar no recovery). |
 
 ---
 
@@ -698,6 +702,58 @@ Branch `feature/recovery`. Decisões D19–D27, desenho em [4.14](#414-recovery-
 - [ ] Depois: página de configuração. No recovery, só o Wi-Fi (é quando ele faz falta: o app não conecta). Arquivos do LittleFS ou do SD e outras configurações ficam no app, que já monta os volumes e tem espaço.
 
 **Pronto quando:** um dispositivo com o app quebrado volta a funcionar só pelo TraceView, sem cabo.
+
+### Fase S: configurações, hora e energia
+
+Branch `feature/settings-time-power`, a partir da `feature/recovery`. Decisões D28–D31.
+
+**Custo hoje (ESP32-S3, exemplo 06, preset Small, IDF 6.0.1):**
+
+| | Flash | RAM estática | Heap no boot |
+|---|---|---|---|
+| BTPDevice | 65 KB | 1,7 KB | ~43 KB sem Wi-Fi (node 11, buffers 8, tasks 16, shell 4, resto 4) |
+| BTP | 38 KB | — | (dentro do node) |
+| TinyShell | 12 KB | — | — |
+| Wi-Fi + lwIP + mDNS (link TCP, recovery) | ~460 KB | ~45 KB | ~81 KB ao subir o Wi-Fi |
+| LittleFS | 31 KB | — | — |
+| SD (FATFS, SDMMC, SDSPI), mesmo sem cartão | ~70 KB | — | — |
+| App inteiro | 1,17 MB de 8 MB | 124 KB de 334 KB (DIRAM, inclui código em IRAM) | 124 KB com TCP; ~167 KB livres |
+
+Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, configurações ~6 KB, sono e PM ~4 KB) e ~2 KB de RAM.
+
+**S1. Configurações persistentes (D28)**
+- [ ] `include/btpdev/settings.h`: `Settings` com `boolean`, `u8`, `u16`, `u32`, `i32`, `f32`, `text` (até 64 octetos); `.range()`, `.unit()`, `.description()`, `.reboot()`; `on_change`.
+- [ ] `src/protocol/SettingsRegistry`: validação no `begin()` (nome ≤ 15, repetido, faixa do padrão, tipo), carga do NVS com tipo gravado junto (tipo mudou: volta ao padrão e avisa), escrita só quando muda.
+- [ ] Módulo `cfg`: `-list`, `-get <nome>`, `-set <nome>, <valor>`, `-reset <nome|all>`. Valores de até 4 octetos trocados de forma atômica; `text` sob lock.
+- [ ] API no código: `device.setting("setpoint")`, `set()`, `save()`.
+- [ ] `App::settings()` e o estilo de funções livres (`begin(commands, topics, settings)`).
+- [ ] Testes de host: parse dos valores, faixa, tipo, nomes, o NVS simulado.
+- [ ] Exemplo 06: o pino do LED e o período de amostragem viram configurações (sai o NVS feito à mão).
+
+**S2. Hora (D29)**
+- [ ] `DeviceConfig::time` (`TimeConfig`: `tz`, `sntp`, dois servidores, período de ressincronização).
+- [ ] SNTP pelo `esp_netif_sntp` quando o link TCP tem IP; ressincroniza a cada 6 h.
+- [ ] `btp -time` (mostra hora local, UTC, fonte, idade), `btp -time <ISO 8601>`, `btp -tz <POSIX>` (salvo no NVS).
+- [ ] `device.time_valid()`, `now()` (`time_t`), `now_us()`, `time_source()`. Validade guardada no RTC: some numa falta de energia, fica num reboot ou sono.
+- [ ] Testes de host: parse de ISO 8601 com fuso, regra de validade.
+
+**S3. Economia sem desconectar (D30)**
+- [ ] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`), `esp_pm_configure` e `esp_wifi_set_ps`.
+- [ ] Lock de PM no link Serial; conferir `CONFIG_PM_ENABLE` e avisar.
+- [ ] `btp -power`: modo, frequência, tempo em light sleep.
+- [ ] Medir a corrente na bancada (multímetro em série no 5 V) com e sem.
+
+**S4. Sono profundo (D31)**
+- [ ] `device.sleep_for()`, `sleep_until()`, `wake_reason()`, `wake_count()`; `SleepConfig` com GPIO de despertar e GPIO de manter acordado.
+- [ ] Antes de dormir: esvaziar filas de telemetria e log (com prazo), fechar a sessão, parar o Wi-Fi.
+- [ ] `boot_id` em blocos reservados no NVS + RTC; Wi-Fi com canal/BSSID do RTC (reconexão rápida).
+- [ ] `btp -awake <min>`: o próximo ciclo não dorme por N minutos.
+- [ ] O detector de crash loop ignora o despertar do sono.
+- [ ] Exemplo 07: sensor que acorda, mede, grava no LittleFS com hora, publica e dorme.
+
+**S5. Fechamento**
+- [ ] README, CHANGELOG, matriz de suporte; build dos exemplos no CI.
+- [ ] Em hardware (ESP32-S3): configurações sobrevivem a reboot e ao `factory_reset yes`; hora por SNTP e manual; consumo com `Saving`; ciclos de sono com reconexão e `boot_id` sem repetir.
 
 ### Fase 6: primeiro produto real (bally_OS)
 
