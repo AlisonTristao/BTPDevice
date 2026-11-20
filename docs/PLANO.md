@@ -473,8 +473,12 @@ próprio: responde NOT_MODIFIED e o TraceView guarda o cache.
 | Flash | app (`factory`) | recovery (`ota_0`) | storage |
 |---|---|---|---|
 | 4 MB | 2,69 MB | 1 MB | 256 KB |
-| 8 MB | 5 MB | 1 MB | 1,9 MB |
-| 16 MB | 8 MB | 1 MB | 6,9 MB |
+| 8 MB | 5,9 MB | 1 MB (0x600000) | 1 MB |
+| 16 MB | 13,9 MB | 1 MB (0xE00000) | 1 MB |
+
+O LittleFS era o resto da flash (1,9 e 6,9 MB) e foi reduzido a 1 MB: usava menos de 1%, e o
+`uploadfs` grava a partição inteira. O que sobrou foi para a aplicação, com o recovery e o
+LittleFS no fim da flash.
 
 **Fluxo de um update pelo TraceView:**
 

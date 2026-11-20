@@ -3,9 +3,13 @@
 # `idf.py flash` already write it); the recovery firmware lives in `ota_0`
 # and only runs when the otadata points at it. Keep the labels: the library
 # and the recovery look for "btp_recovery" and "storage".
+# The application takes all the flash the recovery (1 MB) and LittleFS (1 MB)
+# leave. LittleFS is 1 MB on purpose: settings, wifi.txt, the key file and
+# small app files fit with room to spare; logs and bulk data belong on an SD
+# card. To give a project more files, move space from `app` to `storage`.
 # Name,    Type, SubType,  Offset,   Size
 nvs,       data, nvs,      0x9000,   0x5000,
 otadata,   data, ota,      0xe000,   0x2000,
-app,       app,  factory,  0x10000,  0x500000,
-btp_recovery, app, ota_0,    0x510000, 0x100000,
-storage,   data, littlefs, 0x610000, 0x1f0000,
+app,       app,  factory,  0x10000,  0x5f0000,
+btp_recovery, app, ota_0,    0x600000, 0x100000,
+storage,   data, littlefs, 0x700000, 0x100000,

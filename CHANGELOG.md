@@ -6,6 +6,12 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Alterado
+- **Partições de 8 e 16 MB**: o LittleFS passa a 1 MB (eram 1,9 e 6,9 MB, usados em menos de
+  1%) e a aplicação fica com o resto: 5,9 e 13,9 MB (eram 5 e 8 MB). O recovery e o LittleFS
+  vão para o fim da flash. Trocar a tabela exige gravar por USB e apaga o LittleFS (a chave e
+  as configurações, no NVS, ficam).
+
 ### Adicionado
 - **Integração com o TraceView**: o manifesto traz `ota_endpoint` (`<nome>.local` do recovery,
   quando há um), e comandos com saída para programas: `cfg -json <i>` (uma configuração por

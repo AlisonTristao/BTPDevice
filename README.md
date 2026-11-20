@@ -607,8 +607,15 @@ um firmware de **recovery** (~0,7 MB) ocupa a `ota_0`. Com o `extra_scripts` mos
 | Tabela | Aplicação | Recovery | LittleFS |
 |---|---|---|---|
 | `tracekit_4mb.csv` | 2,7 MB | 1 MB | 256 KB |
-| `tracekit_8mb.csv` | 5 MB | 1 MB | 1,9 MB |
-| `tracekit_16mb.csv` | 8 MB | 1 MB | 6,9 MB |
+| `tracekit_8mb.csv` | 5,9 MB | 1 MB | 1 MB |
+| `tracekit_16mb.csv` | 13,9 MB | 1 MB | 1 MB |
+
+A aplicação fica com toda a flash que o recovery e o LittleFS não usam. No OTA padrão do
+ESP-IDF, com duas partições de aplicação do mesmo tamanho, cada uma teria menos da metade
+(~7 MB numa flash de 16 MB). O LittleFS fica em 1 MB (configurações, `wifi.txt`, a chave e
+arquivos pequenos); dados grandes e logs vão para o cartão SD. Um projeto que precise de mais
+arquivos passa espaço de `app` para `storage` na sua tabela. Trocar a tabela exige gravar por
+USB e apaga o LittleFS (a chave e as configurações ficam no NVS).
 
 **Atualização.** O comando `btp -recovery` reinicia o dispositivo no recovery, que se
 conecta à mesma rede Wi-Fi e aguarda o firmware em `<nome>.local`. O envio pode ser feito:
