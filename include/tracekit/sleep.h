@@ -1,5 +1,5 @@
-#ifndef BTPDEV_SLEEP_H
-#define BTPDEV_SLEEP_H
+#ifndef TRACEKIT_SLEEP_H
+#define TRACEKIT_SLEEP_H
 
 // Deep sleep (docs/PLANO.md D31): a battery sensor that wakes, measures,
 // sends and sleeps again.
@@ -20,7 +20,7 @@
 
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 enum class WakeReason : std::uint8_t {
     PowerOn,  ///< first boot after power-up (or a reset that is not a wake)
@@ -31,6 +31,6 @@ enum class WakeReason : std::uint8_t {
 
 const char* wake_reason_name(WakeReason reason) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_SLEEP_H
+#endif  // TRACEKIT_SLEEP_H

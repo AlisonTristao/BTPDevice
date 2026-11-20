@@ -5,7 +5,7 @@ Opens a session (HELLO), types each command into the device's shell
 (TERMINAL_IN) and prints what comes back (TERMINAL_OUT):
 
     python tools/btp_term.py COM8 "btp -status" "btp -mem"                    (Serial, in clear)
-    python tools/btp_term.py btpdev-s3-demo.local --password-e ... "btp -status"   (TCP, sealed)
+    python tools/btp_term.py tracekit-s3-demo.local --password-e ... "btp -status"   (TCP, sealed)
     python tools/btp_term.py COM8 --key-file data/bally.key "btp -recovery"   (Serial, sealed)
 
 A target that looks like a serial port (COM8, /dev/ttyACM0) is opened as

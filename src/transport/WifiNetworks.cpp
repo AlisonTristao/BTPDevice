@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 
 WifiParseResult parse_wifi_networks(const char* text, std::size_t size,
                                     WifiNetwork* out, std::size_t max) noexcept {
@@ -75,4 +75,4 @@ bool mdns_host_from_name(const char* name, char* out, std::size_t capacity) noex
     return length > 0U;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

@@ -7,7 +7,7 @@
 
 #include "core/Memory.h"
 
-namespace btpdev {
+namespace tracekit {
 
 bool psram_available() noexcept {
 #if CONFIG_SPIRAM
@@ -74,4 +74,4 @@ void release_task(TaskHandle_t task, TaskMemory* memory) noexcept {
 
 const char* stack_place(const TaskMemory& memory) noexcept { return memory.external() ? "psram" : ""; }
 
-}  // namespace btpdev
+}  // namespace tracekit

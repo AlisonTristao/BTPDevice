@@ -12,7 +12,7 @@
 #include "core/LogTags.h"
 #include "transport/WifiCore.h"
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 constexpr const char* kTag = tag::kCore;
@@ -30,7 +30,7 @@ void Power::begin(const PowerConfig& config, bool wifi, bool serial, std::uint32
 #if CONFIG_PM_ENABLE
     if (serial_ && serial_lock_ == nullptr) {
         esp_pm_lock_handle_t lock = nullptr;
-        if (esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "btpdev_serial", &lock) == ESP_OK) {
+        if (esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "tracekit_serial", &lock) == ESP_OK) {
             esp_pm_lock_acquire(lock);  // held for good: the port is always listening
             serial_lock_ = lock;
         }
@@ -118,4 +118,4 @@ void Power::describe(char* out, std::size_t size) const noexcept {
 #endif
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

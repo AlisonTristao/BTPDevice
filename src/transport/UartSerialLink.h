@@ -1,5 +1,5 @@
-#ifndef BTPDEV_UART_SERIAL_LINK_H
-#define BTPDEV_UART_SERIAL_LINK_H
+#ifndef TRACEKIT_UART_SERIAL_LINK_H
+#define TRACEKIT_UART_SERIAL_LINK_H
 
 // Serial link over a UART: the board's USB-serial bridge (CP210x, CH340...)
 // on chips without native USB (ESP32, ESP32-C3...), or on any chip when the
@@ -33,7 +33,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct UartSerialConfig {
     int port = 0;
@@ -92,6 +92,6 @@ private:
     std::uint8_t tx_chunk_[256] = {};    // link task only
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_UART_SERIAL_LINK_H
+#endif  // TRACEKIT_UART_SERIAL_LINK_H

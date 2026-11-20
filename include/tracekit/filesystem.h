@@ -1,12 +1,12 @@
-#ifndef BTPDEV_FILESYSTEM_H
-#define BTPDEV_FILESYSTEM_H
+#ifndef TRACEKIT_FILESYSTEM_H
+#define TRACEKIT_FILESYSTEM_H
 
 // Files of the device: the library's own (the networks file, the key file to
 // import) and the application's. One class for every backend -- LittleFS on a
 // flash partition or an SD card -- because both are mounted into ESP-IDF's
 // VFS and then are plain POSIX files under a mount point ("/fs", "/sd").
 //
-//   btpdev::FileSystem* fs = device.fs();       // nullptr: nothing mounted
+//   tracekit::FileSystem* fs = device.fs();       // nullptr: nothing mounted
 //   if (fs != nullptr) fs->append("log.csv", line, len);
 //
 // Names are relative to the mount point ("wifi.txt", "data/log.csv"); ".."
@@ -17,7 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 class FileSystem {
 public:
@@ -60,6 +60,6 @@ private:
     void* usage_context_ = nullptr;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_FILESYSTEM_H
+#endif  // TRACEKIT_FILESYSTEM_H

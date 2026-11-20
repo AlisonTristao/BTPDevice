@@ -1,5 +1,5 @@
-#ifndef BTPDEV_NODE_PRESETS_H
-#define BTPDEV_NODE_PRESETS_H
+#ifndef TRACEKIT_NODE_PRESETS_H
+#define TRACEKIT_NODE_PRESETS_H
 
 // The btp::StaticNode behind each Memory preset (docs/PLANO.md 4.11, D18).
 // Close to BTP's own NodeSize Low/Medium/High, with three changes a device
@@ -20,9 +20,9 @@
 
 #include <cstddef>
 
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Longest shell output returned in a COMMAND_RESULT message (the terminal
 /// shows the full output; a remote COMMAND caller gets this much).
@@ -35,16 +35,16 @@ struct NodePreset;
 // library (the link's send queue and the receive queue in front of the node).
 // The HELLO advertises Slots / SlotBytes / MaxSubscriptions / MaxCommands, so
 // they are spelled out, not hidden in the template arguments.
-#define BTPDEV_DEFINE_PRESET(MEM, SLOTS, SLOT_BYTES, SEAL, SCRATCH, TOPICS, FIELDS, STRINGS, SUBS,                                  COMMANDS, COMMAND_BYTES, SOURCE_INFO, LINK_QUEUE, RX_QUEUE)                   template <>                                                                                          struct NodePreset<MEM> {                                                                                 /* The node's capacities by name (btp::NodeCapacities, BTP 2.51). */                                 struct Capacities : btp::NodeCapacities {                                                                static const std::size_t Slots = SLOTS;                                                              static const std::size_t SlotBytes = SLOT_BYTES;                                                     static const std::size_t SealBytes = SEAL;                                                           static const std::size_t ScratchBytes = SCRATCH;                                                     static const std::size_t CatalogTopics = TOPICS;                                                     static const std::size_t CatalogFields = FIELDS;                                                     static const std::size_t CatalogStringBytes = STRINGS;                                               static const std::size_t MaxSubscriptions = SUBS;                                                    static const std::size_t MaxCommands = COMMANDS;                                                     static const std::size_t CommandBytes = COMMAND_BYTES;                                               static const std::size_t CatalogSourceInfo = SOURCE_INFO;                                        };                                                                                                   static constexpr std::size_t kSlots = SLOTS;                                                         static constexpr std::size_t kSlotBytes = SLOT_BYTES;                                                static constexpr std::size_t kSealBytes = SEAL;                                                      static constexpr std::size_t kMaxSubscriptions = SUBS;                                               static constexpr std::size_t kMaxCommands = COMMANDS;                                                static constexpr std::size_t kCatalogTopics = TOPICS;                                                static constexpr std::size_t kCatalogFields = FIELDS;                                                static constexpr std::size_t kSourceInfo = SOURCE_INFO;                                              static constexpr std::size_t kLinkQueueBytes = LINK_QUEUE;                                           static constexpr std::size_t kRxQueueBytes = RX_QUEUE;                                               using Node = btp::NodeWith<Capacities>;                                                          }
+#define TRACEKIT_DEFINE_PRESET(MEM, SLOTS, SLOT_BYTES, SEAL, SCRATCH, TOPICS, FIELDS, STRINGS, SUBS,                                  COMMANDS, COMMAND_BYTES, SOURCE_INFO, LINK_QUEUE, RX_QUEUE)                   template <>                                                                                          struct NodePreset<MEM> {                                                                                 /* The node's capacities by name (btp::NodeCapacities, BTP 2.51). */                                 struct Capacities : btp::NodeCapacities {                                                                static const std::size_t Slots = SLOTS;                                                              static const std::size_t SlotBytes = SLOT_BYTES;                                                     static const std::size_t SealBytes = SEAL;                                                           static const std::size_t ScratchBytes = SCRATCH;                                                     static const std::size_t CatalogTopics = TOPICS;                                                     static const std::size_t CatalogFields = FIELDS;                                                     static const std::size_t CatalogStringBytes = STRINGS;                                               static const std::size_t MaxSubscriptions = SUBS;                                                    static const std::size_t MaxCommands = COMMANDS;                                                     static const std::size_t CommandBytes = COMMAND_BYTES;                                               static const std::size_t CatalogSourceInfo = SOURCE_INFO;                                        };                                                                                                   static constexpr std::size_t kSlots = SLOTS;                                                         static constexpr std::size_t kSlotBytes = SLOT_BYTES;                                                static constexpr std::size_t kSealBytes = SEAL;                                                      static constexpr std::size_t kMaxSubscriptions = SUBS;                                               static constexpr std::size_t kMaxCommands = COMMANDS;                                                static constexpr std::size_t kCatalogTopics = TOPICS;                                                static constexpr std::size_t kCatalogFields = FIELDS;                                                static constexpr std::size_t kSourceInfo = SOURCE_INFO;                                              static constexpr std::size_t kLinkQueueBytes = LINK_QUEUE;                                           static constexpr std::size_t kRxQueueBytes = RX_QUEUE;                                               using Node = btp::NodeWith<Capacities>;                                                          }
 
 // SlotBytes >= 600 everywhere: a COMMAND_REQUEST with a full 512-byte shell
 // line is 532 bytes of logical payload.
 //                   memory          slots slot  seal  scratch topics fields strings subs cmds cmdB srcinfo linkQ  rxQ
-BTPDEV_DEFINE_PRESET(Memory::Small,  2U,   600U, 1024U, 1024U, 4U,    16U,   512U,   4U,  2U,  768U,  8U,  8192U, 4096U);
-BTPDEV_DEFINE_PRESET(Memory::Medium, 4U,   600U, 2048U, 2048U, 8U,    48U,   1536U,  8U,  4U,  768U, 12U, 16384U, 8192U);
-BTPDEV_DEFINE_PRESET(Memory::Large,  6U,  1024U, 4096U, 4096U, 16U,   128U,  3072U, 16U,  8U, 1024U, 16U, 32768U, 16384U);
+TRACEKIT_DEFINE_PRESET(Memory::Small,  2U,   600U, 1024U, 1024U, 4U,    16U,   512U,   4U,  2U,  768U,  8U,  8192U, 4096U);
+TRACEKIT_DEFINE_PRESET(Memory::Medium, 4U,   600U, 2048U, 2048U, 8U,    48U,   1536U,  8U,  4U,  768U, 12U, 16384U, 8192U);
+TRACEKIT_DEFINE_PRESET(Memory::Large,  6U,  1024U, 4096U, 4096U, 16U,   128U,  3072U, 16U,  8U, 1024U, 16U, 32768U, 16384U);
 
-#undef BTPDEV_DEFINE_PRESET
+#undef TRACEKIT_DEFINE_PRESET
 
 /// A preset's numbers, at runtime.
 struct PresetSizes {
@@ -78,6 +78,6 @@ inline PresetSizes preset_sizes(Memory memory) noexcept {
     }
 }
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_NODE_PRESETS_H
+#endif  // TRACEKIT_NODE_PRESETS_H

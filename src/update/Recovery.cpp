@@ -13,7 +13,7 @@
 
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kRecovery;
@@ -60,7 +60,7 @@ void restart_after(std::uint32_t delay_ms) noexcept {
     if (delay_ms == 0U) esp_restart();
     esp_timer_create_args_t args{};
     args.callback = [](void*) { esp_restart(); };
-    args.name = "btpdev_recovery";
+    args.name = "tracekit_recovery";
     esp_timer_handle_t timer = nullptr;
     if (esp_timer_create(&args, &timer) != ESP_OK ||
         esp_timer_start_once(timer, static_cast<std::uint64_t>(delay_ms) * 1000U) != ESP_OK) {
@@ -80,7 +80,7 @@ void Recovery::find_partitions() noexcept {
     const esp_partition_t* running = esp_ota_get_running_partition();
     available_ = false;
     if (recovery_ == nullptr || app_ == nullptr) {
-        std::snprintf(why_, sizeof(why_), "no recovery partition (use partitions/btpdev_<size>.csv)");
+        std::snprintf(why_, sizeof(why_), "no recovery partition (use partitions/tracekit_<size>.csv)");
         return;
     }
     if (running != app_) {
@@ -102,7 +102,7 @@ void Recovery::boot(const RecoveryConfig& config) noexcept {
     find_partitions();
     if (!config_.enabled) return;
     if (recovery_ == nullptr) {
-        ESP_LOGI(kTag, "no recovery partition: updates over Wi-Fi are off (partitions/btpdev_<size>.csv adds one)");
+        ESP_LOGI(kTag, "no recovery partition: updates over Wi-Fi are off (partitions/tracekit_<size>.csv adds one)");
         return;
     }
     if (!available_) {
@@ -140,7 +140,7 @@ void Recovery::arm_stable_timer() noexcept {
         s_crashes = 0U;
         ESP_LOGI(tag::kRecovery, "stable: crash count cleared");
     };
-    args.name = "btpdev_stable";
+    args.name = "tracekit_stable";
     esp_timer_handle_t timer = nullptr;
     if (esp_timer_create(&args, &timer) == ESP_OK) {
         esp_timer_start_once(timer, static_cast<std::uint64_t>(config_.stable_ms) * 1000U);
@@ -237,4 +237,4 @@ void Recovery::describe(char* out, std::size_t size) const noexcept {
                   config_.crash_loop == 0U ? " (detector off)" : "");
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

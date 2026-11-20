@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 
 ShellTextError copy_shell_line(btp::ByteView parameters, char* out, std::size_t capacity) noexcept {
     if (parameters.data == nullptr || parameters.size == 0U) return ShellTextError::Empty;
@@ -28,4 +28,4 @@ const char* shell_text_error_message(ShellTextError error) noexcept {
     return "?";
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

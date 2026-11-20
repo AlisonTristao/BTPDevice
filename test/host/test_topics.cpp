@@ -13,8 +13,8 @@
 
 #include "check.h"
 
-using btpdev::Topics;
-using btpdev::TopicRegistry;
+using tracekit::Topics;
+using tracekit::TopicRegistry;
 
 namespace {
 
@@ -51,7 +51,7 @@ struct Rig {
     CaptureConfig config;
     TestNode node{config};
     TopicRegistry registry;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
 
     esp_err_t install(Topics& topics, std::size_t max_topics = 8U) {
         const esp_err_t err = registry.install(topics, node, node.catalog(), max_topics, error);
@@ -147,7 +147,7 @@ bool pump_on = true;
 void bound_variables_become_samples() {
     Rig rig;
     Topics topics;
-    topics.topic("weather", btpdev::Hz(10))
+    topics.topic("weather", tracekit::Hz(10))
         .f32("temperature", &temperature, "C", -40, 85)
         .f32("humidity", &humidity, "%")
         .i32("counter", &counter)
@@ -183,7 +183,7 @@ void bound_variables_become_samples() {
 void fill_functions_write_the_sample() {
     Rig rig;
     Topics topics;
-    topics.topic("power", btpdev::Hz(5)).f32("volts", "V").f32("amps", "A").fill([](btpdev::Sample& s) {
+    topics.topic("power", tracekit::Hz(5)).f32("volts", "V").f32("amps", "A").fill([](tracekit::Sample& s) {
         s.put("volts", 12.5).put("amps", 0.25f);
     });
     CHECK(rig.install(topics) == ESP_OK);
@@ -196,11 +196,11 @@ void fill_functions_write_the_sample() {
 void ranges_reach_the_catalogue_for_any_type() {
     Rig rig;
     Topics topics;
-    topics.topic("motors", btpdev::Hz(5))
+    topics.topic("motors", tracekit::Hz(5))
         .u16("current", "counts").range(0, 4095)
         .i8("pwm", "%").range(-100, 100)
         .u8("mode")
-        .fill([](btpdev::Sample& s) { s.put("current", 1234).put("pwm", -50).put("mode", 3); });
+        .fill([](tracekit::Sample& s) { s.put("current", 1234).put("pwm", -50).put("mode", 3); });
     CHECK(rig.install(topics) == ESP_OK);
     const btp::CatalogTopic* topic = rig.node.catalog().topic(Topics::kFirstTopicId);
     CHECK(topic != nullptr && topic->field_count == 3U);
@@ -219,7 +219,7 @@ void ranges_reach_the_catalogue_for_any_type() {
 void a_wrong_fill_drops_the_sample() {
     Rig rig;
     Topics topics;
-    topics.topic("power", btpdev::Hz(5)).f32("volts", "V").f32("amps", "A").fill([](btpdev::Sample& s) {
+    topics.topic("power", tracekit::Hz(5)).f32("volts", "V").f32("amps", "A").fill([](tracekit::Sample& s) {
         s.put("amps", 1.0);  // out of order: the writer refuses, nothing is sent
     });
     CHECK(rig.install(topics) == ESP_OK);
@@ -231,7 +231,7 @@ void a_wrong_fill_drops_the_sample() {
 void text_topics_publish_utf8() {
     Rig rig;
     Topics topics;
-    topics.text("status", btpdev::Hz(1), [](btpdev::Text& out) { out.printf("uptime %us", 42U); });
+    topics.text("status", tracekit::Hz(1), [](tracekit::Text& out) { out.printf("uptime %us", 42U); });
     CHECK(rig.install(topics) == ESP_OK);
     rig.registry.publish_pending(rig.node, 1000U);
     CHECK(rig.texts(Topics::kFirstTopicId).empty());  // not subscribed
@@ -244,7 +244,7 @@ void text_topics_publish_utf8() {
 void event_publish_only_reaches_subscribers() {
     Rig rig;
     Topics topics;
-    topics.topic("alarm", btpdev::OnEvent).boolean("door", &pump_on);
+    topics.topic("alarm", tracekit::OnEvent).boolean("door", &pump_on);
     CHECK(rig.install(topics) == ESP_OK);
     CHECK(rig.registry.request_publish("alarm"));
     CHECK(!rig.registry.request_publish("nope"));
@@ -265,18 +265,18 @@ void event_publish_only_reaches_subscribers() {
 void handles_reach_the_same_topics_as_names() {
     Rig rig;
     Topics topics;
-    const btpdev::Topic temp = topics.topic("temp", btpdev::Hz(1)).f32("x", &temperature);
-    btpdev::Topic alarm = topics.topic("alarm", btpdev::OnEvent).boolean("door", &pump_on);
-    const btpdev::Topic audio = topics.stream("audio", 4U, "counts", 2U).handle();
+    const tracekit::Topic temp = topics.topic("temp", tracekit::Hz(1)).f32("x", &temperature);
+    tracekit::Topic alarm = topics.topic("alarm", tracekit::OnEvent).boolean("door", &pump_on);
+    const tracekit::Topic audio = topics.stream("audio", 4U, "counts", 2U).handle();
     CHECK(temp.valid() && temp.index == 0U && alarm.index == 1U && audio.index == 2U);
     CHECK(rig.install(topics) == ESP_OK);
     CHECK(rig.registry.handle_of("alarm").index == alarm.index);
     CHECK(!rig.registry.handle_of("nope").valid());
 
     // An invalid handle, or one past the declarations, does nothing.
-    CHECK(!rig.registry.request_publish(btpdev::Topic{}));
-    CHECK(!rig.registry.request_publish(btpdev::Topic{7U}));
-    CHECK(!rig.registry.subscribed(btpdev::Topic{7U}));
+    CHECK(!rig.registry.request_publish(tracekit::Topic{}));
+    CHECK(!rig.registry.request_publish(tracekit::Topic{7U}));
+    CHECK(!rig.registry.subscribed(tracekit::Topic{7U}));
     const std::int16_t block[] = {1, 2};
     CHECK(!rig.registry.write_stream(temp, block, 2U, 8000U, 1U));  // not a stream
     CHECK(!rig.registry.request_publish(audio));                    // not an event topic
@@ -297,9 +297,9 @@ void handles_reach_the_same_topics_as_names() {
 void ids_are_automatic_unless_pinned() {
     Rig rig;
     Topics topics;
-    topics.topic("a", btpdev::Hz(1)).f32("x", &temperature);
-    topics.topic("b", btpdev::Hz(1)).f32("x", &temperature).id(0x0200);
-    topics.topic("c", btpdev::Hz(1)).f32("x", &temperature);
+    topics.topic("a", tracekit::Hz(1)).f32("x", &temperature);
+    topics.topic("b", tracekit::Hz(1)).f32("x", &temperature).id(0x0200);
+    topics.topic("c", tracekit::Hz(1)).f32("x", &temperature);
     CHECK(rig.install(topics) == ESP_OK);
     CHECK(rig.registry.id_of("a") == Topics::kFirstTopicId);
     CHECK(rig.registry.id_of("b") == 0x0200);
@@ -318,40 +318,40 @@ void mistakes_are_reported_by_name() {
     std::string message;
     {
         Topics t;
-        t.topic("weather", btpdev::Hz(1)).f32("x", &temperature);
-        t.topic("weather", btpdev::Hz(1)).f32("y", &temperature);
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.topic("weather", tracekit::Hz(1)).f32("x", &temperature);
+        t.topic("weather", tracekit::Hz(1)).f32("y", &temperature);
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "\"weather\" is declared twice");
     }
     {
         Topics t;
-        t.topic("empty", btpdev::Hz(1));
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.topic("empty", tracekit::Hz(1));
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "no fields");
     }
     {
         Topics t;
-        t.topic("w", btpdev::Hz(1)).f32("x", &temperature).f32("x", &humidity);
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.topic("w", tracekit::Hz(1)).f32("x", &temperature).f32("x", &humidity);
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "field \"x\" is declared twice");
     }
     {
         Topics t;
-        t.topic("w", btpdev::Hz(1)).f32("x");  // no variable, no fill
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.topic("w", tracekit::Hz(1)).f32("x");  // no variable, no fill
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "no .fill()");
     }
     {
         Topics t;
-        t.topic("w", btpdev::Hz(1)).f32("x", &temperature).fill([](btpdev::Sample&) {});
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.topic("w", tracekit::Hz(1)).f32("x", &temperature).fill([](tracekit::Sample&) {});
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "one or the other");
     }
     {
         Topics t;
-        t.topic("a", btpdev::Hz(1)).f32("x", &temperature);
-        t.topic("b", btpdev::Hz(1)).f32("x", &temperature);
-        CHECK(install_error(t, message, 1U) == BTPDEV_ERR_BAD_TOPIC);
+        t.topic("a", tracekit::Hz(1)).f32("x", &temperature);
+        t.topic("b", tracekit::Hz(1)).f32("x", &temperature);
+        CHECK(install_error(t, message, 1U) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "larger preset");
     }
 }
@@ -410,13 +410,13 @@ void streams_must_fit_one_frame() {
     {
         Topics t;
         t.stream("big", 3000U);
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "at most 2022 samples");
     }
     {
         Topics t;
         t.stream("s", 16U).f32("extra", &temperature);
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "fields are fixed");
     }
 }
@@ -427,7 +427,7 @@ void bytes_topics_publish_an_opaque_body() {
     std::vector<std::uint8_t> body;  // empty: nothing new
     int calls = 0;
     topics
-        .bytes("camera.matrix", btpdev::Hz(10), 8U,
+        .bytes("camera.matrix", tracekit::Hz(10), 8U,
                [&](std::uint8_t* out, std::size_t capacity) -> std::size_t {
                    ++calls;
                    if (body.empty() || body.size() > capacity) return 0U;
@@ -481,21 +481,21 @@ void bytes_topics_are_checked() {
     std::string message;
     {
         Topics t;
-        t.bytes("img", btpdev::Hz(1), 4000U, [](std::uint8_t*, std::size_t) -> std::size_t { return 0U; });
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.bytes("img", tracekit::Hz(1), 4000U, [](std::uint8_t*, std::size_t) -> std::size_t { return 0U; });
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "max_size must be 1..2030");
     }
     {
         Topics t;
-        t.bytes("img", btpdev::Hz(1), 16U, [](std::uint8_t*, std::size_t) -> std::size_t { return 0U; })
+        t.bytes("img", tracekit::Hz(1), 16U, [](std::uint8_t*, std::size_t) -> std::size_t { return 0U; })
             .u8("x", "");
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "cannot have fields");
     }
     {
         Topics t;
-        t.bytes("img", btpdev::Hz(1), 16U, nullptr);
-        CHECK(install_error(t, message) == BTPDEV_ERR_BAD_TOPIC);
+        t.bytes("img", tracekit::Hz(1), 16U, nullptr);
+        CHECK(install_error(t, message) == TRACEKIT_ERR_BAD_TOPIC);
         CHECK_CONTAINS(message.c_str(), "has no function");
     }
 }
@@ -503,7 +503,7 @@ void bytes_topics_are_checked() {
 void text_topics_carry_their_version() {
     Rig rig;
     Topics topics;
-    topics.text("status", btpdev::Hz(1), [](btpdev::Text& out) { out.append("ok"); }).version(3);
+    topics.text("status", tracekit::Hz(1), [](tracekit::Text& out) { out.append("ok"); }).version(3);
     CHECK(rig.install(topics) == ESP_OK);
     const btp::CatalogTopic* topic = rig.node.catalog().topic(Topics::kFirstTopicId);
     CHECK(topic != nullptr && topic->schema_version == 3U);
@@ -519,12 +519,12 @@ void text_topics_carry_their_version() {
 }
 
 void text_buffer_is_bounded() {
-    btpdev::Text text;
+    tracekit::Text text;
     const std::string big(3000, 'x');
     text.append(big.c_str());
-    CHECK(text.size() == btpdev::Text::kCapacity);
+    CHECK(text.size() == tracekit::Text::kCapacity);
     text.printf("more");
-    CHECK(text.size() == btpdev::Text::kCapacity);
+    CHECK(text.size() == tracekit::Text::kCapacity);
 }
 
 }  // namespace

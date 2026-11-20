@@ -5,8 +5,8 @@
 
 #include "check.h"
 
-using btpdev::FrameQueue;
-using btpdev::Priority;
+using tracekit::FrameQueue;
+using tracekit::Priority;
 
 namespace {
 

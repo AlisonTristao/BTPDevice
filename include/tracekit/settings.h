@@ -1,11 +1,11 @@
-#ifndef BTPDEV_SETTINGS_H
-#define BTPDEV_SETTINGS_H
+#ifndef TRACEKIT_SETTINGS_H
+#define TRACEKIT_SETTINGS_H
 
 // Persistent settings: values the application needs to adjust in the field
 // (a setpoint, a period, a pin) without recompiling. Declared once, bound to
 // the application's own variables, kept in NVS (docs/PLANO.md D28):
 //
-//   void settings(btpdev::Settings& s) override {
+//   void settings(tracekit::Settings& s) override {
 //       s.f32("setpoint", &setpoint_, 25.0f).range(0, 100).unit("°C");
 //       s.u32("period_ms", &period_ms_, 500).range(100, 60000);
 //       s.u8("led_pin", &pin_, 48).reboot();          // used once, at boot
@@ -23,7 +23,7 @@
 //   cfg -set setpoint, 30          checked against type and range, then saved
 //   cfg -reset setpoint            back to the default (cfg -reset all)
 //
-// From the code, BtpDevice::set_setting("setpoint", "30") does what
+// From the code, TraceKit::set_setting("setpoint", "30") does what
 // `cfg -set` does, and save_setting("setpoint") stores a value the
 // application changed in the variable itself.
 //
@@ -44,7 +44,7 @@
 #include <functional>
 #include <vector>
 
-namespace btpdev {
+namespace tracekit {
 
 enum class SettingType : std::uint8_t { Bool, U8, U16, U32, I32, F32, Text };
 
@@ -144,6 +144,6 @@ private:
     std::vector<SettingDecl> list_;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_SETTINGS_H
+#endif  // TRACEKIT_SETTINGS_H

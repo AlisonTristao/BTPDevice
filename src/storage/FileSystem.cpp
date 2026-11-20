@@ -1,4 +1,4 @@
-#include <btpdev/filesystem.h>
+#include <tracekit/filesystem.h>
 
 #include <cstdio>
 #include <cstring>
@@ -6,7 +6,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-namespace btpdev {
+namespace tracekit {
 
 void FileSystem::attach(const char* root, UsageFn usage, void* usage_context) noexcept {
     root_[0] = '\0';
@@ -126,4 +126,4 @@ bool FileSystem::usage(std::uint64_t* total_bytes, std::uint64_t* used_bytes) co
            usage_(usage_context_, total_bytes, used_bytes);
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

@@ -1,5 +1,5 @@
-#ifndef BTPDEV_STREAM_FRAMING_H
-#define BTPDEV_STREAM_FRAMING_H
+#ifndef TRACEKIT_STREAM_FRAMING_H
+#define TRACEKIT_STREAM_FRAMING_H
 
 // Link framing of the three stream links (Serial, TCP, BLE):
 // 0x00 || COBS(frame) || 0x00 over a byte pipe with no message boundaries
@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <new>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Worst-case size of 0x00 || COBS(frame) || 0x00 for a `frame_size`-octet
 /// frame; 0 when frame_size is out of range.
@@ -90,6 +90,6 @@ private:
     Stats stats_{};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_STREAM_FRAMING_H
+#endif  // TRACEKIT_STREAM_FRAMING_H

@@ -6,7 +6,7 @@
 
 #include "core/LogTags.h"
 
-#if CONFIG_BTPDEV_LINK_ESPNOW
+#if CONFIG_TRACEKIT_LINK_ESPNOW
 #include <esp_log.h>
 #include <esp_now.h>
 #include <esp_timer.h>
@@ -15,9 +15,9 @@
 #include "transport/WifiCore.h"
 #endif
 
-namespace btpdev {
+namespace tracekit {
 
-#if CONFIG_BTPDEV_LINK_ESPNOW
+#if CONFIG_TRACEKIT_LINK_ESPNOW
 
 namespace {
 
@@ -78,14 +78,14 @@ esp_err_t EspNowLink::start(const LinkEvents& events, ErrorInfo& error) noexcept
         return fail(error, ESP_ERR_INVALID_ARG, kTag, "ESP-NOW link started without on_receive");
     }
     if (all_zero(config_.peer_mac)) {
-        return fail(error, BTPDEV_ERR_CONFIG, kTag,
+        return fail(error, TRACEKIT_ERR_CONFIG, kTag,
                     "DeviceConfig::espnow.peer_mac is not set: put the dongle's MAC there");
     }
     if (!mutex_.create()) return fail(error, ESP_ERR_NO_MEM, kTag, "no memory for the ESP-NOW mutex");
     if (!normal_storage_.allocate(config_.normal_queue_bytes) ||
         !telemetry_storage_.allocate(config_.telemetry_queue_bytes)) {
         normal_storage_.reset();
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the ESP-NOW queues (%u bytes)",
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the ESP-NOW queues (%u bytes)",
                     static_cast<unsigned>(config_.normal_queue_bytes + config_.telemetry_queue_bytes));
     }
     normal_.bind(normal_storage_.data(), normal_storage_.size(), 0U);
@@ -115,7 +115,7 @@ esp_err_t EspNowLink::start(const LinkEvents& events, ErrorInfo& error) noexcept
         g_link = nullptr;
         normal_storage_.reset();
         telemetry_storage_.reset();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "could not start ESP-NOW on channel %u (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "could not start ESP-NOW on channel %u (%s)",
                     static_cast<unsigned>(config_.channel), esp_err_to_name(err));
     }
     running_.store(true);
@@ -211,12 +211,12 @@ void EspNowLink::pump(std::uint32_t now) noexcept {
     }
 }
 
-#else  // !CONFIG_BTPDEV_LINK_ESPNOW
+#else  // !CONFIG_TRACEKIT_LINK_ESPNOW
 
 EspNowLink::~EspNowLink() = default;
 esp_err_t EspNowLink::start(const LinkEvents&, ErrorInfo& error) noexcept {
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kEspNow,
-                "the ESP-NOW link is disabled in menuconfig (BTPDevice > Links)");
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kEspNow,
+                "the ESP-NOW link is disabled in menuconfig (TraceKit > Links)");
 }
 void EspNowLink::stop() noexcept {}
 bool EspNowLink::send(const std::uint8_t*, std::size_t, Priority) noexcept { return false; }
@@ -225,7 +225,7 @@ void EspNowLink::on_receive(const std::uint8_t*, const std::uint8_t*, int) noexc
 void EspNowLink::on_sent(bool) noexcept {}
 void EspNowLink::pump(std::uint32_t) noexcept {}
 
-#endif  // CONFIG_BTPDEV_LINK_ESPNOW
+#endif  // CONFIG_TRACEKIT_LINK_ESPNOW
 
 LinkStats EspNowLink::stats() const noexcept {
     LinkStats s;
@@ -246,4 +246,4 @@ EspNowLink::DeliveryStats EspNowLink::delivery_stats() const noexcept {
     return s;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

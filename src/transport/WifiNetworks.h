@@ -1,5 +1,5 @@
-#ifndef BTPDEV_WIFI_NETWORKS_H
-#define BTPDEV_WIFI_NETWORKS_H
+#ifndef TRACEKIT_WIFI_NETWORKS_H
+#define TRACEKIT_WIFI_NETWORKS_H
 
 // The pure parts of the Wi-Fi station: reading the networks file and turning
 // the device name into its mDNS hostname. Portable, covered by
@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 struct WifiNetwork {
     static constexpr std::size_t kMaxSsid = 32U;      // 802.11 limit
@@ -38,6 +38,6 @@ WifiParseResult parse_wifi_networks(const char* text, std::size_t size,
 /// name has no letter or digit) or `capacity` is too small.
 bool mdns_host_from_name(const char* name, char* out, std::size_t capacity) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_WIFI_NETWORKS_H
+#endif  // TRACEKIT_WIFI_NETWORKS_H

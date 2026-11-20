@@ -36,9 +36,9 @@ std::vector<std::uint8_t> make_frame(std::uint32_t sequence, std::size_t payload
 }
 
 std::vector<std::uint8_t> framed(const std::vector<std::uint8_t>& frame) {
-    std::vector<std::uint8_t> out(btpdev::stream_encoded_capacity(frame.size()));
+    std::vector<std::uint8_t> out(tracekit::stream_encoded_capacity(frame.size()));
     std::size_t written = 0U;
-    CHECK(btpdev::stream_encode(frame.data(), frame.size(), out.data(), out.size(), &written));
+    CHECK(tracekit::stream_encode(frame.data(), frame.size(), out.data(), out.size(), &written));
     out.resize(written);
     return out;
 }
@@ -59,12 +59,12 @@ void encode_refuses_a_small_buffer() {
     const auto frame = make_frame(1U, 40U);
     std::vector<std::uint8_t> out(10);
     std::size_t written = 0U;
-    CHECK(!btpdev::stream_encode(frame.data(), frame.size(), out.data(), out.size(), &written));
-    CHECK(!btpdev::stream_encode(nullptr, 5U, out.data(), out.size(), &written));
+    CHECK(!tracekit::stream_encode(frame.data(), frame.size(), out.data(), out.size(), &written));
+    CHECK(!tracekit::stream_encode(nullptr, 5U, out.data(), out.size(), &written));
 }
 
 void unbound_decoder_is_inert() {
-    btpdev::StreamDecoder decoder;
+    tracekit::StreamDecoder decoder;
     CHECK(!decoder.bound());
     std::vector<std::uint8_t> too_small(100);
     CHECK(!decoder.bind(too_small.data(), too_small.size()));
@@ -75,8 +75,8 @@ void unbound_decoder_is_inert() {
 }
 
 void frames_survive_arbitrary_chunking() {
-    std::vector<std::uint8_t> storage(btpdev::StreamDecoder::kStorageSize);
-    btpdev::StreamDecoder decoder;
+    std::vector<std::uint8_t> storage(tracekit::StreamDecoder::kStorageSize);
+    tracekit::StreamDecoder decoder;
     CHECK(decoder.bind(storage.data(), storage.size()));
 
     std::vector<std::uint8_t> stream;
@@ -97,8 +97,8 @@ void frames_survive_arbitrary_chunking() {
 }
 
 void a_corrupt_frame_is_skipped_and_the_next_one_arrives() {
-    std::vector<std::uint8_t> storage(btpdev::StreamDecoder::kStorageSize);
-    btpdev::StreamDecoder decoder;
+    std::vector<std::uint8_t> storage(tracekit::StreamDecoder::kStorageSize);
+    tracekit::StreamDecoder decoder;
     decoder.bind(storage.data(), storage.size());
 
     auto bad = framed(make_frame(1U, 20U));
@@ -115,8 +115,8 @@ void a_corrupt_frame_is_skipped_and_the_next_one_arrives() {
 }
 
 void reset_discards_a_frame_left_half_way() {
-    std::vector<std::uint8_t> storage(btpdev::StreamDecoder::kStorageSize);
-    btpdev::StreamDecoder decoder;
+    std::vector<std::uint8_t> storage(tracekit::StreamDecoder::kStorageSize);
+    tracekit::StreamDecoder decoder;
     decoder.bind(storage.data(), storage.size());
 
     const auto first = framed(make_frame(1U, 50U));
@@ -131,8 +131,8 @@ void reset_discards_a_frame_left_half_way() {
 }
 
 void the_largest_serial_frame_fits() {
-    std::vector<std::uint8_t> storage(btpdev::StreamDecoder::kStorageSize);
-    btpdev::StreamDecoder decoder;
+    std::vector<std::uint8_t> storage(tracekit::StreamDecoder::kStorageSize);
+    tracekit::StreamDecoder decoder;
     decoder.bind(storage.data(), storage.size());
     const auto frame = make_frame(9U, btp::kSerialMaxFrameSize - 40U);
     const auto wire = framed(frame);

@@ -3,8 +3,8 @@
 checks that each one comes back byte for byte.
 
     python tools/link_echo_test.py serial COM5
-    python tools/link_echo_test.py tcp btpdev-echo.local        (or an IP)
-    python tools/link_echo_test.py ble btpdev-echo              (device name)
+    python tools/link_echo_test.py tcp tracekit-echo.local        (or an IP)
+    python tools/link_echo_test.py ble tracekit-echo              (device name)
 
 Options: --count N (frames, default 200), --max-payload N (default 1000).
 

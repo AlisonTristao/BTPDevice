@@ -1,5 +1,5 @@
-#ifndef BTPDEV_TASK_SPAWN_H
-#define BTPDEV_TASK_SPAWN_H
+#ifndef TRACEKIT_TASK_SPAWN_H
+#define TRACEKIT_TASK_SPAWN_H
 
 // The library's tasks, with their stack in PSRAM when DeviceConfig::psram is
 // Psram::Stacks (and the build allows it), internal otherwise.
@@ -15,11 +15,11 @@
 
 #include <cstdint>
 
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-namespace btpdev {
+namespace tracekit {
 
 /// True when the chip has PSRAM mapped into the heap.
 bool psram_available() noexcept;
@@ -46,6 +46,6 @@ void release_task(TaskHandle_t task, TaskMemory* memory) noexcept;
 /// Where a task's stack is, for btp -mem: "psram" or "".
 const char* stack_place(const TaskMemory& memory) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TASK_SPAWN_H
+#endif  // TRACEKIT_TASK_SPAWN_H

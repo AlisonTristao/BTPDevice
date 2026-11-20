@@ -1,12 +1,12 @@
-// The SD card driver (btpdev::sd_card), in a file of its own: it is linked
+// The SD card driver (tracekit::sd_card), in a file of its own: it is linked
 // only when a project sets SdConfig::driver to it, so the FAT, SDMMC and SDSPI
 // drivers (~70 KB of flash) stay out of every project without a card.
 
 #include <cstring>
 
-#include <btpdev/config.h>
-#include <btpdev/error.h>
-#include <btpdev/filesystem.h>
+#include <tracekit/config.h>
+#include <tracekit/error.h>
+#include <tracekit/filesystem.h>
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
 #include <sdkconfig.h>
@@ -21,7 +21,7 @@
 
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kFs;
@@ -61,7 +61,7 @@ int sd_card(const SdConfig& config, FileSystem& fs, ErrorInfo& error) {
         slot.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
         err = esp_vfs_fat_sdmmc_mount(config.mount, &host, &slot, &mount, &card);
 #else
-        return fail(error, BTPDEV_ERR_STORAGE, kTag, "this chip has no SDMMC host: use SdMode::Spi");
+        return fail(error, TRACEKIT_ERR_STORAGE, kTag, "this chip has no SDMMC host: use SdMode::Spi");
 #endif
     } else {
         sdmmc_host_t host = SDSPI_HOST_DEFAULT();
@@ -74,7 +74,7 @@ int sd_card(const SdConfig& config, FileSystem& fs, ErrorInfo& error) {
         bus.max_transfer_sz = 4096;
         err = spi_bus_initialize(static_cast<spi_host_device_t>(host.slot), &bus, SDSPI_DEFAULT_DMA);
         if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {  // INVALID_STATE: bus already up
-            return fail(error, BTPDEV_ERR_STORAGE, kTag, "SPI bus for the SD card failed (%s)",
+            return fail(error, TRACEKIT_ERR_STORAGE, kTag, "SPI bus for the SD card failed (%s)",
                         esp_err_to_name(err));
         }
         sdspi_device_config_t slot = SDSPI_DEVICE_CONFIG_DEFAULT();
@@ -83,7 +83,7 @@ int sd_card(const SdConfig& config, FileSystem& fs, ErrorInfo& error) {
         err = esp_vfs_fat_sdspi_mount(config.mount, &host, &slot, &mount, &card);
     }
     if (err != ESP_OK) {
-        return fail(error, BTPDEV_ERR_STORAGE, kTag,
+        return fail(error, TRACEKIT_ERR_STORAGE, kTag,
                     "no SD card at %s (%s): check the card, the pins and that it is FAT formatted",
                     config.mount, esp_err_to_name(err));
     }
@@ -95,4 +95,4 @@ int sd_card(const SdConfig& config, FileSystem& fs, ErrorInfo& error) {
     return ESP_OK;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

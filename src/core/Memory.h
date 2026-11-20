@@ -1,5 +1,5 @@
-#ifndef BTPDEV_MEMORY_H
-#define BTPDEV_MEMORY_H
+#ifndef TRACEKIT_MEMORY_H
+#define TRACEKIT_MEMORY_H
 
 // The one allocation path of the library (CONTRIBUTING.md "Memória"): used
 // only while starting up, never on a hot path. PSRAM first when the chip has
@@ -9,9 +9,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Returns nullptr when neither PSRAM nor internal RAM has `size` bytes.
 /// Set once, from begin(): what of the library's memory may go to PSRAM
@@ -51,6 +51,6 @@ private:
     std::size_t size_ = 0U;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_MEMORY_H
+#endif  // TRACEKIT_MEMORY_H

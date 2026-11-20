@@ -1,9 +1,9 @@
-#include <btpdev/error.h>
+#include <tracekit/error.h>
 
 #include <cstdarg>
 #include <cstdio>
 
-namespace btpdev {
+namespace tracekit {
 
 esp_err_t fail(ErrorInfo& out, esp_err_t code, const char* module,
                const char* format, ...) noexcept {
@@ -30,17 +30,17 @@ void clear(ErrorInfo& out) noexcept {
 
 const char* err_name(esp_err_t code) noexcept {
     switch (code) {
-        case BTPDEV_ERR_CONFIG: return "BTPDEV_ERR_CONFIG";
-        case BTPDEV_ERR_LINK_UNSUPPORTED: return "BTPDEV_ERR_LINK_UNSUPPORTED";
-        case BTPDEV_ERR_LINK_START: return "BTPDEV_ERR_LINK_START";
-        case BTPDEV_ERR_MEMORY_BUDGET: return "BTPDEV_ERR_MEMORY_BUDGET";
-        case BTPDEV_ERR_STORAGE: return "BTPDEV_ERR_STORAGE";
-        case BTPDEV_ERR_NO_KEY: return "BTPDEV_ERR_NO_KEY";
-        case BTPDEV_ERR_BAD_KEY: return "BTPDEV_ERR_BAD_KEY";
-        case BTPDEV_ERR_BAD_TOPIC: return "BTPDEV_ERR_BAD_TOPIC";
-        case BTPDEV_ERR_BAD_COMMAND: return "BTPDEV_ERR_BAD_COMMAND";
-        case BTPDEV_ERR_ALREADY_STARTED: return "BTPDEV_ERR_ALREADY_STARTED";
-        case BTPDEV_ERR_NOT_IMPLEMENTED: return "BTPDEV_ERR_NOT_IMPLEMENTED";
+        case TRACEKIT_ERR_CONFIG: return "TRACEKIT_ERR_CONFIG";
+        case TRACEKIT_ERR_LINK_UNSUPPORTED: return "TRACEKIT_ERR_LINK_UNSUPPORTED";
+        case TRACEKIT_ERR_LINK_START: return "TRACEKIT_ERR_LINK_START";
+        case TRACEKIT_ERR_MEMORY_BUDGET: return "TRACEKIT_ERR_MEMORY_BUDGET";
+        case TRACEKIT_ERR_STORAGE: return "TRACEKIT_ERR_STORAGE";
+        case TRACEKIT_ERR_NO_KEY: return "TRACEKIT_ERR_NO_KEY";
+        case TRACEKIT_ERR_BAD_KEY: return "TRACEKIT_ERR_BAD_KEY";
+        case TRACEKIT_ERR_BAD_TOPIC: return "TRACEKIT_ERR_BAD_TOPIC";
+        case TRACEKIT_ERR_BAD_COMMAND: return "TRACEKIT_ERR_BAD_COMMAND";
+        case TRACEKIT_ERR_ALREADY_STARTED: return "TRACEKIT_ERR_ALREADY_STARTED";
+        case TRACEKIT_ERR_NOT_IMPLEMENTED: return "TRACEKIT_ERR_NOT_IMPLEMENTED";
         default: break;
     }
 #if defined(ESP_PLATFORM)
@@ -61,4 +61,4 @@ const char* err_name(esp_err_t code) noexcept {
 #endif
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

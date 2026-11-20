@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 
 void FrameQueue::bind(std::uint8_t* storage, std::size_t capacity,
                       std::size_t reserve) noexcept {
@@ -118,4 +118,4 @@ void FrameQueue::consume(std::size_t size) noexcept {
     if (frames_ == 0U) head_ = 0U;  // keep the next frames contiguous when possible
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

@@ -1,5 +1,5 @@
-#ifndef BTPDEV_MOUNT_H
-#define BTPDEV_MOUNT_H
+#ifndef TRACEKIT_MOUNT_H
+#define TRACEKIT_MOUNT_H
 
 // Mounting the two storage backends into ESP-IDF's VFS (docs/PLANO.md 4.10).
 // After a successful mount the FileSystem is attached to the mount point and
@@ -8,22 +8,22 @@
 //   LittleFS  a flash partition (StorageConfig::fs.partition), formatted on
 //             first use when fs.format_if_empty is set. Survives power loss
 //             mid-write, which is why it is the default (D5).
-//   SD card   btpdev::sd_card (SdCard.cpp, linked only when used): SPI
+//   SD card   tracekit::sd_card (SdCard.cpp, linked only when used): SPI
 //             (cs, mosi, miso, sck) or SDMMC 1-bit (sck = CLK,
 //             mosi = CMD, miso = D0), FAT. Never formatted by the library:
 //             a card may hold someone's data.
 
-#include <btpdev/config.h>
-#include <btpdev/error.h>
-#include <btpdev/filesystem.h>
+#include <tracekit/config.h>
+#include <tracekit/error.h>
+#include <tracekit/filesystem.h>
 
-namespace btpdev {
+namespace tracekit {
 
 esp_err_t mount_littlefs(const FsConfig& config, FileSystem& fs, ErrorInfo& error) noexcept;
 /// A volume the application mounted (StorageConfig::app_volume): only attached,
 /// with the usage of a FAT volume when it is one.
 void attach_app_volume(const char* root, FileSystem& fs) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_MOUNT_H
+#endif  // TRACEKIT_MOUNT_H

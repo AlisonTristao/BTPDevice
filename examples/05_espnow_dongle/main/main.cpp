@@ -6,17 +6,17 @@
 //   3. pio run -t uploadfs, then pio run -t upload.
 //   4. TraceView sees "sensor-radio" through the dongle (hub).
 
-#include <BtpDevice.h>
+#include <TraceKit.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
 #include "btp/btp_device.h"
 #include "btp/btp_storage.h"
 
-void app_commands(btpdev::Commands& c);
-void app_topics(btpdev::Topics& t);
+void app_commands(tracekit::Commands& c);
+void app_topics(tracekit::Topics& t);
 
-static BtpDevice device(device_config, storage_config);
+static TraceKit device(device_config, storage_config);
 
 extern "C" void app_main() {
     if (device.begin(app_commands, app_topics) != ESP_OK) return;

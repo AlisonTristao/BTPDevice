@@ -1,4 +1,4 @@
-# BTPDevice -- ESP-IDF component.
+# TraceKit -- ESP-IDF component.
 #
 # Dependencies are the BTP and TinyShell components (both ESP-IDF components
 # on their own since BTP 2.49.0 / TinyShell 2.1.0, docs/PLANO.md D15). While
@@ -12,28 +12,28 @@
 
 if(NOT ESP_PLATFORM)
     message(FATAL_ERROR
-        "BTPDevice is an ESP-IDF component. For the host tests use "
+        "TraceKit is an ESP-IDF component. For the host tests use "
         "test/host/CMakeLists.txt.")
 endif()
 
-# include/btpdev/version.h and idf_component.yml each carry the version; the
+# include/tracekit/version.h and idf_component.yml each carry the version; the
 # component manager reads the YAML, the code reads the header. Refuse to
 # build if they disagree.
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/include/btpdev/version.h" _btpdev_version_line
-     REGEX "#define BTPDEV_VERSION_STRING")
-string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _btpdev_header_version "${_btpdev_version_line}")
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/idf_component.yml" _btpdev_yml_line
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/include/tracekit/version.h" _tracekit_version_line
+     REGEX "#define TRACEKIT_VERSION_STRING")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _tracekit_header_version "${_tracekit_version_line}")
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/idf_component.yml" _tracekit_yml_line
      REGEX "^version:")
-string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _btpdev_yml_version "${_btpdev_yml_line}")
-if(NOT _btpdev_header_version STREQUAL _btpdev_yml_version)
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" _tracekit_yml_version "${_tracekit_yml_line}")
+if(NOT _tracekit_header_version STREQUAL _tracekit_yml_version)
     message(FATAL_ERROR
-        "BTPDevice version mismatch: include/btpdev/version.h says "
-        "${_btpdev_header_version}, idf_component.yml says ${_btpdev_yml_version}")
+        "TraceKit version mismatch: include/tracekit/version.h says "
+        "${_tracekit_header_version}, idf_component.yml says ${_tracekit_yml_version}")
 endif()
 
-set(btpdev_srcs
+set(tracekit_srcs
     "src/core/BootIdentity.cpp"
-    "src/core/BtpDevice.cpp"
+    "src/core/TraceKit.cpp"
     "src/core/ConfigCheck.cpp"
     "src/core/DebugReport.cpp"
     "src/core/DeviceCore.cpp"
@@ -77,14 +77,14 @@ set(btpdev_srcs
 # expands component requirements, so an if(CONFIG_BT_NIMBLE_ENABLED) here is
 # always false. BleLink.cpp compiles to a stub when NimBLE is off. esp_tinyusb
 # and mdns come from idf_component.yml (esp_tinyusb only on chips with USB OTG).
-set(btpdev_priv_requires log esp_pm esp_driver_gpio esp_driver_uart esp_driver_usb_serial_jtag esp_hal_wdt esp_hw_support esp_rom esp_timer esp_event esp_netif esp_wifi nvs_flash lwip bt esp_app_format app_update esp_partition
+set(tracekit_priv_requires log esp_pm esp_driver_gpio esp_driver_uart esp_driver_usb_serial_jtag esp_hal_wdt esp_hw_support esp_rom esp_timer esp_event esp_netif esp_wifi nvs_flash lwip bt esp_app_format app_update esp_partition
     fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi)
 
 idf_component_register(
-    SRCS ${btpdev_srcs}
+    SRCS ${tracekit_srcs}
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "src"
     REQUIRES BTP TinyShell
-    PRIV_REQUIRES ${btpdev_priv_requires})
+    PRIV_REQUIRES ${tracekit_priv_requires})
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra)

@@ -1,5 +1,5 @@
-#ifndef BTPDEV_WIFI_STATION_H
-#define BTPDEV_WIFI_STATION_H
+#ifndef TRACEKIT_WIFI_STATION_H
+#define TRACEKIT_WIFI_STATION_H
 
 // Connects the station to one of the known networks and keeps it connected.
 // The decisions are WifiLogic's (portable, host-tested); this class only
@@ -12,7 +12,7 @@
 // tried and why the last one failed, then once more every
 // kFailuresBeforeError failures (not on every retry).
 
-#include <btpdev/error.h>
+#include <tracekit/error.h>
 
 #include <atomic>
 #include <cstddef>
@@ -23,7 +23,7 @@
 #include "transport/WifiLogic.h"
 #include "transport/WifiNetworks.h"
 
-namespace btpdev {
+namespace tracekit {
 
 class WifiStation {
 public:
@@ -36,7 +36,7 @@ public:
     WifiStation& operator=(const WifiStation&) = delete;
 
     /// `networks` must outlive the station. Starts the Wi-Fi driver if needed.
-    /// BTPDEV_ERR_CONFIG when `count` is 0 (nothing to connect to).
+    /// TRACEKIT_ERR_CONFIG when `count` is 0 (nothing to connect to).
     /// `hostname` (optional) is what the station gives DHCP, so the router's
     /// client list shows the device's name instead of "espressif".
     esp_err_t start(const WifiNetwork* networks, std::size_t count, ErrorInfo& error,
@@ -78,6 +78,6 @@ private:
     WifiLogic::Visible visible_[kMaxScanResults] = {};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_WIFI_STATION_H
+#endif  // TRACEKIT_WIFI_STATION_H

@@ -1,6 +1,6 @@
 #include "core/RuntimeErrors.h"
 
-namespace btpdev {
+namespace tracekit {
 
 const char* runtime_error_name(RuntimeError kind) noexcept {
     switch (kind) {
@@ -16,4 +16,4 @@ const char* runtime_error_name(RuntimeError kind) noexcept {
     return "?";
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

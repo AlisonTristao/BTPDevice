@@ -1,6 +1,6 @@
 # Host tests on every push, plus an ESP-IDF build of every test app and
 # example. BTP and TinyShell are checked out next to this repository, the same
-# sibling layout test_apps/btpdev_components.cmake expects locally.
+# sibling layout test_apps/tracekit_components.cmake expects locally.
 name: ci
 
 on:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  # Minimum versions BTPDevice builds against (docs/PLANO.md D15). Bump in
+  # Minimum versions TraceKit builds against (docs/PLANO.md D15). Bump in
   # the same commit that starts using something newer.
   BTP_REF: v2.51.0
   TINYSHELL_REF: v2.2.0
@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: BTPDevice
+          path: TraceKit
       - uses: actions/checkout@v4
         with:
           repository: AlisonTristao/BTP
@@ -36,15 +36,15 @@ jobs:
           ref: ${{ env.TINYSHELL_REF }}
           path: TinyShell
       - name: Configure
-        run: cmake -S BTPDevice/test/host -B build
+        run: cmake -S TraceKit/test/host -B build
       - name: Build
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
       - name: Python tools
         run: |
-          python -m py_compile BTPDevice/tools/link_echo_test.py BTPDevice/tools/pio_recovery.py BTPDevice/tools/btp_term.py
-          python BTPDevice/tools/test_btp_ota.py
+          python -m py_compile TraceKit/tools/link_echo_test.py TraceKit/tools/pio_recovery.py TraceKit/tools/btp_term.py
+          python TraceKit/tools/test_btp_ota.py
 
   idf-build:
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: BTPDevice
+          path: TraceKit
       - uses: actions/checkout@v4
         with:
           repository: AlisonTristao/BTP
@@ -83,4 +83,4 @@ jobs:
         with:
           esp_idf_version: ${{ env.IDF_VERSION }}
           target: ${{ matrix.target }}
-          path: BTPDevice/${{ matrix.app }}
+          path: TraceKit/${{ matrix.app }}

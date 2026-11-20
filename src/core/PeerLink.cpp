@@ -12,14 +12,14 @@
 #include "core/RuntimeErrors.h"
 #include "security/KeyStore.h"
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 
-constexpr const char* kTag = "btpdev.peer";
-constexpr const char* kNamespace = "btpdev";
+constexpr const char* kTag = "tracekit.peer";
+constexpr const char* kNamespace = "btpdev";  // the old name, kept: devices in the field have data there
 constexpr const char* kNvsKey = "peer_key";
-constexpr const char* kSalt = "btpdev-peer-v1";
+constexpr const char* kSalt = "btpdev-peer-v1";  // the old name, kept: changing it unpairs every peer
 constexpr std::size_t kChannelBytes = 2U;
 
 btp::ReassemblyStorage* wire(btp::ReassemblyStorage* s, std::uint8_t (*bytes)[512], std::size_t n) noexcept {
@@ -287,4 +287,4 @@ bool PeerLink::open(const btp::Header& header, std::uint16_t sealed_size, const 
     return btp::aead_open(key, header, sealed_size, sealed, out_plaintext) == btp::AeadError::Ok;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

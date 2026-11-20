@@ -1,5 +1,5 @@
-#ifndef BTPDEV_RECOVERY_CONTRACT_H
-#define BTPDEV_RECOVERY_CONTRACT_H
+#ifndef TRACEKIT_RECOVERY_CONTRACT_H
+#define TRACEKIT_RECOVERY_CONTRACT_H
 
 // The contract between the application (the library, in the `factory`
 // partition) and the recovery firmware (recovery/, in `ota_0`). The two are
@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev::recovery {
+namespace tracekit::recovery {
 
 /// Bump when a key below changes meaning or layout. The recovery refuses a
 /// newer contract it does not know (it still serves uploads, without the
@@ -26,7 +26,7 @@ constexpr const char* kKeyName = "name";      // str, the device name (mDNS, /st
 constexpr const char* kKeyWifi = "wifi";      // blob, WifiBlob
 constexpr const char* kKeyReason = "reason";  // u8, Reason
 
-constexpr const char* kKeyNamespace = "btpdev";
+constexpr const char* kKeyNamespace = "btpdev";  // the old name, kept: devices in the field have data there
 constexpr const char* kKeyBlob = "keyfile";   // the 96-octet key file (KeyStore)
 
 /// Why the recovery is running. Written by the app just before it points the
@@ -71,6 +71,6 @@ constexpr const char* kStorageLabel = "storage";
 /// Recovery HTTP server (D20): the port TraceView's OTA tab uses.
 constexpr std::uint16_t kHttpPort = 80U;
 
-}  // namespace btpdev::recovery
+}  // namespace tracekit::recovery
 
-#endif  // BTPDEV_RECOVERY_CONTRACT_H
+#endif  // TRACEKIT_RECOVERY_CONTRACT_H

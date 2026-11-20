@@ -11,7 +11,7 @@
 extern "C" esp_err_t esp_vfs_fat_info(const char* base_path, std::uint64_t* out_total_bytes,
                                      std::uint64_t* out_free_bytes) __attribute__((weak));
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kFs;
@@ -52,13 +52,13 @@ esp_err_t mount_littlefs(const FsConfig& config, FileSystem& fs, ErrorInfo& erro
     conf.dont_mount = false;
     const esp_err_t err = esp_vfs_littlefs_register(&conf);
     if (err == ESP_ERR_NOT_FOUND) {
-        return fail(error, BTPDEV_ERR_STORAGE, kTag,
+        return fail(error, TRACEKIT_ERR_STORAGE, kTag,
                     "no partition \"%s\" in the partition table: add a data/littlefs partition "
                     "(see examples/*/partitions.csv) or change StorageConfig::fs.partition",
                     config.partition);
     }
     if (err != ESP_OK) {
-        return fail(error, BTPDEV_ERR_STORAGE, kTag,
+        return fail(error, TRACEKIT_ERR_STORAGE, kTag,
                     "could not mount LittleFS on \"%s\" (%s)%s", config.partition, esp_err_to_name(err),
                     config.format_if_empty ? "" : ": set StorageConfig::fs.format_if_empty to format it");
     }
@@ -78,4 +78,4 @@ void attach_app_volume(const char* root, FileSystem& fs) noexcept {
     ESP_LOGI(kTag, "application volume %s attached", root);
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

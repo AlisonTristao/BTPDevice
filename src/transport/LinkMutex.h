@@ -1,5 +1,5 @@
-#ifndef BTPDEV_LINK_MUTEX_H
-#define BTPDEV_LINK_MUTEX_H
+#ifndef TRACEKIT_LINK_MUTEX_H
+#define TRACEKIT_LINK_MUTEX_H
 
 // The FreeRTOS mutex each link keeps around its FrameQueue (the queue itself
 // is not thread-safe: send() runs on any task, draining on the driver's).
@@ -9,7 +9,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
-namespace btpdev {
+namespace tracekit {
 
 /// pdMS_TO_TICKS that never rounds a non-zero time down to 0. With the
 /// default CONFIG_FREERTOS_HZ=100 a tick is 10 ms: pdMS_TO_TICKS(1) is 0, and
@@ -61,6 +61,6 @@ private:
     bool locked_;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_LINK_MUTEX_H
+#endif  // TRACEKIT_LINK_MUTEX_H

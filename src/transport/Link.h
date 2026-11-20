@@ -1,8 +1,8 @@
-#ifndef BTPDEV_LINK_H
-#define BTPDEV_LINK_H
+#ifndef TRACEKIT_LINK_H
+#define TRACEKIT_LINK_H
 
 // What every link driver (Serial, TCP, BLE, ESP-NOW) looks like to the core
-// (btpdev::Link, in config.h, is the user-facing choice of which one to use). Four
+// (tracekit::Link, in config.h, is the user-facing choice of which one to use). Four
 // real implementations, so a small interface is justified (CONTRIBUTING.md
 // section 2): the core picks one per boot and never needs to know which.
 //
@@ -19,14 +19,14 @@
 //     TinyUSB, Wi-Fi). They must only copy and return -- never log, block or
 //     call into btp::Node (CONTRIBUTING.md "Concorrência").
 
-#include <btpdev/error.h>
+#include <tracekit/error.h>
 
 #include <cstddef>
 #include <cstdint>
 
 #include "core/FrameQueue.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct LinkEvents {
     void* context = nullptr;
@@ -91,6 +91,6 @@ public:
     virtual std::uint32_t task_stack_bytes() const noexcept { return 0U; }
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_LINK_H
+#endif  // TRACEKIT_LINK_H

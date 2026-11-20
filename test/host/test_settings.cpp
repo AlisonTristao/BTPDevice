@@ -1,4 +1,4 @@
-// Persistent settings (include/btpdev/settings.h, src/protocol/SettingsRegistry):
+// Persistent settings (include/tracekit/settings.h, src/protocol/SettingsRegistry):
 // declaration checks, loading saved values, text <-> value, reset, and what
 // happens when a declaration changes under a saved value.
 
@@ -12,11 +12,11 @@
 
 namespace {
 
-using btpdev::Settings;
-using btpdev::SettingsRegistry;
+using tracekit::Settings;
+using tracekit::SettingsRegistry;
 using Result = SettingsRegistry::Result;
 
-class MapStore : public btpdev::SettingsStore {
+class MapStore : public tracekit::SettingsStore {
 public:
     bool load(const char* key, std::uint8_t* data, std::size_t* size) override {
         auto it = blobs.find(key);
@@ -59,7 +59,7 @@ struct App {
 
 void defaults_then_saved_values() {
     MapStore store;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     {
         App app;
         Settings s;
@@ -96,7 +96,7 @@ void defaults_then_saved_values() {
 
 void bad_values_change_nothing() {
     MapStore store;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     App app;
     Settings s;
     app.declare(s);
@@ -123,7 +123,7 @@ void bad_values_change_nothing() {
 
 void reset_one_and_all() {
     MapStore store;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     App app;
     Settings s;
     app.declare(s);
@@ -141,7 +141,7 @@ void reset_one_and_all() {
 
 void changed_declarations_fall_back_to_the_default() {
     MapStore store;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     {
         App app;
         Settings s;
@@ -166,7 +166,7 @@ void changed_declarations_fall_back_to_the_default() {
 }
 
 void declarations_are_checked() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     float f = 0.0f;
     std::uint8_t u = 0U;
     char t[4];
@@ -174,59 +174,59 @@ void declarations_are_checked() {
         Settings s;
         s.f32("", &f, 1.0f);
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
     }
     {
         Settings s;
         s.f32("a_name_of_16_chr", &f, 1.0f);  // 16 > an NVS key's 15
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
     }
     {
         Settings s;
         s.f32("x", &f, 1.0f);
         s.u8("x", &u, 1U);
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
         CHECK_CONTAINS(error.message, "twice");
     }
     {
         Settings s;
         s.f32("x", &f, 200.0f).range(0, 100);
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
         CHECK_CONTAINS(error.message, "default");
     }
     {
         Settings s;
         s.u8("x", &u, 1U).range(0, 300);
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
     }
     {
         Settings s;
         s.text("x", t, sizeof(t), "toolong");
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
     }
     {
         Settings s;
         s.u8("all", &u, 1U);
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
     }
     {
         Settings s;
         s.u8("has space", &u, 1U);
         SettingsRegistry reg;
-        CHECK(reg.install(s, nullptr, error) == BTPDEV_ERR_CONFIG);
+        CHECK(reg.install(s, nullptr, error) == TRACEKIT_ERR_CONFIG);
     }
 }
 
 void a_refusing_store_is_reported() {
     MapStore store;
     store.refuse = true;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     App app;
     Settings s;
     app.declare(s);
@@ -241,7 +241,7 @@ void list_lines() {
     Settings s;
     app.declare(s);
     SettingsRegistry reg;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     CHECK(reg.install(s, nullptr, error) == ESP_OK);
     CHECK(reg.size() == 6U);
     char line[160];

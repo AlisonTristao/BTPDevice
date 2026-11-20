@@ -1,5 +1,5 @@
-#ifndef BTPDEV_NVS_SETTINGS_STORE_H
-#define BTPDEV_NVS_SETTINGS_STORE_H
+#ifndef TRACEKIT_NVS_SETTINGS_STORE_H
+#define TRACEKIT_NVS_SETTINGS_STORE_H
 
 // The settings' saved copy in NVS, namespace "btpcfg" (docs/PLANO.md D28).
 // Opened per call: settings change rarely, and an open handle would pin a
@@ -7,7 +7,7 @@
 
 #include "protocol/SettingsRegistry.h"
 
-namespace btpdev {
+namespace tracekit {
 
 class NvsSettingsStore final : public SettingsStore {
 public:
@@ -18,6 +18,6 @@ public:
     bool erase(const char* key) override;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_NVS_SETTINGS_STORE_H
+#endif  // TRACEKIT_NVS_SETTINGS_STORE_H

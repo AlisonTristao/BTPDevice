@@ -2,14 +2,14 @@
 
 #include "check.h"
 
-using btpdev::DeviceConfig;
-using btpdev::Link;
-using btpdev::StorageConfig;
+using tracekit::DeviceConfig;
+using tracekit::Link;
+using tracekit::StorageConfig;
 
 namespace {
 
-// Stands in for btpdev::sd_card, which is ESP-IDF only.
-int fake_sd_driver(const btpdev::SdConfig&, btpdev::FileSystem&, btpdev::ErrorInfo&) { return 0; }
+// Stands in for tracekit::sd_card, which is ESP-IDF only.
+int fake_sd_driver(const tracekit::SdConfig&, tracekit::FileSystem&, tracekit::ErrorInfo&) { return 0; }
 
 
 DeviceConfig valid_device() {
@@ -18,15 +18,15 @@ DeviceConfig valid_device() {
     return config;
 }
 
-esp_err_t check(const DeviceConfig& config, btpdev::ErrorInfo& error) {
-    return btpdev::check_device_config(config, error);
+esp_err_t check(const DeviceConfig& config, tracekit::ErrorInfo& error) {
+    return tracekit::check_device_config(config, error);
 }
 
 void the_defaults_plus_a_name_are_valid() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     CHECK(check(valid_device(), error) == ESP_OK);
     CHECK(error.ok());
-    CHECK(btpdev::check_storage_config(StorageConfig{}, error) == ESP_OK);
+    CHECK(tracekit::check_storage_config(StorageConfig{}, error) == ESP_OK);
 }
 
 void designated_initializers_compile_in_declaration_order() {
@@ -35,182 +35,182 @@ void designated_initializers_compile_in_declaration_order() {
         .name = "estacao-quintal",
         .link = Link::FromSettings,
         .fallback = Link::Tcp,
-        .memory = btpdev::Memory::Small,
-        .threading = btpdev::Threading::Auto,
+        .memory = tracekit::Memory::Small,
+        .threading = tracekit::Threading::Auto,
         .comms = {.core = 0, .priority = 10, .stack_bytes = 6144, .period_ms = 1},
         .wifi = {.file = "wifi.txt"},
         .tcp = {.port = 44300},
         .espnow = {.peer_mac = {1, 2, 3, 4, 5, 6}, .channel = 6},
-        .serial_port = btpdev::SerialPort::Uart,
+        .serial_port = tracekit::SerialPort::Uart,
         .uart = {.port = 0, .baud = 921600},
         .source_info = {{"hw", "Hardware", "rev B"}},
     };
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     CHECK(check(config, error) == ESP_OK);
 }
 
 void the_name_is_required() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     config.name = nullptr;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "name");
-    CHECK_STR_EQ(error.module, "btpdev");
+    CHECK_STR_EQ(error.module, "tracekit");
 
     config.name = "";
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
 }
 
 void the_name_fits_a_ble_advertisement() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     config.name = "12345678901234567890123456789";  // 29, the limit
     CHECK(check(config, error) == ESP_OK);
     config.name = "123456789012345678901234567890";  // 30
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "max is 29");
 }
 
 void the_name_is_printable_ascii() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     config.name = "esta\xc3\xa7\xc3\xa3o";  // "estação" in UTF-8
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     config.name = "tab\there";
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     config.name = "Robo 2 (bancada)";
     CHECK(check(config, error) == ESP_OK);
 }
 
 void the_fallback_must_be_a_concrete_link() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     config.fallback = Link::FromSettings;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "fallback");
 }
 
 void task_and_network_ranges() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     config.comms.core = 2;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     config.comms.core = -1;
     CHECK(check(config, error) == ESP_OK);
 
     config = valid_device();
     CHECK(config.shell.core == -1 && config.shell.priority == 0U);  // the defaults
     config.shell.core = 2;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "shell.core");
     config.shell.core = 0;
     config.shell.stack_bytes = 2048U;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     config.shell.stack_bytes = 6144U;
     CHECK(check(config, error) == ESP_OK);
 
     config = valid_device();
     config.tcp.port = 0;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
 
     config = valid_device();
     config.espnow.channel = 0;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     config.espnow.channel = 15;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
 }
 
 void uart_serial_ranges() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     // The defaults: Auto port, UART0 on its own pins at 921600, console muted.
-    CHECK(config.serial_port == btpdev::SerialPort::Auto);
+    CHECK(config.serial_port == tracekit::SerialPort::Auto);
     CHECK(config.uart.port == 0 && config.uart.baud == 921600U);
     CHECK(config.uart.tx_pin == -1 && config.uart.rx_pin == -1 && config.uart.mute_console);
 
     config.uart.baud = 1200U;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "uart.baud");
     config.uart.baud = 2000000U;
     CHECK(check(config, error) == ESP_OK);
 
     config = valid_device();
     config.uart.port = 3;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     config.uart.port = 1;  // no default pins on UART1
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "tx_pin");
     config.uart.tx_pin = 17;
     config.uart.rx_pin = 18;
     CHECK(check(config, error) == ESP_OK);
     config.uart.rx_pin = -2;
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
 
     config = valid_device();
-    config.serial_port = static_cast<btpdev::SerialPort>(7);
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    config.serial_port = static_cast<tracekit::SerialPort>(7);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
 }
 
 void source_info_is_filled_from_the_start() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     DeviceConfig config = valid_device();
     config.source_info[1] = {"hw", "Hardware", "rev B"};  // [0] left empty
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "source_info[1]");
 
     config = valid_device();
     config.source_info[0] = {"hw", nullptr, nullptr};  // no value
-    CHECK(check(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(check(config, error) == TRACEKIT_ERR_CONFIG);
 
     config.source_info[0] = {"hw", nullptr, "rev B"};  // label is optional
     CHECK(check(config, error) == ESP_OK);
 }
 
 void storage_rules() {
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     StorageConfig config{};
     config.fs.partition = "";  // no LittleFS: allowed
-    CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
+    CHECK(tracekit::check_storage_config(config, error) == ESP_OK);
     config.fs.partition = "storage";
     config.fs.mount = nullptr;
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
-    CHECK_STR_EQ(error.module, "btpdev.fs");
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
+    CHECK_STR_EQ(error.module, "tracekit.fs");
 
     config = StorageConfig{};
     config.fs.mount = "fs";
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
 
     config = StorageConfig{};
     config.key_file = "";
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
-    config.key = btpdev::KeySource::None;
-    CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
+    config.key = tracekit::KeySource::None;
+    CHECK(tracekit::check_storage_config(config, error) == ESP_OK);
 
     config = StorageConfig{};
     config.sd.driver = &fake_sd_driver;  // SPI without pins
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "pins");
-    config.sd = {.driver = &fake_sd_driver, .mode = btpdev::SdMode::Spi,
+    config.sd = {.driver = &fake_sd_driver, .mode = tracekit::SdMode::Spi,
                  .cs = 10, .mosi = 11, .miso = 13, .sck = 12};
-    CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
+    CHECK(tracekit::check_storage_config(config, error) == ESP_OK);
     config.sd.mount = "/fs";  // same as the LittleFS mount
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
 
     config = StorageConfig{};
     config.fs.partition = "";
     config.app_volume = "/sdcard";  // mounted by the application
-    CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
+    CHECK(tracekit::check_storage_config(config, error) == ESP_OK);
     config.app_volume = "sdcard";
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "app_volume");
     config = StorageConfig{};
     config.app_volume = "/fs";  // the library's own LittleFS mount
-    CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
+    CHECK(tracekit::check_storage_config(config, error) == TRACEKIT_ERR_CONFIG);
 }
 
 void link_names() {
-    CHECK_STR_EQ(btpdev::link_name(Link::Serial), "Serial");
-    CHECK_STR_EQ(btpdev::link_name(Link::EspNow), "ESP-NOW");
+    CHECK_STR_EQ(tracekit::link_name(Link::Serial), "Serial");
+    CHECK_STR_EQ(tracekit::link_name(Link::EspNow), "ESP-NOW");
 }
 
 }  // namespace

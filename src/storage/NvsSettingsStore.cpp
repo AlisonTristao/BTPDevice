@@ -2,7 +2,7 @@
 
 #include <nvs.h>
 
-namespace btpdev {
+namespace tracekit {
 
 bool NvsSettingsStore::load(const char* key, std::uint8_t* data, std::size_t* size) {
     nvs_handle_t handle = 0;
@@ -30,4 +30,4 @@ bool NvsSettingsStore::erase(const char* key) {
     return err == ESP_OK || err == ESP_ERR_NVS_NOT_FOUND;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

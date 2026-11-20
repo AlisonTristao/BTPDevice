@@ -1,7 +1,7 @@
 // FileSystem on a real directory of the host (the same POSIX calls the
 // device makes on its VFS mount points).
 
-#include <btpdev/filesystem.h>
+#include <tracekit/filesystem.h>
 
 #include <cstring>
 #include <filesystem>
@@ -13,7 +13,7 @@
 namespace {
 
 std::string make_root() {
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "btpdev_fs_test";
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "tracekit_fs_test";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     std::string text = root.generic_string();
@@ -21,7 +21,7 @@ std::string make_root() {
 }
 
 void unmounted_does_nothing() {
-    btpdev::FileSystem fs;
+    tracekit::FileSystem fs;
     char buffer[8];
     std::size_t size = 0U;
     CHECK(!fs.mounted());
@@ -33,7 +33,7 @@ void unmounted_does_nothing() {
 }
 
 void write_read_append_rename_remove(const std::string& root) {
-    btpdev::FileSystem fs;
+    tracekit::FileSystem fs;
     fs.attach((root + "/").c_str());  // a trailing slash is accepted
     CHECK(fs.mounted());
 
@@ -64,9 +64,9 @@ void write_read_append_rename_remove(const std::string& root) {
 }
 
 void names_cannot_leave_the_root(const std::string& root) {
-    btpdev::FileSystem fs;
+    tracekit::FileSystem fs;
     fs.attach(root.c_str());
-    char out[btpdev::FileSystem::kMaxPath];
+    char out[tracekit::FileSystem::kMaxPath];
     CHECK(!fs.path("../secret", out, sizeof(out)));
     CHECK(!fs.path("data/../../x", out, sizeof(out)));
     CHECK(!fs.path("/etc/passwd", out, sizeof(out)));
@@ -83,7 +83,7 @@ struct Listing {
 };
 
 void list_visits_files_only(const std::string& root) {
-    btpdev::FileSystem fs;
+    tracekit::FileSystem fs;
     fs.attach(root.c_str());
     std::filesystem::create_directories(root + "/subdir");
     fs.write("a.txt", "12", 2U);
@@ -106,7 +106,7 @@ void list_visits_files_only(const std::string& root) {
 }
 
 void usage_comes_from_the_backend(const std::string& root) {
-    btpdev::FileSystem fs;
+    tracekit::FileSystem fs;
     fs.attach(root.c_str(), [](void*, std::uint64_t* total, std::uint64_t* used) {
         *total = 1000U;
         *used = 250U;

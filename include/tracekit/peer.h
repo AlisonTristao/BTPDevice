@@ -1,5 +1,5 @@
-#ifndef BTPDEV_PEER_H
-#define BTPDEV_PEER_H
+#ifndef TRACEKIT_PEER_H
+#define TRACEKIT_PEER_H
 
 // The peer link: a second BTP link, device to device, over a transport the
 // application brings (a radio modem, a LoRa module, a cable...).
@@ -15,22 +15,22 @@
 //     PeerEvent::AuthFailed. Without a password nothing is sent and
 //     everything received is dropped (fail closed);
 //   * no session and no telemetry subscriptions: the peer link carries the
-//     application's own messages, by channel (BtpDevice::peer_send() /
+//     application's own messages, by channel (TraceKit::peer_send() /
 //     PeerConfig::on_message).
 //
 // One message travels in one datagram (no fragmentation on the peer link):
-// BtpDevice::max_peer_message() is the transport's datagram size minus the
+// TraceKit::max_peer_message() is the transport's datagram size minus the
 // BTP header, CRC and AEAD tag (kPeerOverhead).
 //
 // Threads: PeerTransport::send(), on_message and on_event run on the
 // library's communication task (keep them short, never block). The
-// transport hands received datagrams to BtpDevice::peer_receive() from any
+// transport hands received datagrams to TraceKit::peer_receive() from any
 // task.
 
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Bytes BTP adds to one peer message: the frame header and CRC (40) and the
 /// AES-GCM tag (16).
@@ -88,6 +88,6 @@ struct PeerConfig {
     void* context = nullptr;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_PEER_H
+#endif  // TRACEKIT_PEER_H

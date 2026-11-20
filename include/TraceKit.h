@@ -1,24 +1,24 @@
 #ifndef BTP_DEVICE_H
 #define BTP_DEVICE_H
 
-// BtpDevice -- the one object an application needs to talk to TraceView over
+// TraceKit -- the one object an application needs to talk to TraceView over
 // BTP. See README.md for the target API and docs/PLANO.md for the plan.
 //
 // Status (Phase 4): identity, one link per boot, the BTP node with session,
 // manifest and STATUS, the TraceView terminal, commands and telemetry topics.
 // The key and the file system arrive in Phase 5.
 
-#include <btpdev/app.h>
-#include <btpdev/commands.h>
-#include <btpdev/config.h>
-#include <btpdev/error.h>
-#include <btpdev/filesystem.h>
-#include <btpdev/identity.h>
-#include <btpdev/log.h>
-#include <btpdev/settings.h>
-#include <btpdev/sleep.h>
-#include <btpdev/time.h>
-#include <btpdev/topics.h>
+#include <tracekit/app.h>
+#include <tracekit/commands.h>
+#include <tracekit/config.h>
+#include <tracekit/error.h>
+#include <tracekit/filesystem.h>
+#include <tracekit/identity.h>
+#include <tracekit/log.h>
+#include <tracekit/settings.h>
+#include <tracekit/sleep.h>
+#include <tracekit/time.h>
+#include <tracekit/topics.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -30,7 +30,7 @@ namespace btp {
 class Node;
 }
 
-namespace btpdev {
+namespace tracekit {
 
 class DeviceCore;
 
@@ -53,27 +53,27 @@ enum Degraded : std::uint8_t {
 
 const char* state_name(State state) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-class BtpDevice {
+class TraceKit {
 public:
     /// The application's declaration functions (btp_commands.cpp,
     /// btp_topics.cpp): a plain function, or a lambda that captures.
-    using CommandsFn = std::function<void(btpdev::Commands&)>;
-    using TopicsFn = std::function<void(btpdev::Topics&)>;
-    using SettingsFn = std::function<void(btpdev::Settings&)>;
+    using CommandsFn = std::function<void(tracekit::Commands&)>;
+    using TopicsFn = std::function<void(tracekit::Topics&)>;
+    using SettingsFn = std::function<void(tracekit::Settings&)>;
 
     /// Both configs are copied; they do not need to outlive the device.
-    BtpDevice(const btpdev::DeviceConfig& device,
-              const btpdev::StorageConfig& storage = {}) noexcept;
-    /// A device described by a btpdev::App (include/btpdev/app.h). Nothing of
+    TraceKit(const tracekit::DeviceConfig& device,
+              const tracekit::StorageConfig& storage = {}) noexcept;
+    /// A device described by a tracekit::App (include/tracekit/app.h). Nothing of
     /// the App is called here -- its config, commands and topics are read by
     /// begin() -- so the two globals may be declared in any order or file.
-    explicit BtpDevice(btpdev::App& app) noexcept;
-    ~BtpDevice();
+    explicit TraceKit(tracekit::App& app) noexcept;
+    ~TraceKit();
 
-    BtpDevice(const BtpDevice&) = delete;
-    BtpDevice& operator=(const BtpDevice&) = delete;
+    TraceKit(const TraceKit&) = delete;
+    TraceKit& operator=(const TraceKit&) = delete;
 
     /// Brings the device up (identity, link, node, commands, topics, tasks).
     /// Returns ESP_OK, or the failure also recorded in last_error() and
@@ -87,15 +87,15 @@ public:
     /// Publishes a topic now (an event), on top of its periodic rate -- only
     /// if someone is subscribed. Any task. False: no topic by that name.
     bool publish(const char* topic) noexcept;
-    /// The same by handle (Topics declarations convert to btpdev::Topic):
+    /// The same by handle (Topics declarations convert to tracekit::Topic):
     /// no name lookup. False: an invalid handle, or a stream topic.
-    bool publish(btpdev::Topic topic) noexcept;
+    bool publish(tracekit::Topic topic) noexcept;
 
     /// Any task: whether anybody is subscribed to the topic now (refreshed on
     /// every comms pass). For work only worth doing while someone watches,
     /// like sampling a slow sensor for the topic's fill().
     bool subscribed(const char* topic) const noexcept;
-    bool subscribed(btpdev::Topic topic) const noexcept;
+    bool subscribed(tracekit::Topic topic) const noexcept;
 
     /// Queues a block of samples for a stream topic (Topics::stream()); the
     /// library sends it in order while someone is subscribed. Call it from
@@ -109,7 +109,7 @@ public:
     /// call write_stream() from that task.
     bool write_stream(const char* topic, const std::int16_t* samples, std::size_t count,
                       std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
-    bool write_stream(btpdev::Topic topic, const std::int16_t* samples, std::size_t count,
+    bool write_stream(tracekit::Topic topic, const std::int16_t* samples, std::size_t count,
                       std::uint32_t rate_hz, std::uint64_t timestamp_us) noexcept;
 
     /// Runs a shell line on the library's shell task, as if typed in the
@@ -128,21 +128,21 @@ public:
     /// The current value as text ("30", "true"). False: no such setting.
     bool get_setting(const char* name, char* out, std::size_t size) const noexcept;
 
-    /// Wall-clock time (btpdev/time.h). False until SNTP, `btp -time_set`
+    /// Wall-clock time (tracekit/time.h). False until SNTP, `btp -time_set`
     /// or set_time() set it since the last power-up.
     bool time_valid() const noexcept;
     /// UTC seconds (meaningless while !time_valid()).
     std::time_t now() const noexcept;
     std::int64_t now_us() const noexcept;
-    btpdev::TimeSource time_source() const noexcept;
+    tracekit::TimeSource time_source() const noexcept;
     /// From the application's own source (an RTC chip, GPS): UTC seconds.
     bool set_time(std::time_t utc) noexcept;
 
     /// PowerConfig at run time (btp -power_set does the same). Any task.
-    void set_power_mode(btpdev::PowerMode mode) noexcept;
-    btpdev::PowerMode power_mode() const noexcept;
+    void set_power_mode(tracekit::PowerMode mode) noexcept;
+    tracekit::PowerMode power_mode() const noexcept;
 
-    /// Deep sleep for `ms` (btpdev/sleep.h): queued data gets
+    /// Deep sleep for `ms` (tracekit/sleep.h): queued data gets
     /// SleepConfig::flush_ms to leave, the link stops, the chip sleeps and
     /// wakes as a new boot. Does not return -- except false when the device
     /// is kept awake (btp -awake, SleepConfig::awake_gpio).
@@ -150,7 +150,7 @@ public:
     /// Until a wall-clock time (needs time_valid()). False: no valid time,
     /// already past, or kept awake.
     bool sleep_until(std::time_t utc) noexcept;
-    btpdev::WakeReason wake_reason() const noexcept;
+    tracekit::WakeReason wake_reason() const noexcept;
     /// Wakes from deep sleep since the last power-up / reset.
     std::uint32_t wake_count() const noexcept;
     /// sleep_for() would refuse now (btp -awake or the awake GPIO).
@@ -176,27 +176,27 @@ public:
     /// device; a call from any other task is refused (and logged once).
     void tick() noexcept;
 
-    btpdev::State state() const noexcept;
+    tracekit::State state() const noexcept;
     std::uint8_t degraded() const noexcept;
     /// The link this boot actually uses (after FromSettings / fallback).
-    btpdev::Link active_link() const noexcept;
+    tracekit::Link active_link() const noexcept;
     bool connected() const noexcept;
     std::uint32_t source_id() const noexcept;
 
     /// The most recent failure (code == ESP_OK when there was none).
-    const btpdev::ErrorInfo& last_error() const noexcept { return error_; }
+    const tracekit::ErrorInfo& last_error() const noexcept { return error_; }
 
-    const btpdev::DeviceConfig& device_config() const noexcept { return device_; }
-    const btpdev::StorageConfig& storage_config() const noexcept { return storage_; }
+    const tracekit::DeviceConfig& device_config() const noexcept { return device_; }
+    const tracekit::StorageConfig& storage_config() const noexcept { return storage_; }
 
     /// The device's file system (LittleFS, else the SD card); nullptr when
     /// nothing is mounted. Any task.
-    btpdev::FileSystem* fs() noexcept;
+    tracekit::FileSystem* fs() noexcept;
 
     /// Saves the link Link::FromSettings uses from the next boot on.
-    esp_err_t set_link(btpdev::Link link) noexcept;
+    esp_err_t set_link(tracekit::Link link) noexcept;
 
-    // ---- peer link (DeviceConfig::peer, include/btpdev/peer.h) -------------
+    // ---- peer link (DeviceConfig::peer, include/tracekit/peer.h) -------------
 
     /// The transport received one datagram from the peer. Any task, never
     /// blocks; the message is opened on the communication task. False: no
@@ -208,7 +208,7 @@ public:
     bool peer_send(std::uint16_t channel, const std::uint8_t* data, std::size_t size) noexcept;
     /// Largest message peer_send() takes (one datagram); 0 without a peer link.
     std::size_t max_peer_message() const noexcept;
-    btpdev::PeerStats peer_stats() const noexcept;
+    tracekit::PeerStats peer_stats() const noexcept;
     /// Sets the peer-link password (every device of the group uses the same),
     /// saves the derived key in NVS and applies it at once; nullptr or ""
     /// erases it. Any task. Same as `btp -peer_password <text>`.
@@ -225,11 +225,11 @@ public:
 private:
     esp_err_t start_core(const CommandsFn& commands, const TopicsFn& topics,
                          const SettingsFn& settings) noexcept;
-    btpdev::DeviceConfig device_;
-    btpdev::StorageConfig storage_;
-    btpdev::App* app_ = nullptr;
-    btpdev::ErrorInfo error_;
-    btpdev::DeviceCore* core_ = nullptr;
+    tracekit::DeviceConfig device_;
+    tracekit::StorageConfig storage_;
+    tracekit::App* app_ = nullptr;
+    tracekit::ErrorInfo error_;
+    tracekit::DeviceCore* core_ = nullptr;
     bool started_ = false;
 };
 

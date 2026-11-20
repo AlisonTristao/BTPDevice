@@ -1,14 +1,14 @@
-#ifndef BTPDEV_CONFIG_H
-#define BTPDEV_CONFIG_H
+#ifndef TRACEKIT_CONFIG_H
+#define TRACEKIT_CONFIG_H
 
-// The two configuration structs a BtpDevice is built from: DeviceConfig
+// The two configuration structs a TraceKit is built from: DeviceConfig
 // (identity, link, memory, network) and StorageConfig (file system, key).
 // Users fill them in their btp_device.h / btp_storage.h with C++20
 // designated initializers:
 //
-//   const btpdev::DeviceConfig device_config = {
+//   const tracekit::DeviceConfig device_config = {
 //       .name = "weather-station",
-//       .link = btpdev::Link::Tcp,
+//       .link = tracekit::Link::Tcp,
 //   };
 //
 // Every field has a sensible default, so only what differs is written.
@@ -18,9 +18,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <btpdev/peer.h>
+#include <tracekit/peer.h>
 
-namespace btpdev {
+namespace tracekit {
 
 /// How the device talks to TraceView. One link per boot (docs/PLANO.md D4).
 enum class Link : std::uint8_t {
@@ -41,7 +41,7 @@ enum class Memory : std::uint8_t {
 /// Who drives the communication loop.
 enum class Threading : std::uint8_t {
     Auto,    ///< the library runs its own task; the user calls nothing
-    Manual,  ///< the user calls BtpDevice::routine() from their own loop
+    Manual,  ///< the user calls TraceKit::routine() from their own loop
 };
 
 /// The library's communication task (DeviceConfig::comms).
@@ -134,7 +134,7 @@ struct UartConfig {
     int rx_pin = -1;
     /// When `port` is the ESP_LOG console, ESP_LOG output is discarded while
     /// the link runs: a log line written in the middle of a frame would
-    /// corrupt it. Logs still reach TraceView through btpdev::log(). Plain
+    /// corrupt it. Logs still reach TraceView through tracekit::log(). Plain
     /// printf() to stdout is not caught: do not use it on that port.
     bool mute_console = true;
 };
@@ -164,7 +164,7 @@ struct WifiConfig {
     WifiBuffers buffers = WifiBuffers::Lean;
 };
 
-/// docs/PLANO.md D30. Switchable at run time too (BtpDevice::set_power_mode,
+/// docs/PLANO.md D30. Switchable at run time too (TraceKit::set_power_mode,
 /// btp -power_set).
 enum class PowerMode : std::uint8_t {
     /// Radio always listening, CPU at full speed: the lowest latency.
@@ -186,7 +186,7 @@ struct PowerConfig {
     std::uint32_t idle_ms = 50U;
 };
 
-/// Deep sleep (BtpDevice::sleep_for, docs/PLANO.md D31).
+/// Deep sleep (TraceKit::sleep_for, docs/PLANO.md D31).
 struct SleepConfig {
     /// A GPIO that wakes the device from deep sleep (a button), -1: none.
     /// Must be an RTC-capable pin (ESP32-S3: 0-21; C3: 0-5).
@@ -201,7 +201,7 @@ struct SleepConfig {
     std::uint32_t flush_ms = 300U;
 };
 
-/// Wall-clock time (btpdev/time.h, docs/PLANO.md D29).
+/// Wall-clock time (tracekit/time.h, docs/PLANO.md D29).
 struct TimeConfig {
     /// POSIX TZ string. `btp -tz` replaces it and the choice is kept in NVS.
     /// Brasília (UTC-3, no DST) by default; "UTC0", "CET-1CEST,M3.5.0,M10.5.0/3"...
@@ -231,7 +231,7 @@ struct SourceInfo {
 };
 
 /// The recovery firmware in `ota_0` (docs/PLANO.md D19-D26, section 4.14).
-/// Needs one of the partitions/btpdev_<size>.csv tables; with another table
+/// Needs one of the partitions/tracekit_<size>.csv tables; with another table
 /// the library works as before and `btp -recovery` explains why it cannot.
 struct RecoveryConfig {
     /// Mirror the name and Wi-Fi networks for the recovery, register
@@ -274,7 +274,7 @@ struct DeviceConfig {
     /// Unused entries keep key == nullptr.
     SourceInfo source_info[kMaxSourceInfo] = {};
     /// A second link, device to device, over the application's own transport
-    /// (include/btpdev/peer.h). Off unless `peer.transport` is set.
+    /// (include/tracekit/peer.h). Off unless `peer.transport` is set.
     PeerConfig peer{};
     /// Debug log on the serial CONSOLE only (ESP_LOG, never TraceView): each
     /// begin() step with its time since boot and the heap it took, then the
@@ -311,7 +311,7 @@ enum class SdMode : std::uint8_t { Spi, Sdmmc };
 class FileSystem;
 struct ErrorInfo;
 struct SdConfig;
-/// Mounts an SD card: btpdev::sd_card. A pointer rather than a flag so a
+/// Mounts an SD card: tracekit::sd_card. A pointer rather than a flag so a
 /// project without a card never links the FAT and SD drivers (~70 KB).
 using SdDriver = int (*)(const SdConfig& config, FileSystem& fs, ErrorInfo& error);
 
@@ -319,7 +319,7 @@ using SdDriver = int (*)(const SdConfig& config, FileSystem& fs, ErrorInfo& erro
 int sd_card(const SdConfig& config, FileSystem& fs, ErrorInfo& error);
 
 /// Optional SD card, a second root for the same files:
-///   .sd = {.driver = btpdev::sd_card, .cs = 10, .mosi = 11, .miso = 13, .sck = 12}
+///   .sd = {.driver = tracekit::sd_card, .cs = 10, .mosi = 11, .miso = 13, .sck = 12}
 struct SdConfig {
     /// nullptr: no card.
     SdDriver driver = nullptr;
@@ -344,6 +344,6 @@ struct StorageConfig {
     const char* app_volume = nullptr;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_CONFIG_H
+#endif  // TRACEKIT_CONFIG_H

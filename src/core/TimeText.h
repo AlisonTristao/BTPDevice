@@ -1,5 +1,5 @@
-#ifndef BTPDEV_TIME_TEXT_H
-#define BTPDEV_TIME_TEXT_H
+#ifndef TRACEKIT_TIME_TEXT_H
+#define TRACEKIT_TIME_TEXT_H
 
 // Time as text, for `btp -time_set` and `btp -time` (docs/PLANO.md D29).
 // Portable: no time zone database here. A text without an offset is local
@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Times before this are a clock that was never set (2025-01-01 00:00 UTC).
 constexpr std::int64_t kMinValidEpoch = 1735689600;
@@ -36,6 +36,6 @@ std::int64_t days_from_civil(int year, int month, int day) noexcept;
 /// "2026-11-19T17:00:00Z".
 void format_utc(std::int64_t epoch, char* out, std::size_t size) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TIME_TEXT_H
+#endif  // TRACEKIT_TIME_TEXT_H

@@ -4,7 +4,7 @@
 
 #include "core/LogTags.h"
 
-#if CONFIG_BTPDEV_LINK_TCP
+#if CONFIG_TRACEKIT_LINK_TCP
 #include <cerrno>
 #include <cstring>
 
@@ -15,9 +15,9 @@
 #include <mdns.h>
 #endif
 
-namespace btpdev {
+namespace tracekit {
 
-#if CONFIG_BTPDEV_LINK_TCP
+#if CONFIG_TRACEKIT_LINK_TCP
 
 namespace {
 
@@ -50,7 +50,7 @@ esp_err_t TcpLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     }
     if (!mutex_.create()) return fail(error, ESP_ERR_NO_MEM, kTag, "no memory for the TCP link mutex");
     if (!queue_storage_.allocate(config_.send_queue_bytes)) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the TCP send queue (%u bytes)",
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the TCP send queue (%u bytes)",
                     static_cast<unsigned>(config_.send_queue_bytes));
     }
     queue_.bind(queue_storage_.data(), queue_storage_.size(), queue_storage_.size() / 4U);
@@ -75,7 +75,7 @@ esp_err_t TcpLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     }
 
     running_.store(true);
-    const bool created = spawn_task(&TcpLink::task_entry, "btpdev_tcp", config_.task_stack_bytes, this,
+    const bool created = spawn_task(&TcpLink::task_entry, "tracekit_tcp", config_.task_stack_bytes, this,
                                     config_.task_priority, config_.task_core, /*may_be_external=*/true, &task_,
                                     &task_memory_);
     if (!created) {
@@ -93,7 +93,7 @@ esp_err_t TcpLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
 
 esp_err_t TcpLink::open_listener(ErrorInfo& error) noexcept {
     const int fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (fd < 0) return fail(error, BTPDEV_ERR_LINK_START, kTag, "socket() failed (errno %d)", errno);
+    if (fd < 0) return fail(error, TRACEKIT_ERR_LINK_START, kTag, "socket() failed (errno %d)", errno);
     int reuse = 1;
     (void)::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     sockaddr_in address{};
@@ -104,7 +104,7 @@ esp_err_t TcpLink::open_listener(ErrorInfo& error) noexcept {
         ::listen(fd, kListenBacklog) < 0) {
         const int e = errno;
         ::close(fd);
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "cannot listen on TCP port %u (errno %d)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "cannot listen on TCP port %u (errno %d)",
                     static_cast<unsigned>(config_.port), e);
     }
     listen_fd_ = fd;
@@ -323,12 +323,12 @@ void TcpLink::drain() noexcept {
     if (broken) close_client();
 }
 
-#else  // !CONFIG_BTPDEV_LINK_TCP
+#else  // !CONFIG_TRACEKIT_LINK_TCP
 
 TcpLink::~TcpLink() = default;
 esp_err_t TcpLink::start(const LinkEvents&, ErrorInfo& error) noexcept {
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kTcp,
-                "the TCP link is disabled in menuconfig (BTPDevice > Links)");
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kTcp,
+                "the TCP link is disabled in menuconfig (TraceKit > Links)");
 }
 void TcpLink::stop() noexcept {}
 bool TcpLink::send(const std::uint8_t*, std::size_t, Priority) noexcept { return false; }
@@ -342,7 +342,7 @@ esp_err_t TcpLink::open_listener(ErrorInfo&) noexcept { return ESP_ERR_NOT_SUPPO
 void TcpLink::drain() noexcept {}
 void TcpLink::start_mdns() noexcept {}
 
-#endif  // CONFIG_BTPDEV_LINK_TCP
+#endif  // CONFIG_TRACEKIT_LINK_TCP
 
 LinkStats TcpLink::stats() const noexcept {
     LinkStats s;
@@ -353,4 +353,4 @@ LinkStats TcpLink::stats() const noexcept {
     return s;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

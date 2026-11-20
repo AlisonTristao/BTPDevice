@@ -1,5 +1,5 @@
-#ifndef BTPDEV_IDENTITY_PUBLIC_H
-#define BTPDEV_IDENTITY_PUBLIC_H
+#ifndef TRACEKIT_IDENTITY_PUBLIC_H
+#define TRACEKIT_IDENTITY_PUBLIC_H
 
 // The device's BTP identity, which every message carries:
 //   source_id  from the MAC (bytes 2..5, big-endian), stable across boots
@@ -13,7 +13,7 @@
 
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 struct Identity {
     std::uint32_t source_id = 0U;
@@ -23,6 +23,6 @@ struct Identity {
 
 const Identity& identity() noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_IDENTITY_PUBLIC_H
+#endif  // TRACEKIT_IDENTITY_PUBLIC_H

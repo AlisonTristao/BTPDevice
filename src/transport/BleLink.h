@@ -1,5 +1,5 @@
-#ifndef BTPDEV_BLE_LINK_H
-#define BTPDEV_BLE_LINK_H
+#ifndef TRACEKIT_BLE_LINK_H
+#define TRACEKIT_BLE_LINK_H
 
 // BLE link: a NimBLE peripheral with the BTP GATT service (RX write, TX
 // notify; BTP/docs/fragmentation-and-transports.md section 8). Ported from
@@ -19,7 +19,7 @@
 // (key E), exactly like TCP (no TLS).
 //
 // Needs CONFIG_BT_NIMBLE_ENABLED; otherwise start() reports
-// BTPDEV_ERR_LINK_UNSUPPORTED.
+// TRACEKIT_ERR_LINK_UNSUPPORTED.
 
 #include <atomic>
 #include <cstddef>
@@ -30,7 +30,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct BleLinkConfig {
     /// Advertised name (scan response) and GAP device name, at most
@@ -88,6 +88,6 @@ private:
     std::uint8_t notify_scratch_[kMaxChunkSize] = {};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_BLE_LINK_H
+#endif  // TRACEKIT_BLE_LINK_H

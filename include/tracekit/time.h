@@ -1,10 +1,10 @@
-#ifndef BTPDEV_TIME_H
-#define BTPDEV_TIME_H
+#ifndef TRACEKIT_TIME_H
+#define TRACEKIT_TIME_H
 
 // Wall-clock time (docs/PLANO.md D29). The ESP32 has no battery-backed clock:
 // the time survives a reboot and deep sleep (the RTC keeps counting) but not
 // a power loss. It is set by SNTP when the TCP link reaches the internet,
-// by `btp -time_set` in the terminal, or by BtpDevice::set_time().
+// by `btp -time_set` in the terminal, or by TraceKit::set_time().
 //
 //   if (device.time_valid()) {
 //       std::time_t t = device.now();          // UTC seconds
@@ -14,17 +14,17 @@
 
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 enum class TimeSource : std::uint8_t {
     None,         ///< never set since the last power-up: not valid
     Sntp,         ///< from an NTP server
     Manual,       ///< btp -time_set
-    Application,  ///< BtpDevice::set_time() (an RTC chip, GPS...)
+    Application,  ///< TraceKit::set_time() (an RTC chip, GPS...)
 };
 
 const char* time_source_name(TimeSource source) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TIME_H
+#endif  // TRACEKIT_TIME_H

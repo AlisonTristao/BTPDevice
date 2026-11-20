@@ -5,8 +5,8 @@
 
 #include "check.h"
 
-using btpdev::WifiLogic;
-using btpdev::WifiNetwork;
+using tracekit::WifiLogic;
+using tracekit::WifiNetwork;
 
 namespace {
 
@@ -22,7 +22,7 @@ void parses_lines_comments_and_line_endings() {
         ",semssid\n"           // no SSID: skipped
         "sem-virgula\n";       // no comma: skipped
     WifiNetwork out[8];
-    const auto result = btpdev::parse_wifi_networks(text, sizeof(text) - 1U, out, 8U);
+    const auto result = tracekit::parse_wifi_networks(text, sizeof(text) - 1U, out, 8U);
     CHECK(result.networks == 3U);
     CHECK(result.skipped_lines == 2U);
     CHECK_STR_EQ(out[0].ssid, "casa");
@@ -38,7 +38,7 @@ void too_long_fields_and_overflow_are_skipped() {
     std::snprintf(text, sizeof(text), "%s,x\nok1,p\nok2,p\nok3,p\n",
                   "123456789012345678901234567890123");  // 33-char SSID
     WifiNetwork out[2];
-    const auto result = btpdev::parse_wifi_networks(text, std::strlen(text), out, 2U);
+    const auto result = tracekit::parse_wifi_networks(text, std::strlen(text), out, 2U);
     CHECK(result.networks == 2U);
     CHECK(result.skipped_lines == 2U);  // long SSID + ok3 past `max`
     CHECK_STR_EQ(out[1].ssid, "ok2");
@@ -47,7 +47,7 @@ void too_long_fields_and_overflow_are_skipped() {
 void stops_at_an_embedded_nul() {
     const char text[] = "a,1\n\0b,2\n";
     WifiNetwork out[4];
-    const auto result = btpdev::parse_wifi_networks(text, sizeof(text) - 1U, out, 4U);
+    const auto result = tracekit::parse_wifi_networks(text, sizeof(text) - 1U, out, 4U);
     CHECK(result.networks == 1U);
 }
 
@@ -55,18 +55,18 @@ void stops_at_an_embedded_nul() {
 
 void hostname_matches_traceview() {
     char host[64];
-    CHECK(btpdev::mdns_host_from_name("Robo 2 (bancada)", host, sizeof(host)));
+    CHECK(tracekit::mdns_host_from_name("Robo 2 (bancada)", host, sizeof(host)));
     CHECK_STR_EQ(host, "robo-2-bancada");
-    CHECK(btpdev::mdns_host_from_name("  BallyRobot  ", host, sizeof(host)));
+    CHECK(tracekit::mdns_host_from_name("  BallyRobot  ", host, sizeof(host)));
     CHECK_STR_EQ(host, "ballyrobot");
-    CHECK(btpdev::mdns_host_from_name("--estação__quintal--", host, sizeof(host)));
+    CHECK(tracekit::mdns_host_from_name("--estação__quintal--", host, sizeof(host)));
     CHECK_STR_EQ(host, "esta-o-quintal");
-    CHECK(!btpdev::mdns_host_from_name("***", host, sizeof(host)));
+    CHECK(!tracekit::mdns_host_from_name("***", host, sizeof(host)));
 
     char long_name[100];
     std::memset(long_name, 'a', 70);
     long_name[70] = '\0';
-    CHECK(btpdev::mdns_host_from_name(long_name, host, sizeof(host)));
+    CHECK(tracekit::mdns_host_from_name(long_name, host, sizeof(host)));
     CHECK(std::strlen(host) == 63U);
 
     // A '-' landing exactly at the 63-char cut is trimmed, like left(63) + chop.
@@ -74,7 +74,7 @@ void hostname_matches_traceview() {
     long_name[62] = ' ';
     long_name[63] = 'c';
     long_name[64] = '\0';
-    CHECK(btpdev::mdns_host_from_name(long_name, host, sizeof(host)));
+    CHECK(tracekit::mdns_host_from_name(long_name, host, sizeof(host)));
     CHECK(std::strlen(host) == 62U);
 }
 

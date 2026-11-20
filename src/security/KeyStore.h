@@ -1,5 +1,5 @@
-#ifndef BTPDEV_KEY_STORE_H
-#define BTPDEV_KEY_STORE_H
+#ifndef TRACEKIT_KEY_STORE_H
+#define TRACEKIT_KEY_STORE_H
 
 // Ported from bally_OS lib/KeyStore (same file format, same checks): the
 // provisioned key file written by tools/provision_key.py. The device never
@@ -49,7 +49,7 @@
  * No dynamic allocation: the file image is parsed off the caller's buffer and
  * the keys live in this object's fixed-size fields.
  */
-namespace btpdev {
+namespace tracekit {
 
 class KeyStore {
 public:
@@ -203,11 +203,11 @@ private:
 
 /// PBKDF2-HMAC-SHA256 (RFC 8018), first block only: `out_size` <= 32 bytes
 /// of key from a password and a salt. Used for the peer-link key
-/// (include/btpdev/peer.h), where every device derives the same key from the
+/// (include/tracekit/peer.h), where every device derives the same key from the
 /// same password, so the salt is a fixed label.
 void derive_password_key(const char* password, std::size_t password_size, const char* salt,
                          std::uint32_t iterations, std::uint8_t* out, std::size_t out_size) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_KEY_STORE_H
+#endif  // TRACEKIT_KEY_STORE_H

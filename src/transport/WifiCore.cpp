@@ -12,7 +12,7 @@
 #include "core/Memory.h"
 #include "core/TaskSpawn.h"
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 WifiBuffers g_buffers = WifiBuffers::Lean;
@@ -39,17 +39,17 @@ esp_err_t wifi_core_start(ErrorInfo& error) noexcept {
 
     err = esp_netif_init();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "esp_netif_init() failed (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "esp_netif_init() failed (%s)",
                     esp_err_to_name(err));
     }
     err = esp_event_loop_create_default();
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {  // the app may already have one
-        return fail(error, BTPDEV_ERR_LINK_START, kTag,
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag,
                     "esp_event_loop_create_default() failed (%s)", esp_err_to_name(err));
     }
     if (esp_netif_get_handle_from_ifkey("WIFI_STA_DEF") == nullptr &&
         esp_netif_create_default_wifi_sta() == nullptr) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "could not create the Wi-Fi station netif");
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "could not create the Wi-Fi station netif");
     }
 
 #if CONFIG_SPIRAM && !CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP
@@ -73,7 +73,7 @@ esp_err_t wifi_core_start(ErrorInfo& error) noexcept {
     }
     err = esp_wifi_init(&config);
     if (err != ESP_OK) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "esp_wifi_init() failed (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "esp_wifi_init() failed (%s)",
                     esp_err_to_name(err));
     }
     // Credentials come from the networks file on every boot; nothing to keep
@@ -82,7 +82,7 @@ esp_err_t wifi_core_start(ErrorInfo& error) noexcept {
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err == ESP_OK) err = esp_wifi_start();
     if (err != ESP_OK) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "could not start Wi-Fi in station mode (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "could not start Wi-Fi in station mode (%s)",
                     esp_err_to_name(err));
     }
     // Power save adds tens of milliseconds of latency to every packet the
@@ -92,4 +92,4 @@ esp_err_t wifi_core_start(ErrorInfo& error) noexcept {
     return ESP_OK;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

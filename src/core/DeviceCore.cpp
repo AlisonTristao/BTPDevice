@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include <btpdev/identity.h>
-#include <btpdev/version.h>
+#include <tracekit/identity.h>
+#include <tracekit/version.h>
 #include <esp_app_desc.h>
 #include <esp_cpu.h>
 #include <esp_sleep.h>
@@ -28,7 +28,7 @@
 #include <sdkconfig.h>
 
 #include <btp/aead.hpp>
-#include <btpdev/bally_channels.h>
+#include <tracekit/bally_channels.h>
 
 #include "core/ConfigCheck.h"
 #include "core/Identity.h"
@@ -42,11 +42,11 @@
 #include "transport/UartSerialLink.h"
 #include "transport/UsbSerialLink.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kCore;
-constexpr const char* kNvsNamespace = "btpdev";
+constexpr const char* kNvsNamespace = "btpdev";  // the old name, kept: devices in the field have data there
 
 std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time() / 1000LL); }
 
@@ -122,8 +122,8 @@ DeviceCore::~DeviceCore() {
 // start(): the whole of begin()
 // ============================================================================
 
-esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics,
-                            const BtpDevice::SettingsFn& settings) noexcept {
+esp_err_t DeviceCore::start(const TraceKit::CommandsFn& commands, const TraceKit::TopicsFn& topics,
+                            const TraceKit::SettingsFn& settings) noexcept {
     state_.store(State::Starting);
     set_psram_policy(device_.psram);
     const PresetSizes sizes = preset_sizes(device_.memory);
@@ -132,7 +132,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     boot_heap_ = boot_heap_start_;
     {
         const esp_app_desc_t* app = esp_app_get_description();
-        boot_step("boot", "BTPDevice %s, %s, IDF %s, fw %s", BTPDEV_VERSION_STRING, CONFIG_IDF_TARGET,
+        boot_step("boot", "TraceKit %s, %s, IDF %s, fw %s", TRACEKIT_VERSION_STRING, CONFIG_IDF_TARGET,
                   app != nullptr ? app->idf_ver : "?", app != nullptr ? app->version : "?");
     }
 
@@ -233,20 +233,20 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
         Commands declared(shell_);
         commands(declared);
         if (declared.error_code() != 0U) {
-            return fail(error_, BTPDEV_ERR_BAD_COMMAND, tag::kCmd, "%s", declared.error_message());
+            return fail(error_, TRACEKIT_ERR_BAD_COMMAND, tag::kCmd, "%s", declared.error_message());
         }
     }
     if (shell_.dropped_registrations() != 0U) {
-        return fail(error_, BTPDEV_ERR_BAD_COMMAND, tag::kCmd,
+        return fail(error_, TRACEKIT_ERR_BAD_COMMAND, tag::kCmd,
                     "%u command(s) did not fit TinyShell's tables: raise TINYSHELL_MAX_* in menuconfig",
                     static_cast<unsigned>(shell_.dropped_registrations()));
     }
     if (!print_mutex_.create() || !print_storage_.allocate(kPrintQueueBytes)) {
-        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the print queue");
+        return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the print queue");
     }
     print_queue_.bind(print_storage_.data(), print_storage_.size(), 0U);
     if (!log_mutex_.create() || !log_storage_.allocate(kLogQueueBytes)) {
-        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the log queue");
+        return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the log queue");
     }
     log_queue_.bind(log_storage_.data(), log_storage_.size(), 0U);
     active_ = this;
@@ -279,7 +279,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
         const std::size_t heap_now = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         char took[16];
         format_kb(took, sizeof(took), boot_heap_start_ > heap_now ? boot_heap_start_ - heap_now : 0U);
-        boot_step("ready", "in %lu ms, BTPDevice took %s KB",
+        boot_step("ready", "in %lu ms, TraceKit took %s KB",
                   static_cast<unsigned long>((esp_timer_get_time() - boot_started_us_) / 1000), took);
         memory_report([](void*, const char* line) { ESP_LOGI(tag::kCore, "%s", line); }, nullptr);
     }
@@ -404,16 +404,16 @@ Link DeviceCore::resolve_link() noexcept {
 
     if (!has_key_) degraded_.fetch_or(kNoKey);
     if (requested != Link::Serial && !has_key_) {
-#if CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO
+#if CONFIG_TRACEKIT_INSECURE_CLEARTEXT_RADIO
         ESP_LOGW(tag::kKey,
-                 "no device key: %s runs WITHOUT encryption (CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO). "
+                 "no device key: %s runs WITHOUT encryption (CONFIG_TRACEKIT_INSECURE_CLEARTEXT_RADIO). "
                  "Development only",
                  link_name(requested));
 #else
-        fail(error_, BTPDEV_ERR_NO_KEY, tag::kKey,
+        fail(error_, TRACEKIT_ERR_NO_KEY, tag::kKey,
              "%s needs the device key and there is none: using Serial instead. Copy the file "
              "from tools/provision_key.py to the device as \"%s\" (or enable "
-             "CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO for bench tests)",
+             "CONFIG_TRACEKIT_INSECURE_CLEARTEXT_RADIO for bench tests)",
              link_name(requested), storage_.key_file);
         ESP_LOGE(error_.module, "%s", error_.message);
         degraded_.fetch_or(kLinkFallback);
@@ -430,7 +430,7 @@ esp_err_t DeviceCore::allocate(const PresetSizes& sizes) noexcept {
                                stream_encoded_capacity(btp::kSerialMaxFrameSize);
     const std::size_t available = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     if (needed > available) {
-        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag,
+        return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag,
                     "memory preset %s needs about %u bytes and only %u are free: use a smaller "
                     "preset (DeviceConfig::memory)",
                     memory_name(device_.memory), static_cast<unsigned>(needed),
@@ -438,13 +438,13 @@ esp_err_t DeviceCore::allocate(const PresetSizes& sizes) noexcept {
     }
     if (!rx_mutex_.create() || !rx_storage_.allocate(sizes.rx_queue_bytes) ||
         !rx_chunk_.allocate(kRxChunkMax)) {
-        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the receive/send buffers");
+        return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the receive/send buffers");
     }
     rx_queue_.bind(rx_storage_.data(), rx_storage_.size(), 0U);
-    // Room for a remote command and a few local ones (BtpDevice::run()).
+    // Room for a remote command and a few local ones (TraceKit::run()).
     shell_queue_ = xQueueCreate(4, sizeof(ShellRequest));
     if (shell_queue_ == nullptr) {
-        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the shell queue");
+        return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the shell queue");
     }
     return ESP_OK;
 }
@@ -525,7 +525,7 @@ esp_err_t DeviceCore::create_link(Link link, const PresetSizes& sizes) noexcept 
     if (link_->kind() == LinkDriver::Kind::Stream && !decoder_.bound()) {
         if (!decoder_storage_.allocate(StreamDecoder::kStorageSize) ||
             !decoder_.bind(decoder_storage_.data(), decoder_storage_.size())) {
-            return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the stream decoder");
+            return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the stream decoder");
         }
     }
     LinkEvents events;
@@ -553,13 +553,13 @@ esp_err_t DeviceCore::start_link_with_fallback(Link requested, const PresetSizes
     // as the biggest frame the node makes on this transport (a stream block,
     // a manifest or a long text sample fills a Serial frame).
     if (session_link_ && !tx_wire_.allocate(stream_encoded_capacity(transport.max_frame_size))) {
-        return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the %u-byte send scratch",
+        return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the %u-byte send scratch",
                     static_cast<unsigned>(stream_encoded_capacity(transport.max_frame_size)));
     }
     return ESP_OK;
 }
 
-esp_err_t DeviceCore::create_node(const BtpDevice::TopicsFn& topics) noexcept {
+esp_err_t DeviceCore::create_node(const TraceKit::TopicsFn& topics) noexcept {
     // NodeConfig fields read by the node's constructor / begin().
     bool made = false;
     switch (device_.memory) {
@@ -573,7 +573,7 @@ esp_err_t DeviceCore::create_node(const BtpDevice::TopicsFn& topics) noexcept {
             made = make_node<Memory::Medium>(*this, kReassemblyTimeoutMs, &node_storage_, &node_, &catalog_, &destroy_node_);
             break;
     }
-    if (!made) return fail(error_, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the BTP node");
+    if (!made) return fail(error_, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the BTP node");
 
     fill_catalog();
     if (topics != nullptr) {
@@ -616,7 +616,7 @@ void DeviceCore::fill_catalog() noexcept {
         {"fw_build", "Built", fw_build_},
         {"idf_version", "ESP-IDF", app != nullptr ? app->idf_ver : ""},
         {"chip", "Chip", CONFIG_IDF_TARGET},
-        {"btpdevice", "BTPDevice", BTPDEV_VERSION_STRING},
+        {"tracekit", "TraceKit", TRACEKIT_VERSION_STRING},
     };
     auto add = [this](const char* key, const char* label, const char* value) {
         if (catalog_->add_source_info(key, label != nullptr ? label : "", value) != btp::MessageError::Ok) {
@@ -639,14 +639,14 @@ esp_err_t DeviceCore::start_tasks() noexcept {
     const std::uint32_t shell_priority =
         device_.shell.priority != 0U ? device_.shell.priority
                                      : (device_.comms.priority > 1U ? device_.comms.priority - 1U : 1U);
-    if (xTaskCreatePinnedToCore(&DeviceCore::shell_task_entry, "btpdev_shell", device_.shell.stack_bytes, this,
+    if (xTaskCreatePinnedToCore(&DeviceCore::shell_task_entry, "tracekit_shell", device_.shell.stack_bytes, this,
                                 shell_priority, &shell_task_,
                                 device_.shell.core < 0 ? tskNO_AFFINITY : device_.shell.core) != pdPASS) {
         return fail(error_, ESP_ERR_NO_MEM, kTag, "could not create the shell task (%u bytes)",
                     static_cast<unsigned>(device_.shell.stack_bytes));
     }
     if (device_.threading == Threading::Auto &&
-        !spawn_task(&DeviceCore::comms_task_entry, "btpdev_comms", device_.comms.stack_bytes, this,
+        !spawn_task(&DeviceCore::comms_task_entry, "tracekit_comms", device_.comms.stack_bytes, this,
                     device_.comms.priority, device_.comms.core, /*may_be_external=*/true, &comms_task_,
                     &comms_memory_)) {
         return fail(error_, ESP_ERR_NO_MEM, kTag, "could not create the communication task (%u bytes)",
@@ -657,7 +657,7 @@ esp_err_t DeviceCore::start_tasks() noexcept {
         args.callback = &DeviceCore::on_comms_timer;
         args.arg = this;
         args.dispatch_method = ESP_TIMER_TASK;
-        args.name = "btpdev_comms";
+        args.name = "tracekit_comms";
         args.skip_unhandled_events = true;  // a late pass is not worth two
         const std::uint64_t period_us = static_cast<std::uint64_t>(device_.comms.period_ms) * 1000ULL;
         esp_err_t err = esp_timer_create(&args, &comms_timer_);
@@ -1209,7 +1209,7 @@ void DeviceCore::shell_print(const char* text) noexcept {
 
 void DeviceCore::register_builtin_commands() noexcept {
     // One module, "btp", so it never collides with the application's own.
-    shell_.create_module("btp", "BTPDevice: link, session and errors");
+    shell_.create_module("btp", "TraceKit: link, session and errors");
     shell_.add(
         [this]() -> std::uint8_t {
             const LinkStats s = link_->stats();
@@ -1326,7 +1326,7 @@ void DeviceCore::register_builtin_commands() noexcept {
             // Later, on a timer: the reply has to leave before the reset.
             esp_timer_create_args_t args{};
             args.callback = [](void*) { esp_restart(); };
-            args.name = "btpdev_reboot";
+            args.name = "tracekit_reboot";
             esp_timer_handle_t timer = nullptr;
             if (esp_timer_create(&args, &timer) != ESP_OK || esp_timer_start_once(timer, 500000) != ESP_OK) {
                 return RESULT_ERROR;
@@ -2049,4 +2049,4 @@ void progress(void* label, std::uint8_t percent) noexcept {
     progress(static_cast<const char*>(label), percent);
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

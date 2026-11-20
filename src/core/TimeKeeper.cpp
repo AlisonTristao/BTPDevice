@@ -15,7 +15,7 @@
 #include "core/LogTags.h"
 #include "core/TimeText.h"
 
-namespace btpdev {
+namespace tracekit {
 
 const char* time_source_name(TimeSource source) noexcept {
     switch (source) {
@@ -30,7 +30,7 @@ const char* time_source_name(TimeSource source) noexcept {
 namespace {
 
 constexpr const char* kTag = tag::kCore;
-constexpr const char* kNvsNamespace = "btpdev";
+constexpr const char* kNvsNamespace = "btpdev";  // the old name, kept: devices in the field have data there
 constexpr const char* kNvsZone = "tz";
 constexpr std::uint32_t kMagic = 0xB7D07153U;
 
@@ -193,4 +193,4 @@ void TimeKeeper::describe(char* out, std::size_t size) const noexcept {
                   sntp_started_ ? config_.server : (config_.sntp ? "needs the TCP link" : "off"));
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

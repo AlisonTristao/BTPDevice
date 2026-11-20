@@ -11,18 +11,18 @@
 
 #include "core/LogTags.h"
 
-#if CONFIG_BTPDEV_LINK_SERIAL && SOC_USB_SERIAL_JTAG_SUPPORTED
+#if CONFIG_TRACEKIT_LINK_SERIAL && SOC_USB_SERIAL_JTAG_SUPPORTED
 #include <driver/usb_serial_jtag.h>
-#define BTPDEV_HAS_JTAG_SERIAL 1
+#define TRACEKIT_HAS_JTAG_SERIAL 1
 #endif
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 constexpr std::uint32_t kTaskStackBytes = 3072U;
 }  // namespace
 
-#if BTPDEV_HAS_JTAG_SERIAL
+#if TRACEKIT_HAS_JTAG_SERIAL
 
 namespace {
 
@@ -55,14 +55,14 @@ esp_err_t JtagSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
         return fail(error, ESP_ERR_INVALID_ARG, kTag, "Serial link started without on_receive");
     }
     if (usb_serial_jtag_is_driver_installed()) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag,
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag,
                     "the USB-Serial-JTAG driver is already installed by someone else");
     }
     if (!mutex_.create()) {
         return fail(error, ESP_ERR_NO_MEM, kTag, "no memory for the Serial link mutex");
     }
     if (!queue_storage_.allocate(config_.send_queue_bytes)) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the Serial send queue (%u bytes)",
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the Serial send queue (%u bytes)",
                     static_cast<unsigned>(config_.send_queue_bytes));
     }
     queue_.bind(queue_storage_.data(), queue_storage_.size(), queue_storage_.size() / 4U);
@@ -70,7 +70,7 @@ esp_err_t JtagSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
 
     if (kConsoleOnJtag) {
         ESP_LOGW(kTag, "the USB-Serial-JTAG port becomes the BTP link: ESP_LOG is muted from now on "
-                       "(logs reach TraceView through btpdev::log())");
+                       "(logs reach TraceView through tracekit::log())");
         vTaskDelay(ms_to_ticks(20));  // let that line leave through the console first
         g_saved_vprintf = esp_log_set_vprintf(&discard_log);
         console_muted_ = true;
@@ -82,7 +82,7 @@ esp_err_t JtagSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
     const esp_err_t err = usb_serial_jtag_driver_install(&driver);
     if (err != ESP_OK) {
         release();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "usb_serial_jtag_driver_install failed (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "usb_serial_jtag_driver_install failed (%s)",
                     esp_err_to_name(err));
     }
     driver_installed_ = true;
@@ -93,7 +93,7 @@ esp_err_t JtagSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
 
     running_.store(true);
     task_done_.store(false);
-    if (!spawn_task(&JtagSerialLink::task_entry, "btpdev_usj", kTaskStackBytes, this, kTaskPriority, 0,
+    if (!spawn_task(&JtagSerialLink::task_entry, "tracekit_usj", kTaskStackBytes, this, kTaskPriority, 0,
                     /*may_be_external=*/true, &task_, &task_memory_)) {
         running_.store(false);
         task_done_.store(true);
@@ -237,11 +237,11 @@ JtagSerialLink::~JtagSerialLink() = default;
 
 esp_err_t JtagSerialLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     (void)events;
-#if !CONFIG_BTPDEV_LINK_SERIAL
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kSerial,
-                "the Serial link is disabled in menuconfig (BTPDevice > Links)");
+#if !CONFIG_TRACEKIT_LINK_SERIAL
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kSerial,
+                "the Serial link is disabled in menuconfig (TraceKit > Links)");
 #else
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kSerial,
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kSerial,
                 "this chip has no USB-Serial-JTAG port (SerialPort::UsbJtag): use SerialPort::Uart");
 #endif
 }
@@ -270,4 +270,4 @@ LinkStats JtagSerialLink::stats() const noexcept {
 
 std::uint32_t JtagSerialLink::task_stack_bytes() const noexcept { return task_ != nullptr ? kTaskStackBytes : 0U; }
 
-}  // namespace btpdev
+}  // namespace tracekit

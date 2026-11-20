@@ -2,7 +2,7 @@
 
 #include <cstdio>
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 
@@ -104,4 +104,4 @@ void write_memory_report(const HeapUsage& heap, const TaskUsage* tasks, std::siz
     }
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

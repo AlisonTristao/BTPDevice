@@ -1,16 +1,16 @@
-#ifndef BTPDEV_COMMANDS_H
-#define BTPDEV_COMMANDS_H
+#ifndef TRACEKIT_COMMANDS_H
+#define TRACEKIT_COMMANDS_H
 
 // Commands: what can be called from TraceView's terminal (and by a
 // COMMAND_REQUEST). Declared once, in the application's btp_commands.cpp:
 //
 //   uint8_t relay_set(uint8_t on) {
 //       gpio_set_level(RELAY_PIN, on);
-//       btpdev::printf("relay %s\n", on ? "on" : "off");
+//       tracekit::printf("relay %s\n", on ? "on" : "off");
 //       return RESULT_OK;                      // 0 = success
 //   }
 //
-//   void app_commands(btpdev::Commands& c) {
+//   void app_commands(tracekit::Commands& c) {
 //       c.module("relay", "Pump relay")
 //        .add("set", relay_set, "relay -set <0|1>");
 //   }
@@ -23,7 +23,7 @@
 //
 // The module "btp" is the library's own (btp -status, -errors, -mem, -topics,
 // -reboot); "help" is TinyShell's. Mistakes (a duplicate name, a full table)
-// are reported by begin() as BTPDEV_ERR_BAD_COMMAND.
+// are reported by begin() as TRACEKIT_ERR_BAD_COMMAND.
 
 // Keep TinyShell's 1.x `using namespace std` out of the application.
 #ifndef TINYSHELL_NO_USING_NAMESPACE_STD
@@ -35,7 +35,7 @@
 #include <cstdio>
 #include <utility>
 
-namespace btpdev {
+namespace tracekit {
 
 class Commands {
 public:
@@ -114,22 +114,22 @@ void printf(const char* format, ...) noexcept
 /// dropped, the link gets at most ~10 redraws a second, 100% always goes out.
 ///
 /// The `(void*, uint8_t)` overload is the shape of a plain C progress
-/// callback, so the job itself never includes BtpDevice -- the command's
+/// callback, so the job itself never includes TraceKit -- the command's
 /// registration connects the two, with the label as the callback context:
 ///
-///   // calibrate.h -- knows nothing about BtpDevice or the shell
+///   // calibrate.h -- knows nothing about TraceKit or the shell
 ///   using ProgressFn = void (*)(void* ctx, uint8_t percent);
 ///   uint8_t calibrate(int samples, ProgressFn on_progress = nullptr, void* ctx = nullptr);
 ///
 ///   // btp_commands.cpp
 ///   c.module("sensor").add("calibrate", [](int samples) {
-///       return calibrate(samples, btpdev::progress, (void*)"calibrate");
+///       return calibrate(samples, tracekit::progress, (void*)"calibrate");
 ///   });
 ///
 /// `label` must outlive the job (a string literal); null for none.
 void progress(void* label, std::uint8_t percent) noexcept;
 void progress(const char* label, std::uint8_t percent) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_COMMANDS_H
+#endif  // TRACEKIT_COMMANDS_H

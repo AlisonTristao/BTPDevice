@@ -1,5 +1,5 @@
-#ifndef BTPDEV_ESPNOW_LINK_H
-#define BTPDEV_ESPNOW_LINK_H
+#ifndef TRACEKIT_ESPNOW_LINK_H
+#define TRACEKIT_ESPNOW_LINK_H
 
 // ESP-NOW link: one BTP frame per datagram, to and from the bally_dongle
 // (which relays to TraceView). Ported from bally_OS's ROBOT ESP-NOW code and
@@ -31,7 +31,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct EspNowLinkConfig {
     std::uint8_t peer_mac[6] = {};
@@ -96,6 +96,6 @@ private:
     std::atomic<std::uint32_t> telemetry_sent_{0U};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_ESPNOW_LINK_H
+#endif  // TRACEKIT_ESPNOW_LINK_H

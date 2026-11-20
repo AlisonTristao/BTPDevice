@@ -52,9 +52,9 @@ namespace {
 constexpr const char* kTag = "link_echo";
 constexpr const char* kName = CONFIG_ECHO_DEVICE_NAME;
 
-btpdev::LinkDriver* g_link = nullptr;
-btpdev::StreamDecoder g_decoder;
-btpdev::Buffer g_decoder_storage;
+tracekit::LinkDriver* g_link = nullptr;
+tracekit::StreamDecoder g_decoder;
+tracekit::Buffer g_decoder_storage;
 std::uint8_t g_frame[btp::kSerialMaxFrameSize];
 std::uint8_t g_wire[btp::kSerialMaxPacketSize];
 std::uint32_t g_echoed = 0U;
@@ -67,12 +67,12 @@ void echo_frame(const btp::DecodedFrame& decoded) {
     std::size_t frame_size = 0U;
     std::size_t wire_size = 0U;
     if (btp::encode(frame, btp::kSerialTransport, g_frame, sizeof(g_frame), &frame_size) != btp::Error::Ok ||
-        !btpdev::stream_encode(g_frame, frame_size, g_wire, sizeof(g_wire), &wire_size)) {
+        !tracekit::stream_encode(g_frame, frame_size, g_wire, sizeof(g_wire), &wire_size)) {
         return;
     }
-    const btpdev::Priority priority = decoded.header.type == btp::MessageType::Telemetry
-                                          ? btpdev::Priority::Telemetry
-                                          : btpdev::Priority::Normal;
+    const tracekit::Priority priority = decoded.header.type == btp::MessageType::Telemetry
+                                          ? tracekit::Priority::Telemetry
+                                          : tracekit::Priority::Normal;
     if (g_link->send(g_wire, wire_size, priority)) {
         ++g_echoed;
     } else {
@@ -81,8 +81,8 @@ void echo_frame(const btp::DecodedFrame& decoded) {
 }
 
 void on_receive(void*, const std::uint8_t* data, std::size_t size) noexcept {
-    if (g_link->kind() == btpdev::LinkDriver::Kind::Datagram) {
-        if (g_link->send(data, size, btpdev::Priority::Normal)) {
+    if (g_link->kind() == tracekit::LinkDriver::Kind::Datagram) {
+        if (g_link->send(data, size, tracekit::Priority::Normal)) {
             ++g_echoed;
         } else {
             ++g_echo_refused;
@@ -96,31 +96,31 @@ void on_connect(void*) noexcept { g_decoder.reset(); }
 void on_disconnect(void*) noexcept { g_decoder.reset(); }
 
 #if ECHO_TCP
-btpdev::WifiNetwork g_networks[1];
+tracekit::WifiNetwork g_networks[1];
 #endif
 
-btpdev::LinkDriver* make_link() {
+tracekit::LinkDriver* make_link() {
 #if ECHO_SERIAL
-    static btpdev::UsbSerialLink link({.product_name = kName});
+    static tracekit::UsbSerialLink link({.product_name = kName});
     return &link;
 #elif ECHO_TCP
     std::snprintf(g_networks[0].ssid, sizeof(g_networks[0].ssid), "%s", ECHO_SSID);
     std::snprintf(g_networks[0].password, sizeof(g_networks[0].password), "%s", ECHO_PASSWORD);
-    static btpdev::TcpLink link({.device_name = kName,
+    static tracekit::TcpLink link({.device_name = kName,
                                  .networks = g_networks,
                                  .network_count = g_networks[0].ssid[0] != '\0' ? 1U : 0U});
     return &link;
 #elif ECHO_BLE
-    static btpdev::BleLink link({.device_name = kName});
+    static tracekit::BleLink link({.device_name = kName});
     return &link;
 #else
-    btpdev::EspNowLinkConfig config{};
+    tracekit::EspNowLinkConfig config{};
     unsigned mac[6] = {};
     std::sscanf(CONFIG_ECHO_ESPNOW_PEER, "%x:%x:%x:%x:%x:%x", &mac[0], &mac[1], &mac[2], &mac[3],
                 &mac[4], &mac[5]);
     for (int i = 0; i < 6; ++i) config.peer_mac[i] = static_cast<std::uint8_t>(mac[i]);
     config.channel = CONFIG_ECHO_ESPNOW_CHANNEL;
-    static btpdev::EspNowLink link(config);
+    static tracekit::EspNowLink link(config);
     return &link;
 #endif
 }
@@ -129,19 +129,19 @@ btpdev::LinkDriver* make_link() {
 
 extern "C" void app_main() {
     g_link = make_link();
-    if (!g_decoder_storage.allocate(btpdev::StreamDecoder::kStorageSize) ||
+    if (!g_decoder_storage.allocate(tracekit::StreamDecoder::kStorageSize) ||
         !g_decoder.bind(g_decoder_storage.data(), g_decoder_storage.size())) {
         ESP_LOGE(kTag, "no memory for the stream decoder");
         return;
     }
 
-    btpdev::LinkEvents events;
+    tracekit::LinkEvents events;
     events.on_receive = &on_receive;
     events.on_connect = &on_connect;
     events.on_disconnect = &on_disconnect;
-    btpdev::ErrorInfo error;
+    tracekit::ErrorInfo error;
     if (g_link->start(events, error) != ESP_OK) {
-        ESP_LOGE(error.module, "%s [%s]", error.message, btpdev::err_name(error.code));
+        ESP_LOGE(error.module, "%s [%s]", error.message, tracekit::err_name(error.code));
         return;
     }
     ESP_LOGI(kTag, "echoing on %s as \"%s\"", g_link->name(), kName);
@@ -152,8 +152,8 @@ extern "C" void app_main() {
         g_link->poll(now);
         if (static_cast<std::int32_t>(now - next_report) >= 0) {
             next_report = now + 5000U;
-            const btpdev::LinkStats s = g_link->stats();
-            const btpdev::StreamDecoder::Stats d = g_decoder.stats();
+            const tracekit::LinkStats s = g_link->stats();
+            const tracekit::StreamDecoder::Stats d = g_decoder.stats();
             ESP_LOGI(kTag,
                      "%s: %s, conn %lu, in %lu B, out %lu B, frames %lu echoed %lu refused %lu, "
                      "cobs err %lu, crc err %lu",

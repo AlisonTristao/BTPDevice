@@ -1,7 +1,7 @@
-#ifndef BTPDEV_SETTINGS_REGISTRY_H
-#define BTPDEV_SETTINGS_REGISTRY_H
+#ifndef TRACEKIT_SETTINGS_REGISTRY_H
+#define TRACEKIT_SETTINGS_REGISTRY_H
 
-// The declared settings at run time (include/btpdev/settings.h, PLANO D28):
+// The declared settings at run time (include/tracekit/settings.h, PLANO D28):
 // validation, text <-> value, and the saved copy. Portable: the storage is a
 // SettingsStore (NVS on the device, a map in the host tests).
 //
@@ -14,10 +14,10 @@
 #include <functional>
 #include <vector>
 
-#include <btpdev/error.h>
-#include <btpdev/settings.h>
+#include <tracekit/error.h>
+#include <tracekit/settings.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class SettingsStore {
 public:
@@ -76,6 +76,6 @@ private:
     SettingsStore* store_ = nullptr;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_SETTINGS_REGISTRY_H
+#endif  // TRACEKIT_SETTINGS_REGISTRY_H

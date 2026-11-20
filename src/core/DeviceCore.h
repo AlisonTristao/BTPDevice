@@ -1,7 +1,7 @@
-#ifndef BTPDEV_DEVICE_CORE_H
-#define BTPDEV_DEVICE_CORE_H
+#ifndef TRACEKIT_DEVICE_CORE_H
+#define TRACEKIT_DEVICE_CORE_H
 
-// Everything BtpDevice owns, behind the facade (include/BtpDevice.h keeps the
+// Everything TraceKit owns, behind the facade (include/TraceKit.h keeps the
 // public header free of BTP, TinyShell and FreeRTOS internals).
 //
 // Threads (docs/PLANO.md 4.4):
@@ -27,7 +27,7 @@
 #include <freertos/task.h>
 #include <esp_timer.h>
 
-#include <BtpDevice.h>
+#include <TraceKit.h>
 // TinyShell.h still injects `using namespace std` for 1.x compatibility unless
 // told not to; keep std out of the global namespace of our translation units.
 #ifndef TINYSHELL_NO_USING_NAMESPACE_STD
@@ -49,7 +49,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
-#include <btpdev/sleep.h>
+#include <tracekit/sleep.h>
 
 #include "core/Power.h"
 #include "core/TaskSpawn.h"
@@ -59,9 +59,9 @@
 #include "update/DownloadMode.h"
 #include "update/Recovery.h"
 
-#include <btpdev/filesystem.h>
+#include <tracekit/filesystem.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class DeviceCore final : public btp::NodeConfig {
 public:
@@ -71,12 +71,12 @@ public:
     DeviceCore& operator=(const DeviceCore&) = delete;
 
     /// The whole of begin(). On failure, `error` says why and nothing runs.
-    esp_err_t start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics,
-                    const BtpDevice::SettingsFn& settings) noexcept;
+    esp_err_t start(const TraceKit::CommandsFn& commands, const TraceKit::TopicsFn& topics,
+                    const TraceKit::SettingsFn& settings) noexcept;
     bool set_setting(const char* name, const char* value) noexcept;
     bool save_setting(const char* name) noexcept;
     bool get_setting(const char* name, char* out, std::size_t size) noexcept;
-    /// The task that called BtpDevice::begin() (the memory report lists it).
+    /// The task that called TraceKit::begin() (the memory report lists it).
     void set_begin_task(TaskHandle_t task) noexcept { begin_task_ = task; }
     void set_power_mode(PowerMode mode) noexcept;
     bool sleep_for(std::uint64_t ms) noexcept;
@@ -92,7 +92,7 @@ public:
     bool publish(Topic topic) noexcept;
     bool subscribed(Topic topic) const noexcept { return registry_.subscribed(topic); }
     bool subscribed(const char* topic) const noexcept { return registry_.subscribed(topic); }
-    /// Any task (one per stream): a block for a stream topic (BtpDevice::write_stream()).
+    /// Any task (one per stream): a block for a stream topic (TraceKit::write_stream()).
     bool write_stream(const char* topic, const std::int16_t* samples, std::size_t count, std::uint32_t rate_hz,
                       std::uint64_t timestamp_us) noexcept;
     bool write_stream(Topic topic, const std::int16_t* samples, std::size_t count, std::uint32_t rate_hz,
@@ -101,18 +101,18 @@ public:
     /// The first caller becomes the owner; another task is refused (D8: one
     /// context touches the node) and logged once.
     bool claim_manual_task() noexcept;
-    /// Any task: text for TraceView's terminal (btpdev::printf()).
+    /// Any task: text for TraceView's terminal (tracekit::printf()).
     void print(const char* text) noexcept;
-    /// Any task: a progress bar for TraceView's terminal (btpdev::progress()).
+    /// Any task: a progress bar for TraceView's terminal (tracekit::progress()).
     /// Lock-free, never blocks; `label` must outlive the job.
     void progress(const char* label, std::uint8_t percent) noexcept;
-    /// Any task: a shell line from the application (BtpDevice::run()).
+    /// Any task: a shell line from the application (TraceKit::run()).
     bool run(const char* line) noexcept;
-    /// Any task: a line for TraceView's log panel (btpdev::log()). True when queued.
+    /// Any task: a line for TraceView's log panel (tracekit::log()). True when queued.
     bool log(LogLevel level, std::uint64_t timestamp_us, const char* text, std::size_t length) noexcept;
     /// True on the shell task (a command is running).
     bool in_command() const noexcept { return shell_task_ != nullptr && xTaskGetCurrentTaskHandle() == shell_task_; }
-    /// The running device, for btpdev::printf() (one device per firmware).
+    /// The running device, for tracekit::printf() (one device per firmware).
     static DeviceCore* active() noexcept { return active_; }
 
     void routine() noexcept;
@@ -193,7 +193,7 @@ private:
     void load_wifi_networks() noexcept;
     Link resolve_link() noexcept;
     esp_err_t allocate(const PresetSizes& sizes) noexcept;
-    esp_err_t create_node(const BtpDevice::TopicsFn& topics) noexcept;
+    esp_err_t create_node(const TraceKit::TopicsFn& topics) noexcept;
     void fill_catalog() noexcept;
     esp_err_t create_link(Link link, const PresetSizes& sizes) noexcept;
     esp_err_t start_link_with_fallback(Link requested, const PresetSizes& sizes) noexcept;
@@ -311,14 +311,14 @@ private:
     NvsSettingsStore settings_store_;
     LinkMutex settings_mutex_;  // cfg commands (shell task) vs set_setting() (any task)
 
-    // btpdev::printf() from outside a command: any task -> comms -> terminal.
+    // tracekit::printf() from outside a command: any task -> comms -> terminal.
     static constexpr std::size_t kPrintQueueBytes = 2048U;
     LinkMutex print_mutex_;
     Buffer print_storage_;
     FrameQueue print_queue_;   // guarded by print_mutex_
     void drain_prints() noexcept;
 
-    // btpdev::progress(): any task -> comms -> terminal. Not a queue: only the
+    // tracekit::progress(): any task -> comms -> terminal. Not a queue: only the
     // latest value matters, so a job may report as often as it likes.
     static constexpr std::uint32_t kProgressPeriodMs = 100U;  // link redraw cap
     std::atomic<std::uint8_t> progress_percent_{0U};
@@ -328,7 +328,7 @@ private:
     std::uint32_t progress_drawn_ms_ = 0U;         // comms task only
     void drain_progress(std::uint64_t now_ms) noexcept;
 
-    // btpdev::log(): any task -> comms -> LOG message.
+    // tracekit::log(): any task -> comms -> LOG message.
     // Entry: level (1), timestamp_us (8, little-endian), text.
     static constexpr std::size_t kLogHead = 9U;
     static constexpr std::size_t kLogQueueBytes = 2048U;
@@ -363,6 +363,6 @@ private:
     void memory_report(ReportLineFn line, void* context) noexcept;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_DEVICE_CORE_H
+#endif  // TRACEKIT_DEVICE_CORE_H

@@ -10,7 +10,7 @@
 
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kSettings;
@@ -232,41 +232,41 @@ esp_err_t SettingsRegistry::install(Settings& settings, SettingsStore* store, Er
     settings.list_.clear();
     store_ = store;
     if (list_.size() > Settings::kMaxSettings) {
-        return fail(error, BTPDEV_ERR_CONFIG, kTag, "%u settings declared, at most %u",
+        return fail(error, TRACEKIT_ERR_CONFIG, kTag, "%u settings declared, at most %u",
                     static_cast<unsigned>(list_.size()), static_cast<unsigned>(Settings::kMaxSettings));
     }
     for (std::size_t i = 0U; i < list_.size(); ++i) {
         const SettingDecl& d = list_[i];
         const std::size_t name_length = d.name_ != nullptr ? std::strlen(d.name_) : 0U;
         if (name_length == 0U || name_length > Settings::kMaxName) {
-            return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting #%u: the name must have 1 to %u characters",
+            return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting #%u: the name must have 1 to %u characters",
                         static_cast<unsigned>(i + 1U), static_cast<unsigned>(Settings::kMaxName));
         }
         for (std::size_t c = 0U; c < name_length; ++c) {
             const unsigned char ch = static_cast<unsigned char>(d.name_[c]);
             if (ch <= 0x20U || ch >= 0x7FU || ch == ',') {
-                return fail(error, BTPDEV_ERR_CONFIG, kTag,
+                return fail(error, TRACEKIT_ERR_CONFIG, kTag,
                             "setting \"%s\": the name takes printable ASCII without spaces or commas", d.name_);
             }
         }
         for (std::size_t j = 0U; j < i; ++j) {
             if (std::strcmp(list_[j].name_, d.name_) == 0) {
-                return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting \"%s\" is declared twice", d.name_);
+                return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting \"%s\" is declared twice", d.name_);
             }
         }
         if (equals_ignore_case(d.name_, "all")) {
-            return fail(error, BTPDEV_ERR_CONFIG, kTag, "\"all\" is reserved (cfg -reset all)");
+            return fail(error, TRACEKIT_ERR_CONFIG, kTag, "\"all\" is reserved (cfg -reset all)");
         }
         if (d.variable_ == nullptr) {
-            return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting \"%s\" has no variable", d.name_);
+            return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting \"%s\" has no variable", d.name_);
         }
         if (d.type_ == SettingType::Text) {
             if (d.text_size_ < 2U || d.text_size_ - 1U > Settings::kMaxText) {
-                return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting \"%s\": the text buffer must hold 1 to %u characters",
+                return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting \"%s\": the text buffer must hold 1 to %u characters",
                             d.name_, static_cast<unsigned>(Settings::kMaxText));
             }
             if (std::strlen(d.default_text_) >= d.text_size_) {
-                return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting \"%s\": the default does not fit the buffer",
+                return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting \"%s\": the default does not fit the buffer",
                             d.name_);
             }
             continue;
@@ -274,11 +274,11 @@ esp_err_t SettingsRegistry::install(Settings& settings, SettingsStore* store, Er
         const double lo = std::isnan(d.min_) ? type_min(d.type_) : d.min_;
         const double hi = std::isnan(d.max_) ? type_max(d.type_) : d.max_;
         if (lo > hi || lo < type_min(d.type_) || hi > type_max(d.type_)) {
-            return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting \"%s\": the range does not fit a %s", d.name_,
+            return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting \"%s\": the range does not fit a %s", d.name_,
                         type_name(d.type_));
         }
         if (d.default_number_ < lo || d.default_number_ > hi) {
-            return fail(error, BTPDEV_ERR_CONFIG, kTag, "setting \"%s\": the default is outside its range", d.name_);
+            return fail(error, TRACEKIT_ERR_CONFIG, kTag, "setting \"%s\": the default is outside its range", d.name_);
         }
     }
 
@@ -454,4 +454,4 @@ void SettingsRegistry::explain(Result result, const char* name, char* out, std::
     }
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

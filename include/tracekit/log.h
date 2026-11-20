@@ -1,9 +1,9 @@
-#ifndef BTPDEV_LOG_H
-#define BTPDEV_LOG_H
+#ifndef TRACEKIT_LOG_H
+#define TRACEKIT_LOG_H
 
 // Log lines for TraceView's log panel (BTP LOG messages).
 //
-//   btpdev::log(btpdev::LogLevel::Warn, "battery at %u%%", percent);
+//   tracekit::log(tracekit::LogLevel::Warn, "battery at %u%%", percent);
 //
 // Any task may call it. The line goes out on the next pass of the comms task,
 // sealed like every other message. Best effort, as BTP defines LOG: with no
@@ -14,7 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Severity carried in the LOG object_id (TraceView's LogSeverity).
 enum class LogLevel : std::uint8_t {
@@ -41,10 +41,10 @@ bool log(LogLevel level, const char* format, ...) noexcept
 bool log_record(LogLevel level, std::uint64_t timestamp_us, const char* text,
                 std::size_t length) noexcept;
 
-/// True on the library's shell task while a command runs: btpdev::printf()
+/// True on the library's shell task while a command runs: tracekit::printf()
 /// there becomes part of the command's result.
 bool in_command() noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_LOG_H
+#endif  // TRACEKIT_LOG_H

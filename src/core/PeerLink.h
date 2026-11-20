@@ -1,7 +1,7 @@
-#ifndef BTPDEV_PEER_LINK_H
-#define BTPDEV_PEER_LINK_H
+#ifndef TRACEKIT_PEER_LINK_H
+#define TRACEKIT_PEER_LINK_H
 
-// Link 1 of the device's BTP node: the peer link (include/btpdev/peer.h).
+// Link 1 of the device's BTP node: the peer link (include/tracekit/peer.h).
 //
 // It is the NodeLink of that link (send() to the application's transport,
 // seal() / open() with the peer key) and owns everything the link needs:
@@ -19,14 +19,14 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <btpdev/error.h>
-#include <btpdev/peer.h>
+#include <tracekit/error.h>
+#include <tracekit/peer.h>
 
 #include "core/FrameQueue.h"
 #include "core/Memory.h"
 #include "transport/LinkMutex.h"
 
-namespace btpdev {
+namespace tracekit {
 
 class PeerLink final : public btp::NodeLink {
 public:
@@ -113,6 +113,6 @@ private:
     std::uint32_t refused_type_ = 0U;   // open() refused a type the peer link does not carry
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_PEER_LINK_H
+#endif  // TRACEKIT_PEER_LINK_H

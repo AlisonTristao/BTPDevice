@@ -11,9 +11,9 @@
 
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 
-#if CONFIG_BTPDEV_LINK_SERIAL
+#if CONFIG_TRACEKIT_LINK_SERIAL
 
 namespace {
 
@@ -51,18 +51,18 @@ esp_err_t UartSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
     }
     const auto port = static_cast<uart_port_t>(config_.port);
     if (config_.port < 0 || config_.port >= SOC_UART_HP_NUM) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "UART%d does not exist on this chip",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "UART%d does not exist on this chip",
                     config_.port);
     }
     if (uart_is_driver_installed(port)) {
-        return fail(error, BTPDEV_ERR_LINK_START, kTag,
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag,
                     "UART%d already has a driver installed by someone else", config_.port);
     }
     if (!mutex_.create()) {
         return fail(error, ESP_ERR_NO_MEM, kTag, "no memory for the Serial link mutex");
     }
     if (!queue_storage_.allocate(config_.send_queue_bytes)) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag,
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag,
                     "no memory for the Serial send queue (%u bytes)",
                     static_cast<unsigned>(config_.send_queue_bytes));
     }
@@ -81,7 +81,7 @@ esp_err_t UartSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
                                         &uart_events_, 0);
     if (err != ESP_OK) {
         release();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "uart_driver_install(UART%d) failed (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "uart_driver_install(UART%d) failed (%s)",
                     config_.port, esp_err_to_name(err));
     }
     driver_installed_ = true;
@@ -106,7 +106,7 @@ esp_err_t UartSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
     }
     if (err != ESP_OK) {
         release();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "UART%d setup failed (%s): check baud and pins",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "UART%d setup failed (%s): check baud and pins",
                     config_.port, esp_err_to_name(err));
     }
     // Whatever arrived before (boot noise, a host that was already talking)
@@ -115,7 +115,7 @@ esp_err_t UartSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
 
     running_.store(true);
     task_done_.store(false);
-    if (!spawn_task(&UartSerialLink::task_entry, "btpdev_uart", kTaskStackBytes, this, kTaskPriority, 0,
+    if (!spawn_task(&UartSerialLink::task_entry, "tracekit_uart", kTaskStackBytes, this, kTaskPriority, 0,
                     /*may_be_external=*/true, &task_, &task_memory_)) {
         running_.store(false);
         task_done_.store(true);
@@ -268,14 +268,14 @@ void UartSerialLink::close_session() noexcept {
     if (events_.on_disconnect != nullptr) events_.on_disconnect(events_.context);
 }
 
-#else  // !CONFIG_BTPDEV_LINK_SERIAL
+#else  // !CONFIG_TRACEKIT_LINK_SERIAL
 
 UartSerialLink::~UartSerialLink() = default;
 
 esp_err_t UartSerialLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     (void)events;
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kSerial,
-                "the Serial link is disabled in menuconfig (BTPDevice > Links)");
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kSerial,
+                "the Serial link is disabled in menuconfig (TraceKit > Links)");
 }
 
 void UartSerialLink::stop() noexcept {}
@@ -290,7 +290,7 @@ void UartSerialLink::disconnect_peer() noexcept {}
 void UartSerialLink::open_session() noexcept {}
 void UartSerialLink::close_session() noexcept {}
 
-#endif  // CONFIG_BTPDEV_LINK_SERIAL
+#endif  // CONFIG_TRACEKIT_LINK_SERIAL
 
 LinkStats UartSerialLink::stats() const noexcept {
     LinkStats s;
@@ -303,4 +303,4 @@ LinkStats UartSerialLink::stats() const noexcept {
 
 std::uint32_t UartSerialLink::task_stack_bytes() const noexcept { return task_ != nullptr ? kTaskStackBytes : 0U; }
 
-}  // namespace btpdev
+}  // namespace tracekit

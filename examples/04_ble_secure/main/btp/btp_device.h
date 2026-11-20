@@ -1,8 +1,8 @@
 // Who the device is and how it talks to TraceView.
 #pragma once
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 
-inline const btpdev::DeviceConfig device_config = {
+inline const tracekit::DeviceConfig device_config = {
     .name = "sensor-ble",
-    .link = btpdev::Link::Ble,   // needs the device key (data/bally.key)
+    .link = tracekit::Link::Ble,   // needs the device key (data/bally.key)
 };

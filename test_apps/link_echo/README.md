@@ -20,7 +20,7 @@ python tools/link_echo_test.py serial COMx
 ```
 
 `COMx` é a porta que aparece ao ligar a porta "USB" da placa. No Gerenciador
-de Dispositivos ela deve aparecer com o nome `btpdev-echo`.
+de Dispositivos ela deve aparecer com o nome `tracekit-echo`.
 
 ## TCP (Wi-Fi)
 
@@ -28,11 +28,11 @@ de Dispositivos ela deve aparecer com o nome `btpdev-echo`.
 set ECHO_WIFI_SSID=minha-rede
 set ECHO_WIFI_PASSWORD=minha-senha
 pio run -d test_apps/link_echo -e tcp -t upload
-python tools/link_echo_test.py tcp btpdev-echo.local
+python tools/link_echo_test.py tcp tracekit-echo.local
 ```
 
 No log: `connected to "minha-rede" as 192.168.x.y` e
-`reachable as btpdev-echo.local:44300`. Se o mDNS não resolver no seu PC, use o
+`reachable as tracekit-echo.local:44300`. Se o mDNS não resolver no seu PC, use o
 IP do log. Para testar a reconexão, desligue e religue o roteador: o log deve
 mostrar `lost ... reconnecting` e depois `connected` de novo, sem reiniciar a
 placa.
@@ -41,7 +41,7 @@ placa.
 
 ```text
 pio run -d test_apps/link_echo -e ble -t upload
-python tools/link_echo_test.py ble btpdev-echo
+python tools/link_echo_test.py ble tracekit-echo
 ```
 
 ## ESP-NOW

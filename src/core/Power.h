@@ -1,5 +1,5 @@
-#ifndef BTPDEV_POWER_H
-#define BTPDEV_POWER_H
+#ifndef TRACEKIT_POWER_H
+#define TRACEKIT_POWER_H
 
 // PowerMode at run time (docs/PLANO.md D30): Wi-Fi modem sleep, the esp_pm
 // configuration (automatic light sleep, CPU frequency) and the lock that
@@ -8,9 +8,9 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class Power {
 public:
@@ -37,6 +37,6 @@ private:
 
 const char* power_mode_name(PowerMode mode) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_POWER_H
+#endif  // TRACEKIT_POWER_H

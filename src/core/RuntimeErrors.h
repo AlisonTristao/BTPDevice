@@ -1,5 +1,5 @@
-#ifndef BTPDEV_RUNTIME_ERRORS_H
-#define BTPDEV_RUNTIME_ERRORS_H
+#ifndef TRACEKIT_RUNTIME_ERRORS_H
+#define TRACEKIT_RUNTIME_ERRORS_H
 
 // Errors that happen while running, possibly many times per second, in
 // contexts that must not log (driver callbacks). Producers only bump an atomic
@@ -17,7 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 enum class RuntimeError : std::uint8_t {
     RxOverflow,       ///< receive buffer full: link bytes dropped
@@ -26,7 +26,7 @@ enum class RuntimeError : std::uint8_t {
     ShellBusy,        ///< a command arrived while the shell was busy
     TerminalDropped,  ///< terminal input or output dropped (too long / too fast)
     SessionTimeout,   ///< the peer went silent: session closed by the watchdog
-    LogDropped,       ///< btpdev::log() lines dropped (no peer, queue full)
+    LogDropped,       ///< tracekit::log() lines dropped (no peer, queue full)
     Count
 };
 
@@ -76,6 +76,6 @@ private:
     Counter counters_[kKinds];
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_RUNTIME_ERRORS_H
+#endif  // TRACEKIT_RUNTIME_ERRORS_H

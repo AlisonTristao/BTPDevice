@@ -10,7 +10,7 @@
 #include "core/LogTags.h"
 #include "transport/WifiCore.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kWifi;
@@ -54,7 +54,7 @@ esp_err_t WifiStation::start(const WifiNetwork* networks, std::size_t count, Err
                              const char* hostname) noexcept {
     if (running_) return ESP_OK;
     if (networks == nullptr || count == 0U) {
-        return fail(error, BTPDEV_ERR_CONFIG, kTag,
+        return fail(error, TRACEKIT_ERR_CONFIG, kTag,
                     "no Wi-Fi network to connect to: add \"ssid,password\" lines to the "
                     "networks file (DeviceConfig::wifi.file)");
     }
@@ -76,7 +76,7 @@ esp_err_t WifiStation::start(const WifiNetwork* networks, std::size_t count, Err
         esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &WifiStation::on_event,
                                             this, &ip_handler_) != ESP_OK) {
         stop();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "could not register the Wi-Fi event handlers");
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "could not register the Wi-Fi event handlers");
     }
 
     networks_ = networks;
@@ -237,4 +237,4 @@ void WifiStation::report_failure() noexcept {
              static_cast<unsigned>(count_));
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

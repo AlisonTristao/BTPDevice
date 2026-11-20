@@ -1,6 +1,6 @@
 // A long job, the way a driver or a third-party library would write it: it
-// knows nothing about BtpDevice or the shell. Progress goes to an optional
-// plain C callback; btp/btp_commands.cpp plugs btpdev::progress into it.
+// knows nothing about TraceKit or the shell. Progress goes to an optional
+// plain C callback; btp/btp_commands.cpp plugs tracekit::progress into it.
 #pragma once
 
 #include <cstdint>

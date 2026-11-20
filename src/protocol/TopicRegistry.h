@@ -1,7 +1,7 @@
-#ifndef BTPDEV_TOPIC_REGISTRY_H
-#define BTPDEV_TOPIC_REGISTRY_H
+#ifndef TRACEKIT_TOPIC_REGISTRY_H
+#define TRACEKIT_TOPIC_REGISTRY_H
 
-// Turns the application's topic declarations (btpdev::Topics) into the served
+// Turns the application's topic declarations (tracekit::Topics) into the served
 // catalogue and the node's publish registry, and publishes what the node's
 // own registry cannot: text and bytes topics, on-demand (event) publishes and
 // streams.
@@ -28,10 +28,10 @@
 #include <memory>
 #include <vector>
 
-#include <btpdev/error.h>
-#include <btpdev/topics.h>
+#include <tracekit/error.h>
+#include <tracekit/topics.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class TopicRegistry {
 public:
@@ -154,6 +154,6 @@ private:
     std::uint8_t text_payload_[kMaxTextPayload] = {};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TOPIC_REGISTRY_H
+#endif  // TRACEKIT_TOPIC_REGISTRY_H

@@ -1,5 +1,5 @@
-#ifndef BTPDEV_SHELL_TEXT_H
-#define BTPDEV_SHELL_TEXT_H
+#ifndef TRACEKIT_SHELL_TEXT_H
+#define TRACEKIT_SHELL_TEXT_H
 
 // The shell action carried by COMMAND_REQUEST (bally ecosystem convention,
 // shared with TraceView's CommandClient and bally_dongle):
@@ -14,7 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 constexpr std::uint16_t kShellActionId = 0x0001U;
 constexpr std::uint16_t kShellActionVersion = 0x0001U;
@@ -32,6 +32,6 @@ ShellTextError copy_shell_line(btp::ByteView parameters, char* out, std::size_t 
 
 const char* shell_text_error_message(ShellTextError error) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_SHELL_TEXT_H
+#endif  // TRACEKIT_SHELL_TEXT_H

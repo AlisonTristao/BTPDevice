@@ -1,4 +1,4 @@
-# Plano de implementação da BTPDevice
+# Plano de implementação da TraceKit
 
 **Criado em:** 2026-09-26
 **Estado:** Fase 5 (segurança e armazenamento) · Fase R (recovery e OTA) em andamento na branch `feature/recovery`
@@ -15,7 +15,7 @@ Fazer com que **qualquer dispositivo IoT com ESP32** fale com o TraceView
 (telemetria, terminal, comandos, criptografia e descoberta por nome) escrevendo
 apenas:
 
-1. um objeto `BtpDevice` com nome e link;
+1. um objeto `TraceKit` com nome e link;
 2. os tópicos que ele publica;
 3. os comandos que ele aceita;
 4. onde ele guarda os arquivos.
@@ -36,7 +36,7 @@ comunicação, e nenhum deveria resolvê-los de novo.
 ### De onde vem o código
 
 O bally_OS (firmware do Bally Robot) já tem tudo isso funcionando com o TraceView
-por Serial, TCP, BLE e ESP-NOW, mas acoplado à classe `ROBOT`. A BTPDevice parte
+por Serial, TCP, BLE e ESP-NOW, mas acoplado à classe `ROBOT`. A TraceKit parte
 desse código, **generalizando o que é específico do robô**. O bally_OS é a
 implementação de referência e o primeiro usuário real, mas não é o centro da lib.
 A [seção 5](#5-origem-do-código) mapeia o que vem de onde.
@@ -47,7 +47,7 @@ A [seção 5](#5-origem-do-código) mapeia o que vem de onde.
 
 | # | Decisão | Motivo |
 |---|---|---|
-| D1 | Nome: repositório **BTPDevice**, classe **`BtpDevice`**, namespace **`btpdev`** | — |
+| D1 | Nome: repositório **TraceKit**, classe **`TraceKit`**, namespace **`tracekit`** | — |
 | D2 | **Só ESP-IDF**, como componente (6.0+, referência 6.0.1) | É o que o bally_OS usa. O BTP precisa do backend PSA/mbedtls do IDF para cifrar. |
 | D3 | **Só família ESP32.** ESP32-S3 primeiro, depois ESP32, C3 e C6 | Não abraçar o mundo. |
 | D4 | **Um link por boot** na v1. Internamente é um `btp::Node` com um link (o link 0) | Simples de validar. O `attach_link` do BTP 2.47 fica pronto para uma v2 multi-link sem quebrar a API. |
@@ -67,7 +67,7 @@ A [seção 5](#5-origem-do-código) mapeia o que vem de onde.
 | D18 | Os presets de memória são **três instanciações de `btp::StaticNode`**. A escolhida é criada no `begin()` com `heap_caps_malloc` + placement new. "Bytes explícitos" sai da v1 | O `StaticNode` é dimensionado por template. Ajuste fino fica para um Kconfig depois. |
 | D19 | **Recovery e OTA entram na lib.** O app do usuário fica na partição `factory` e um firmware mínimo de recovery (~1 MB) fica na `ota_0` | Revisa o não-objetivo "OTA". Com o app no `factory`, a gravação por USB (`pio run -t upload`, `idf.py flash`) não muda: o otadata em branco sobe o app. O recovery só sobe quando alguém o escolhe pelo otadata, então estar nele é sempre um pedido explícito. O `esp_ota_begin` recusa o `factory`, então o recovery grava com `esp_partition_write`, e quem valida a imagem é o `esp_ota_set_boot_partition`. Ver [4.14](#414-recovery-e-ota). |
 | D20 | O recovery fala o **protocolo HTTP da aba OTA do TraceView** (`GET /status`, `POST /update` com o binário cru), na porta 80, como `<nome>.local` | O TraceView já tem a aba e o resolvedor mDNS. Um firmware não cabe num datagrama BTP, e um dispositivo no meio de uma gravação não deve segurar uma sessão. |
-| D21 | **Upload autenticado pela chave E, por desafio:** o `/status` dá um nonce e o upload leva `HMAC-SHA256(key_E, "btp-ota-1" ‖ nonce ‖ ação ‖ sha256(imagem))`. A autenticação é conferida **antes** de apagar qualquer coisa. Sem chave, o recovery recusa, a não ser com `CONFIG_BTPDEV_RECOVERY_INSECURE` (bancada) | A senha nunca trafega, a mesma regra do `provision_key.py`. O `X-OTA-Password` em texto do bally_OS não é usado. O TraceView ganha o cálculo do HMAC (ele já deriva a chave E da senha). |
+| D21 | **Upload autenticado pela chave E, por desafio:** o `/status` dá um nonce e o upload leva `HMAC-SHA256(key_E, "btp-ota-1" ‖ nonce ‖ ação ‖ sha256(imagem))`. A autenticação é conferida **antes** de apagar qualquer coisa. Sem chave, o recovery recusa, a não ser com `CONFIG_TRACEKIT_RECOVERY_INSECURE` (bancada) | A senha nunca trafega, a mesma regra do `provision_key.py`. O `X-OTA-Password` em texto do bally_OS não é usado. O TraceView ganha o cálculo do HMAC (ele já deriva a chave E da senha). |
 | D22 | O **contrato app ↔ recovery é o NVS**: a chave em `btpdev/keyfile` (já existe) e o namespace `btprec` (versão do contrato, nome, redes Wi-Fi, motivo da entrada). A lib espelha ali o nome e as redes a cada boot | Os dois firmwares evoluem em versões diferentes. O recovery não monta LittleFS. |
 | D23 | **Entradas no recovery:** `btp -recovery` (o TraceView ganha um botão que manda esse comando), detector de crash loop (contador em RTC: N resets anormais seguidos antes de o app ficar estável) e `btp -factory_reset` | O recovery só serve se for alcançável com o app quebrado. O rollback e o GPIO do bootloader não se aplicam ao app no `factory`. |
 | D24 | **Factory reset em dois níveis:** `btp -factory_reset yes` apaga o app e o LittleFS e mantém o NVS (chave e Wi-Fi: o dispositivo continua alcançável); `btp -factory_reset all` apaga também o NVS (volta a precisar de USB e de provisionar a chave) | Decidido com a dona do projeto. |
@@ -89,7 +89,7 @@ A [seção 5](#5-origem-do-código) mapeia o que vem de onde.
 meu_sensor/
 ├── CMakeLists.txt
 ├── main/
-│   ├── idf_component.yml     ← depende de btpdevice
+│   ├── idf_component.yml     ← depende de tracekit
 │   ├── main.cpp
 │   └── btp/
 │       ├── btp_device.h      ← 1. nome, link, memória, rede
@@ -102,14 +102,14 @@ meu_sensor/
 ### 3.2 `main.cpp`
 
 ```cpp
-#include <BtpDevice.h>
+#include <TraceKit.h>
 #include "btp/btp_device.h"
 #include "btp/btp_storage.h"
 
-void app_commands(btpdev::Commands& c);
-void app_topics(btpdev::Topics& t);
+void app_commands(tracekit::Commands& c);
+void app_topics(tracekit::Topics& t);
 
-BtpDevice device(device_config, storage_config);
+TraceKit device(device_config, storage_config);
 
 extern "C" void app_main() {
     if (device.begin(app_commands, app_topics) != ESP_OK) {
@@ -128,12 +128,12 @@ própria task de comunicação.
 ### 3.3 `btp_device.h`
 
 ```cpp
-const btpdev::DeviceConfig device_config = {
+const tracekit::DeviceConfig device_config = {
     .name      = "estacao-quintal",           // BLE, mDNS, USB, manifesto
-    .link      = btpdev::Link::FromSettings,  // lê do NVS; senão usa .fallback
-    .fallback  = btpdev::Link::Tcp,
-    .memory    = btpdev::Memory::Small,       // Small / Medium / Large / bytes
-    .threading = btpdev::Threading::Auto,
+    .link      = tracekit::Link::FromSettings,  // lê do NVS; senão usa .fallback
+    .fallback  = tracekit::Link::Tcp,
+    .memory    = tracekit::Memory::Small,       // Small / Medium / Large / bytes
+    .threading = tracekit::Threading::Auto,
     .comms     = { .core = 0, .priority = 10, .period_ms = 1 },
     .wifi      = { .file = "wifi.txt" },      // ssid,senha por linha
     .tcp       = { .port = 44300 },
@@ -144,10 +144,10 @@ const btpdev::DeviceConfig device_config = {
 ### 3.4 `btp_storage.h`
 
 ```cpp
-const btpdev::StorageConfig storage_config = {
+const tracekit::StorageConfig storage_config = {
     .fs  = { .partition = "storage", .format_if_empty = true },   // LittleFS
-    .key = btpdev::KeySource::Nvs,     // importa /bally.key uma vez, depois renomeia
-    // .sd = { .driver = btpdev::sd_card, .cs = 10, .mosi = 11, .miso = 13, .sck = 12 },
+    .key = tracekit::KeySource::Nvs,     // importa /bally.key uma vez, depois renomeia
+    // .sd = { .driver = tracekit::sd_card, .cs = 10, .mosi = 11, .miso = 13, .sck = 12 },
 };
 ```
 
@@ -156,22 +156,22 @@ const btpdev::StorageConfig storage_config = {
 ```cpp
 extern float temperature, humidity, pressure;
 
-void app_topics(btpdev::Topics& t) {
+void app_topics(tracekit::Topics& t) {
     // Ligado a variáveis: a lib lê na hora de publicar, sem código extra
-    t.topic("weather", btpdev::Hz(1))
+    t.topic("weather", tracekit::Hz(1))
      .f32("temperature", &temperature, "°C",  -40.f,  85.f)
      .f32("humidity",    &humidity,    "%",     0.f, 100.f)
      .f32("pressure",    &pressure,    "hPa");
 
     // Ligado a uma função: snapshot coerente ou valor calculado
-    t.topic("power", btpdev::Hz(0.2))
-     .fill([](btpdev::Sample& s) {
+    t.topic("power", tracekit::Hz(0.2))
+     .fill([](tracekit::Sample& s) {
          s.put("battery_v", read_battery());
          s.put("solar_ma",  read_solar());
      });
 
     // Texto livre (Text Board do TraceView)
-    t.text("status", btpdev::Hz(0.5), [](btpdev::Text& out) {
+    t.text("status", tracekit::Hz(0.5), [](tracekit::Text& out) {
         out.printf("uptime %lus", uptime_s());
     });
 }
@@ -183,7 +183,7 @@ void app_topics(btpdev::Topics& t) {
 uint8_t relay_set(uint8_t on)      { gpio_set_level(RELAY, on); return RESULT_OK; }
 uint8_t sample_period(uint32_t ms) { set_period(ms); return RESULT_OK; }
 
-void app_commands(btpdev::Commands& c) {
+void app_commands(tracekit::Commands& c) {
     c.module("relay", "Relé da bomba")
      .add("set", relay_set, "relay -set <0|1>");
     c.module("sensor", "Amostragem")
@@ -213,7 +213,7 @@ void app_commands(btpdev::Commands& c) {
 ┌──────────────────────── aplicação do usuário ────────────────────────┐
 │  main.cpp · btp_device.h · btp_storage.h · btp_commands · btp_topics │
 └───────────────────────────────┬──────────────────────────────────────┘
-                     BtpDevice (include/BtpDevice.h)
+                     TraceKit (include/TraceKit.h)
 ┌───────────────────────────────┴──────────────────────────────────────┐
 │ core/      ciclo de vida · task comms · task shell · fila RX · erros │
 ├──────────────┬────────────────┬──────────────────┬───────────────────┤
@@ -288,18 +288,18 @@ para respostas, então uma rajada de telemetria nunca impede uma resposta de sai
 | Task | Dono | O que faz |
 |---|---|---|
 | Driver do link (TCP select, NimBLE host, TinyUSB, UART, callbacks Wi-Fi) | transport | Só copia bytes e desenquadra COBS para a **fila RX** |
-| **`btpdev_comms`** | core | **Dona exclusiva do `btp::Node`**: fila RX → `receive`, publicação dos tópicos assinados, drenagem da TX, `tick()` e esvaziamento do ring de erros |
-| **`btpdev_shell`** | core | Executa comandos do TinyShell, para que um comando lento não trave a comunicação. Responde pela fila de conclusão do Node (`complete_command`). |
+| **`tracekit_comms`** | core | **Dona exclusiva do `btp::Node`**: fila RX → `receive`, publicação dos tópicos assinados, drenagem da TX, `tick()` e esvaziamento do ring de erros |
+| **`tracekit_shell`** | core | Executa comandos do TinyShell, para que um comando lento não trave a comunicação. Responde pela fila de conclusão do Node (`complete_command`). |
 
-- Com `Threading::Manual`, a `btpdev_comms` não é criada e o usuário chama
+- Com `Threading::Manual`, a `tracekit_comms` não é criada e o usuário chama
   `routine()`. A primeira task que chama `routine()`/`tick()` vira a dona; outra
   task é recusada (D8).
 - Core, prioridade e stack são configuráveis em `.comms`. O padrão é core 0, junto
   com os rádios, e o núcleo 1 fica para a aplicação. Com `.comms.timer`, um
   `esp_timer` periódico só notifica a task (período exato, independente do
   `CONFIG_FREERTOS_HZ`). Nada da biblioteca roda em ISR ou no contexto do timer.
-- A `btpdev_shell` é configurável em `.shell` (`ShellConfig`): sem afinidade e uma
-  prioridade abaixo da `btpdev_comms` por padrão.
+- A `tracekit_shell` é configurável em `.shell` (`ShellConfig`): sem afinidade e uma
+  prioridade abaixo da `tracekit_comms` por padrão.
 
 ### 4.5 Ciclo de vida
 
@@ -359,7 +359,7 @@ Cada transição sai em `ESP_LOGI`.
 - Módulo embutido **`btp`** (um só, para não colidir com os módulos do usuário):
   `btp -status`, `-link`, `-errors`, `-key`, `-wifi`, `-fs`, `-reboot`, `-bootloader`. Cada
   subcomando pode ser desligado.
-- A execução é assíncrona: o comando entra na fila da `btpdev_shell` e a resposta
+- A execução é assíncrona: o comando entra na fila da `tracekit_shell` e a resposta
   sai pelo link por onde o pedido chegou, com proteção contra resposta para uma
   conexão que já caiu.
 - A saída do shell vai para o terminal do TraceView com as cores do TinyShell.
@@ -368,7 +368,7 @@ Cada transição sai em `ESP_LOGI`.
 
 - O **contrato de canais** (`bally_channels.h`) é do ecossistema, não de um
   produto: TraceView ↔ dispositivo usa a **chave E** (uma por dispositivo), e
-  dongle ↔ dispositivo usa a **chave L** (uma por frota). A BTPDevice carrega uma
+  dongle ↔ dispositivo usa a **chave L** (uma por frota). A TraceKit carrega uma
   das três cópias idênticas, junto com o teste de hash.
 - Por link: Serial, TCP e BLE usam chave E. ESP-NOW usa E ou L conforme o peer.
   **A cifragem segue a chave** ([D13](#2-decisões)): com chave, sela e exige
@@ -391,7 +391,7 @@ Cada transição sai em `ESP_LOGI`.
 | LittleFS (partição `storage`) | `wifi.txt`, arquivo de importação da chave, cache (futuro) e arquivos do usuário via `device.fs()` |
 | SD (opcional) | Segunda raiz para os mesmos arquivos. O usuário escolhe qual raiz a lib usa. |
 
-- A interface `btpdev::FileSystem` é pequena: `read`, `write`, `append`, `exists`,
+- A interface `tracekit::FileSystem` é pequena: `read`, `write`, `append`, `exists`,
   `remove`, `rename`, `list`, `info`. LittleFS e SD implementam essa interface.
 - Se o LittleFS não montar e `format_if_empty` estiver ligado, a lib formata na
   primeira vez. Se ainda assim falhar, o dispositivo segue **sem persistência**,
@@ -415,19 +415,19 @@ Fase 3 com medições no alvo.
 
 ### 4.12 Erros e logs
 
-**Tags:** `btpdev`, `btpdev.serial`, `btpdev.tcp`, `btpdev.wifi`, `btpdev.ble`,
-`btpdev.espnow`, `btpdev.key`, `btpdev.fs`, `btpdev.cmd`, `btpdev.topic`. O nível
-padrão vem de um Kconfig (`BTPDEV_LOG_LEVEL`) e pode ser ajustado por tag com
+**Tags:** `tracekit`, `tracekit.serial`, `tracekit.tcp`, `tracekit.wifi`, `tracekit.ble`,
+`tracekit.espnow`, `tracekit.key`, `tracekit.fs`, `tracekit.cmd`, `tracekit.topic`. O nível
+padrão vem de um Kconfig (`TRACEKIT_LOG_LEVEL`) e pode ser ajustado por tag com
 `esp_log_level_set`.
 
 **Três camadas:**
 
 1. **Boot e configuração:** `begin()` retorna um `esp_err_t` com códigos próprios
-   (`BTPDEV_ERR_NO_KEY`, `_LINK_UNSUPPORTED`, `_MEMORY_BUDGET`, `_BAD_TOPIC`,
-   `_STORAGE`, …) e `btpdev_err_name()`. `last_error()` devolve
+   (`TRACEKIT_ERR_NO_KEY`, `_LINK_UNSUPPORTED`, `_MEMORY_BUDGET`, `_BAD_TOPIC`,
+   `_STORAGE`, …) e `tracekit_err_name()`. `last_error()` devolve
    `{ código, módulo, mensagem }`.
 2. **Execução:** os callbacks de driver só incrementam contadores ou empurram para
-   um ring fixo sem lock. A `btpdev_comms` esvazia o ring e loga com limite de
+   um ring fixo sem lock. A `tracekit_comms` esvazia o ring e loga com limite de
    taxa: a primeira ocorrência completa, depois um resumo por segundo.
 3. **Remoto:** os contadores vão no STATUS do BTP (o TraceView já mostra), e
    `btp -errors` lista os últimos N erros no terminal.
@@ -456,7 +456,7 @@ próprio: responde NOT_MODIFIED e o TraceView guarda o cache.
   ambíguo não resolve (mesma regra do TraceView).
 - **Cada entrada:** nome, `source_uuid`, `config_revision`, último `boot_id`,
   visto por último em, endereço do link e o payload bruto do MANIFEST_DATA.
-- **Onde:** `/btpdev/peers/index.bin` e `/btpdev/peers/<source_id>.man` no
+- **Onde:** `/tracekit/peers/index.bin` e `/tracekit/peers/<source_id>.man` no
   LittleFS. Em RAM fica só o índice.
 - Implementa os hooks `manifest_load / manifest_store / manifest_evict` do
   `NodeConfig` (BTP 2.48).
@@ -530,8 +530,8 @@ genérico:
 | `protocol/Status` | Nada é portado | `Node::emit_status` ([D17](#2-decisões)) |
 | `security/KeyStore` | `lib/KeyStore` | Ler de bytes ou do NVS, sem depender do `SDCard` |
 | `security/Seal` | `lib/RadioSeal` | — |
-| `storage/SdCard` | `lib/SDCard` | Implementar `btpdev::FileSystem` |
-| `include/btpdev/bally_channels.h` | `include/bally_channels.h` + `scripts/check_channel_contract.py` | Nenhuma: cópia byte a byte |
+| `storage/SdCard` | `lib/SDCard` | Implementar `tracekit::FileSystem` |
+| `include/tracekit/bally_channels.h` | `include/bally_channels.h` + `scripts/check_channel_contract.py` | Nenhuma: cópia byte a byte |
 | `tools/provision_key.py` | `scripts/provision_key.py` (+ teste) | — |
 | Composição (`core/`) | `BallyRobot.cpp` ~956–1618 (`bindProtocolTransport`, `onTcp*`, `onBle*`, `onSerial*`) | **Reescrever** para um Node, um link e uma fila RX |
 
@@ -596,21 +596,21 @@ atrasadas, que o `NodeCommandTicket` já carrega.
 **Memória.** `sizeof` no host (64 bits) de um `StaticNode`: o do bally_OS
 (`<4,600,1900,1900,6,24,768,…>`) tem ~16 KB, o padrão tem ~19 KB, um "small" tem
 ~10 KB e um "large" tem ~34 KB. O robô mantém **quatro** Nodes estáticos hoje. Com
-um Node por boot, a BTPDevice economiza uns 45 KB só aí.
+um Node por boot, a TraceKit economiza uns 45 KB só aí.
 
 **ESP-NOW e dongle.** Hoje o MAC do dongle vem de um flag de build (`MAC_ADDR`) e o
 canal vem do settings (`espnow_channel`). O `source_id` do dongle é derivado do MAC
-dele. Na BTPDevice isso vira `.espnow = { .peer_mac, .channel }` no
+dele. Na TraceKit isso vira `.espnow = { .peer_mac, .channel }` no
 `btp_device.h`. O pareamento automático (aprender o MAC do primeiro frame
 autenticado com a chave L e guardar no NVS) fica como melhoria depois da v1.
 
 ### Fase 1: infraestrutura do repositório
 
 - [x] BTP e TinyShell como componentes IDF ([D15](#2-decisões)): BTP 2.49.0 e TinyShell 2.1.0, na branch `feature/idf-component` de cada um.
-- [x] `CMakeLists.txt`, `idf_component.yml` e `Kconfig` (`BTPDEV_LOG_LEVEL`, `BTPDEV_LINK_*`) da BTPDevice.
-- [x] Esqueleto de `include/BtpDevice.h` e `include/btpdev/` (config, erros, versão). O `begin()` já valida a configuração e responde `BTPDEV_ERR_NOT_IMPLEMENTED`.
+- [x] `CMakeLists.txt`, `idf_component.yml` e `Kconfig` (`TRACEKIT_LOG_LEVEL`, `TRACEKIT_LINK_*`) da TraceKit.
+- [x] Esqueleto de `include/TraceKit.h` e `include/tracekit/` (config, erros, versão). O `begin()` já valida a configuração e responde `TRACEKIT_ERR_NOT_IMPLEMENTED`.
 - [x] `test/host/` com CMake + CTest: `test_error` e `test_config_check`.
-- [x] `test_apps/build_smoke` compilando para ESP32-S3 (PlatformIO, ESP-IDF 6.0.1): BTP (com o backend AEAD/PSA), TinyShell e BTPDevice entram como componentes, sem embrulho.
+- [x] `test_apps/build_smoke` compilando para ESP32-S3 (PlatformIO, ESP-IDF 6.0.1): BTP (com o backend AEAD/PSA), TinyShell e TraceKit entram como componentes, sem embrulho.
 - [x] CI no GitHub Actions (`.github/workflows/ci.yml`): testes de host e build IDF dos `test_apps`. *O job IDF depende das tags `v2.49.0` (BTP) e `v2.1.0` (TinyShell) estarem publicadas.*
 
 **Pronto quando:** `ctest` e o build no alvo passam na CI.
@@ -638,7 +638,7 @@ Wi-Fi aceita também `ssid`/`password` direto na `DeviceConfig`, além do arquiv
 - [x] Ciclo de vida (`State`, `degraded()`) e ordem do `begin()` com a política de degradação (queda para Serial).
 - [x] Orçamento de memória e alocação única: presets = `StaticNode` + filas (medidos no host: Small ~11,7 KB, Medium ~22,4 KB, Large ~47,2 KB só o Node).
 - [x] Identidade: `source_id` e `peer_uuid` do MAC (mesmo esquema do bally_OS), `boot_id` contado no NVS, nome no BLE, mDNS, USB e `source_info`.
-- [x] Fila RX única (com os eventos de conexão na mesma ordem dos bytes), `btpdev_comms`, `routine()`/`tick()` e `Threading::Manual`.
+- [x] Fila RX única (com os eventos de conexão na mesma ordem dos bytes), `tracekit_comms`, `routine()`/`tick()` e `Threading::Manual`.
 - [x] Terminal (porta do `TerminalResponder`, sem locks) e shell em task própria; COMMAND_REQUEST (ação 1 = linha de shell, 2 = ping) respondido pelo `complete_command` do Node.
 - [x] Watchdog de sessão ligado: uma conexão que ficou calada além do tempo negociado é derrubada (o TraceView manda keepalive a cada ~5 s).
 - [x] Contrato de canais (`bally_channels.h`) e `Seal`; `KeyStore` carregando de bytes. *Feito na Fase 5, junto com o armazenamento da chave.*
@@ -650,10 +650,10 @@ tópicos nascem.
 
 ### Fase 4: telemetria e comandos
 
-- [x] Builder de tópicos (`include/btpdev/topics.h`): campos ligados a variáveis, `.fill()`, tópicos de texto, IDs automáticos a partir de 0x0101, faixas, validação com o nome do tópico no erro.
+- [x] Builder de tópicos (`include/tracekit/topics.h`): campos ligados a variáveis, `.fill()`, tópicos de texto, IDs automáticos a partir de 0x0101, faixas, validação com o nome do tópico no erro.
 - [x] Integração com o registro de publicação do Node (`on_publish`: só publica com assinatura, na taxa concedida) e revisão automática do manifesto. Tópicos de texto e publicação por evento (`device.publish()`) pelo `TopicRegistry`.
-- [x] `Commands` sobre o TinyShell (`include/btpdev/commands.h`), shell em task própria e respostas assíncronas pelo link de origem.
-- [x] `btpdev::printf()`: dentro de um comando vira a saída dele; fora, aparece acima do prompt dos terminais abertos.
+- [x] `Commands` sobre o TinyShell (`include/tracekit/commands.h`), shell em task própria e respostas assíncronas pelo link de origem.
+- [x] `tracekit::printf()`: dentro de um comando vira a saída dele; fora, aparece acima do prompt dos terminais abertos.
 - [x] Módulo embutido `btp`: `-status`, `-errors`, `-topics`, `-reboot`. (`-link`, `-wifi`, `-fs` e `-key` entram na Fase 5, com o armazenamento.)
 - [x] **Exemplo `02_weather_station`** (TCP, tópicos ligados a variáveis, tópico de texto).
 - [x] **Exemplo `03_relay_actuator`** (comandos, `printf`, publicação por evento).
@@ -661,11 +661,11 @@ tópicos nascem.
 
 **Pronto quando:** os três exemplos funcionam com o TraceView e o gráfico mostra os tópicos.
 O teste por BLE e TCP cifrados fica para a Fase 5; até lá o `02_weather_station` usa
-`CONFIG_BTPDEV_INSECURE_CLEARTEXT_RADIO`.
+`CONFIG_TRACEKIT_INSECURE_CLEARTEXT_RADIO`.
 
 ### Fase 5: segurança e armazenamento
 
-- [x] `btpdev::FileSystem` (POSIX sobre o VFS, testado no host) com LittleFS (monta, formata na primeira vez) e SD (SPI e SDMMC 1-bit). Partição vazia = sem LittleFS.
+- [x] `tracekit::FileSystem` (POSIX sobre o VFS, testado no host) com LittleFS (monta, formata na primeira vez) e SD (SPI e SDMMC 1-bit). Partição vazia = sem LittleFS.
 - [x] Chave no NVS: `KeyStore` portado do bally_OS (vetores golden no host), import do arquivo no boot e com `btp -key_import`, `btp -key` (só as tags públicas), `btp -key_forget yes`.
 - [x] Cifragem que segue a chave ([D13](#2-decisões)): chave E nos links diretos; no ESP-NOW, E ou L pelo contrato de canais (`bally_channels.h`), com `reply_seal` devolvendo a resposta pelo canal do pedido.
 - [x] `Link::FromSettings`, `device.set_link()` e `btp -link` / `btp -link_set`.
@@ -683,13 +683,13 @@ Branch `feature/recovery`. Decisões D19–D27, desenho em [4.14](#414-recovery-
 
 - [x] Plano (este bloco) e decisões.
 - [x] `Sha256` com API incremental, compartilhado pelo `KeyStore` e pelo OTA; `OtaAuth` (mensagem, HMAC, hex, comparação em tempo constante), testado no host.
-- [x] Tabelas `partitions/btpdev_{4,8,16}mb.csv` (label `btp_recovery`: `recovery` é nome de subtipo no IDF 6 e gera aviso).
+- [x] Tabelas `partitions/tracekit_{4,8,16}mb.csv` (label `btp_recovery`: `recovery` é nome de subtipo no IDF 6 e gera aviso).
 - [x] Firmware `recovery/`: NVS, Wi-Fi STA, mDNS, `/status`, `/update`, `/reboot`, timeout, factory reset. Tamanho (IDF 6.0.1, `-Os`): **ESP32-S3 712 KB, ESP32 715 KB, ESP32-C3 754 KB** na partição de 1 MB.
 - [x] Na lib: espelho de nome e Wi-Fi no `btprec`, `btp -recovery`, `btp -recovery_info`, `btp -factory_reset`, detector de crash loop, checagem da tabela no `begin()`.
 - [x] `tools/btp_ota.py` (status, upload, reboot) e o teste dele contra o vetor do host.
 - [x] `tools/pio_recovery.py`: compila e grava o recovery junto com o app (`pio run -t recovery` grava só ele).
 - [x] **Exemplo `06_recovery_s3`**: temperatura interna e LED RGB da DevKitC-1, por TCP com chave (compila; app de 1,19 MB).
-- [x] Rede própria com portal cativo e página de upload no navegador (D27). Recovery: **ESP32-S3 758 KB, ESP32 763 KB, ESP32-C3 802 KB** (era 696–754 KB). Na placa: a rede `btp-btpdev` sobe sem Wi-Fi espelhado.
+- [x] Rede própria com portal cativo e página de upload no navegador (D27). Recovery: **ESP32-S3 758 KB, ESP32 763 KB, ESP32-C3 802 KB** (era 696–754 KB). Na placa: a rede `btp-tracekit` sobe sem Wi-Fi espelhado.
 - [x] Em hardware (ESP32-S3 N16R8, sem chave, link Serial pela USB-Serial-JTAG com `tools/btp_term.py`): crash loop (`demo -crash` ×3 → recovery, que espera firmware), rede própria do recovery, `btp -bootloader` (entra no modo download e volta sozinho em 30 s sem contar como crash), `btp -status/-mem/-recovery_info`, `chip -temp`.
 - [x] Em hardware com chave e Wi-Fi (`tools/btp_term.py` por TCP cifrado): `btp -recovery` → o recovery entra na mesma rede e responde como `<nome>.local`; senha errada recusada antes de apagar (401, app intacto); upload de 1,17 MB em ~9 s; conexão cortada no meio e chip resetado no meio (equivale a faltar energia): o recovery volta, reporta `app none` e aceita o envio seguinte; o fluxo da página (JavaScript servido pela placa, rodado no Node) grava e volta ao app; a sondagem de portal cativo redireciona para `/`.
 - [ ] **Testes pendentes em hardware:**
@@ -697,7 +697,7 @@ Branch `feature/recovery`. Decisões D19–D27, desenho em [4.14](#414-recovery-
   - [ ] Portal cativo num celular de verdade: com a placa sem acesso ao Wi-Fi conhecido, conectar em `btp-<nome>` e ver se a página abre sozinha (o redirecionamento de `/generate_204` para `/` já foi testado).
   - [ ] `btp -bootloader` num app com TinyUSB (exemplo 01 ou 03): o PHY volta para a USB-Serial-JTAG e o esptool grava.
   - [ ] Recovery em outros chips: ESP32 clássico, C3 e C6 compilam; nenhum foi testado em placa.
-  - [ ] Senha WPA2 na rede própria (`CONFIG_BTPDEV_RECOVERY_AP_PASSWORD`).
+  - [ ] Senha WPA2 na rede própria (`CONFIG_TRACEKIT_RECOVERY_AP_PASSWORD`).
 - [ ] TraceView (outro repositório): HMAC na aba OTA e botão "recovery" no dispositivo.
 - [ ] Depois: página de configuração. No recovery, só o Wi-Fi (é quando ele faz falta: o app não conecta). Arquivos do LittleFS ou do SD e outras configurações ficam no app, que já monta os volumes e tem espaço.
 
@@ -711,7 +711,7 @@ Branch `feature/settings-time-power`, a partir da `feature/recovery`. Decisões 
 
 | | Flash | RAM estática | Heap no boot |
 |---|---|---|---|
-| BTPDevice | 65 KB | 1,7 KB | ~43 KB sem Wi-Fi (node 11, buffers 8, tasks 16, shell 4, resto 4) |
+| TraceKit | 65 KB | 1,7 KB | ~43 KB sem Wi-Fi (node 11, buffers 8, tasks 16, shell 4, resto 4) |
 | BTP | 38 KB | — | (dentro do node) |
 | TinyShell | 12 KB | — | — |
 | Wi-Fi + lwIP + mDNS (link TCP, recovery) | ~460 KB | ~45 KB | ~81 KB ao subir o Wi-Fi |
@@ -723,7 +723,7 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 
 **S0. Memória (antes das funcionalidades)**
 - [x] O `begin()` roda numa task própria de 8 KB (temporária, mesmo núcleo e prioridade de quem chamou): importar o `bally.key` do LittleFS estourava os 3,5 KB do `app_main` (achado na placa, virava crash loop).
-- [x] SD fora do binário de quem não usa (`SdConfig::driver = btpdev::sd_card`): −114 KB de flash, −10 KB de RAM estática.
+- [x] SD fora do binário de quem não usa (`SdConfig::driver = tracekit::sd_card`): −114 KB de flash, −10 KB de RAM estática.
 - [x] Stacks pelo pico medido (manifesto, assinatura a 50 Hz e comandos juntos): `comms` 5 KB (pico 3,4), `shell` 5 KB (2,8), TCP 3 KB (1,3); eram 8, 8 e 6.
 - [x] `DeviceConfig::psram` (`Off`, `Buffers`, `Stacks`); exemplo 06 com a PSRAM e o Wi-Fi/lwIP nela.
 - [x] `WifiConfig::buffers = Lean` (padrão): 6 buffers de recepção e transmissão dinâmica no `esp_wifi_init`.
@@ -732,11 +732,11 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [ ] Picos das stacks com o TraceView e um preset Large (manifesto maior).
 
 **S1. Configurações persistentes (D28)**
-- [x] `include/btpdev/settings.h`: `Settings` com `boolean`, `u8`, `u16`, `u32`, `i32`, `f32`, `text` (até 64 octetos); `.range()`, `.unit()`, `.help()`, `.reboot()`, `.on_change()`.
+- [x] `include/tracekit/settings.h`: `Settings` com `boolean`, `u8`, `u16`, `u32`, `i32`, `f32`, `text` (até 64 octetos); `.range()`, `.unit()`, `.help()`, `.reboot()`, `.on_change()`.
 - [x] `src/protocol/SettingsRegistry` (portável): validação no `begin()` (nome de 1 a 15 caracteres, repetido, `all` reservado, faixa cabendo no tipo, padrão dentro da faixa), carga do NVS com o tipo gravado junto (tipo ou faixa mudou: volta ao padrão, avisa e apaga o valor velho), o padrão não é gravado.
 - [x] `NvsSettingsStore`: um blob por configuração no namespace `btpcfg`.
 - [x] Módulo `cfg`: `-list`, `-get`, `-set`, `-reset <nome|all>`, sob um lock (shell e `set_setting()` de outra task).
-- [x] API no código: `BtpDevice::set_setting()`, `save_setting()`, `get_setting()`.
+- [x] API no código: `TraceKit::set_setting()`, `save_setting()`, `get_setting()`.
 - [x] `App::settings()` e `begin(commands, topics, settings)`.
 - [x] Testes de host (`test_settings`): carga, reboot simulado, valores inválidos, reset, declaração que mudou, store que recusa, linhas do `cfg -list`.
 - [x] Exemplo 06: `led_pin` (com `on_change`) e `sample_ms` viram configurações; saiu o NVS feito à mão e o `led -pin`.
@@ -746,12 +746,12 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [x] `DeviceConfig::time` (`TimeConfig`: `tz`, `sntp`, `server`, `sync_hours`). Um servidor só: o IDF vem com `CONFIG_LWIP_SNTP_MAX_SERVERS=1`.
 - [x] SNTP pelo `esp_netif_sntp` quando o link é TCP (começa a perguntar quando houver IP); ressincroniza a cada 6 h.
 - [x] `btp -time` (hora local, UTC, fuso, fonte, idade), `btp -time_set <hora>` (ISO 8601 com fuso, local sem fuso, ou segundos desde 1970: o que o TraceView mandará), `btp -tz <POSIX>` (salvo no NVS). Comandos separados porque o TinyShell exige um número fixo de argumentos.
-- [x] `BtpDevice::time_valid()`, `now()`, `now_us()`, `time_source()`, `set_time()`. Validade e fonte na memória do RTC, junto do relógio.
+- [x] `TraceKit::time_valid()`, `now()`, `now_us()`, `time_source()`, `set_time()`. Validade e fonte na memória do RTC, junto do relógio.
 - [x] Testes de host (`test_time_text`): fusos, Z, sem segundos, local, época, datas inválidas, ano bissexto, formatação UTC (conferidos contra o `datetime` do Python).
 - [x] Na placa: SNTP acertando em segundos (igual ao relógio do PC) e corrigindo uma hora manual errada depois do reboot; `btp -time_set` local e com fuso; recusa de data inválida e de antes de 2025; `btp -tz` trocando e recusando lixo; hora e fuso mantidos após `btp -reboot`.
 
 **S3. Economia sem desconectar (D30)**
-- [x] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`, `idle_ms`), `esp_pm_configure` (CPU mínima = cristal, light sleep) e `esp_wifi_set_ps(MIN_MODEM)`. Troca em tempo de execução: `BtpDevice::set_power_mode()`, `btp -power_set`.
+- [x] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`, `idle_ms`), `esp_pm_configure` (CPU mínima = cristal, light sleep) e `esp_wifi_set_ps(MIN_MODEM)`. Troca em tempo de execução: `TraceKit::set_power_mode()`, `btp -power_set`.
 - [x] No `Saving`, a task `comms` espaça as passadas (`idle_ms`, 50 ms): acordando a cada tick o chip nunca ficava ocioso o bastante para dormir.
 - [x] Lock `ESP_PM_NO_LIGHT_SLEEP` no link Serial; sem `CONFIG_PM_ENABLE`/`TICKLESS_IDLE` a lib avisa e fica só no modem sleep.
 - [x] `btp -power`: modo, Wi-Fi, light sleep, pausa e, com `CONFIG_PM_PROFILING`, o tempo em cada modo.
@@ -759,7 +759,7 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [ ] Medir a corrente na bancada (multímetro em série no 5 V) com e sem.
 
 **S4. Sono profundo (D31)**
-- [x] `BtpDevice::sleep_for()`, `sleep_until()`, `wake_reason()`, `wake_count()`, `stay_awake()`; `SleepConfig` com GPIO de despertar (ext1 ou GPIO conforme o chip) e GPIO de manter acordado.
+- [x] `TraceKit::sleep_for()`, `sleep_until()`, `wake_reason()`, `wake_count()`, `stay_awake()`; `SleepConfig` com GPIO de despertar (ext1 ou GPIO conforme o chip) e GPIO de manter acordado.
 - [x] Antes de dormir: `flush_ms` para as filas saírem, a lib para de rodar, o link para (o cliente TCP vê a conexão fechar, o Wi-Fi sai do AP).
 - [x] `boot_id` em blocos de 64 reservados no NVS + RTC (`plan_boot_id`, testado no host): ao acordar, nenhuma escrita na flash.
 - [ ] Wi-Fi com canal/BSSID do RTC (reconexão rápida). Ainda não: hoje cada despertar faz o scan, e a primeira tentativa de autenticação costuma falhar (`reason 2`), o que leva ~5–10 s para conectar.
@@ -776,14 +776,14 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 
 Validar a API numa aplicação grande. É o teste de fogo da lib, não o objetivo dela.
 
-- [x] Branch/worktree no bally_OS usando a BTPDevice como componente (`feature/btpdevice`).
+- [x] Branch/worktree no bally_OS usando a TraceKit como componente (`feature/tracekit`).
 - [x] Os tópicos e comandos do robô viram os arquivos de configuração dele (`src/btp/`).
 - [x] Resolver a divisão do Wi-Fi com o OTA do robô e do USB com o Mass Storage: no TCP a lib é dona do Wi-Fi e o OTA só serve HTTP quando há IP (boot em OTA usa TCP); no Serial o robô instala o USB composto (CDC + MSC) e a lib só abre o CDC (`usb.install_driver = false`); o SD é do robô (`StorageConfig::app_volume`).
-- [x] Remover do bally_OS as libs que passaram para a BTPDevice.
-- [x] O que o robô pediu e virou API geral da lib: `btpdev::log()` / `log_record()`, `BtpDevice::run()`, `subscribed()`, `btpdev::identity()`, `in_command()`, `TopicDecl::range()` em qualquer tipo, `Commands::shell()`.
+- [x] Remover do bally_OS as libs que passaram para a TraceKit.
+- [x] O que o robô pediu e virou API geral da lib: `tracekit::log()` / `log_record()`, `TraceKit::run()`, `subscribed()`, `tracekit::identity()`, `in_command()`, `TopicDecl::range()` em qualquer tipo, `Commands::shell()`.
 - [ ] Teste no hardware: TraceView por Serial, TCP e BLE, e dongle por ESP-NOW.
 
-**Pronto quando:** o robô faz tudo o que fazia antes, com a comunicação inteira vindo da BTPDevice.
+**Pronto quando:** o robô faz tudo o que fazia antes, com a comunicação inteira vindo da TraceKit.
 
 ### Fase 7: v1.0.0
 

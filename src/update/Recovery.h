@@ -1,5 +1,5 @@
-#ifndef BTPDEV_RECOVERY_H
-#define BTPDEV_RECOVERY_H
+#ifndef TRACEKIT_RECOVERY_H
+#define TRACEKIT_RECOVERY_H
 
 // The application's side of the recovery (docs/PLANO.md D19-D26, 4.14):
 // finds the recovery partition, mirrors what the recovery needs into NVS,
@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 #include <esp_err.h>
 
 #include "transport/WifiNetworks.h"
@@ -19,7 +19,7 @@
 
 #include <esp_partition.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class Recovery {
 public:
@@ -65,6 +65,6 @@ private:
     char recovery_version_[32] = "";
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_RECOVERY_H
+#endif  // TRACEKIT_RECOVERY_H

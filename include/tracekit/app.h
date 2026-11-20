@@ -1,21 +1,21 @@
-#ifndef BTPDEV_APP_H
-#define BTPDEV_APP_H
+#ifndef TRACEKIT_APP_H
+#define TRACEKIT_APP_H
 
-// btpdev::App -- a whole device in one class. Derive from it, say who the
+// tracekit::App -- a whole device in one class. Derive from it, say who the
 // device is in config(), what it can do in commands() and what it measures in
 // topics(), and keep the device's state as members:
 //
-//   class GardenPump : public btpdev::App {
+//   class GardenPump : public tracekit::App {
 //   public:
-//       btpdev::DeviceConfig config() const override {
-//           return {.name = "bomba-jardim", .memory = btpdev::Memory::Small};
+//       tracekit::DeviceConfig config() const override {
+//           return {.name = "bomba-jardim", .memory = tracekit::Memory::Small};
 //       }
-//       void commands(btpdev::Commands& c) override {
+//       void commands(tracekit::Commands& c) override {
 //           c.module("relay", "Pump relay")
 //               .add("set", [this](uint8_t on) { return set(on); }, "relay -set <0|1>");
 //       }
-//       void topics(btpdev::Topics& t) override {
-//           relay_ = t.topic("relay", btpdev::Hz(1)).boolean("on", &on_);
+//       void topics(tracekit::Topics& t) override {
+//           relay_ = t.topic("relay", tracekit::Hz(1)).boolean("on", &on_);
 //       }
 //
 //   private:
@@ -25,11 +25,11 @@
 //           return RESULT_OK;
 //       }
 //       bool on_ = false;
-//       btpdev::Topic relay_;
+//       tracekit::Topic relay_;
 //   };
 //
 //   GardenPump app;
-//   BtpDevice device(app);
+//   TraceKit device(app);
 //
 //   extern "C" void app_main() { device.begin(); }
 //
@@ -38,17 +38,17 @@
 // does not matter. The App must outlive the device (a global, as above):
 // commands and fill() functions capture `this`.
 //
-// The free-function style (BtpDevice(device_config, storage_config) and
+// The free-function style (TraceKit(device_config, storage_config) and
 // begin(app_commands, app_topics)) keeps working; both end in the same place.
 
-#include <btpdev/commands.h>
-#include <btpdev/config.h>
-#include <btpdev/settings.h>
-#include <btpdev/topics.h>
+#include <tracekit/commands.h>
+#include <tracekit/config.h>
+#include <tracekit/settings.h>
+#include <tracekit/topics.h>
 
-class BtpDevice;
+class TraceKit;
 
-namespace btpdev {
+namespace tracekit {
 
 class App {
 public:
@@ -63,20 +63,20 @@ public:
     virtual void commands(Commands& commands) { (void)commands; }
     /// What TraceView can plot. Default: nothing.
     virtual void topics(Topics& topics) { (void)topics; }
-    /// Values kept in NVS and changed with `cfg -set` (btpdev/settings.h).
+    /// Values kept in NVS and changed with `cfg -set` (tracekit/settings.h).
     /// Loaded before commands() and topics(). Default: none.
     virtual void settings(Settings& settings) { (void)settings; }
 
     /// The device running this App: valid from inside commands() / topics()
     /// on, i.e. once begin() was called. Any task.
-    BtpDevice& device() noexcept { return *device_; }
+    TraceKit& device() noexcept { return *device_; }
     bool has_device() const noexcept { return device_ != nullptr; }
 
 private:
-    friend class ::BtpDevice;
-    BtpDevice* device_ = nullptr;
+    friend class ::TraceKit;
+    TraceKit* device_ = nullptr;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_APP_H
+#endif  // TRACEKIT_APP_H

@@ -1,33 +1,33 @@
-#ifndef BTPDEV_LOG_TAGS_H
-#define BTPDEV_LOG_TAGS_H
+#ifndef TRACEKIT_LOG_TAGS_H
+#define TRACEKIT_LOG_TAGS_H
 
 // The ESP_LOG tag of every module (CONTRIBUTING.md, "Erros e logs"). One list,
-// so begin() can apply CONFIG_BTPDEV_LOG_LEVEL to all of them and a new module
+// so begin() can apply CONFIG_TRACEKIT_LOG_LEVEL to all of them and a new module
 // cannot forget to register its tag.
 
 #include <cstddef>
 
-namespace btpdev {
+namespace tracekit {
 namespace tag {
 
-constexpr const char* kCore = "btpdev";
-constexpr const char* kSerial = "btpdev.serial";
-constexpr const char* kTcp = "btpdev.tcp";
-constexpr const char* kWifi = "btpdev.wifi";
-constexpr const char* kBle = "btpdev.ble";
-constexpr const char* kEspNow = "btpdev.espnow";
-constexpr const char* kKey = "btpdev.key";
-constexpr const char* kFs = "btpdev.fs";
-constexpr const char* kCmd = "btpdev.cmd";
-constexpr const char* kTopic = "btpdev.topic";
-constexpr const char* kRecovery = "btpdev.recovery";
-constexpr const char* kSettings = "btpdev.cfg";
+constexpr const char* kCore = "tracekit";
+constexpr const char* kSerial = "tracekit.serial";
+constexpr const char* kTcp = "tracekit.tcp";
+constexpr const char* kWifi = "tracekit.wifi";
+constexpr const char* kBle = "tracekit.ble";
+constexpr const char* kEspNow = "tracekit.espnow";
+constexpr const char* kKey = "tracekit.key";
+constexpr const char* kFs = "tracekit.fs";
+constexpr const char* kCmd = "tracekit.cmd";
+constexpr const char* kTopic = "tracekit.topic";
+constexpr const char* kRecovery = "tracekit.recovery";
+constexpr const char* kSettings = "tracekit.cfg";
 
 constexpr const char* kAll[] = {kCore, kSerial, kTcp,  kWifi, kBle,
                                 kEspNow, kKey, kFs, kCmd, kTopic, kRecovery, kSettings};
 constexpr std::size_t kCount = sizeof(kAll) / sizeof(kAll[0]);
 
 }  // namespace tag
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_LOG_TAGS_H
+#endif  // TRACEKIT_LOG_TAGS_H

@@ -1,5 +1,5 @@
-#ifndef BTPDEV_TIME_KEEPER_H
-#define BTPDEV_TIME_KEEPER_H
+#ifndef TRACEKIT_TIME_KEEPER_H
+#define TRACEKIT_TIME_KEEPER_H
 
 // The device's wall clock (docs/PLANO.md D29): time zone, SNTP, and whether
 // the time can be trusted. Validity lives in RTC memory next to the clock
@@ -9,10 +9,10 @@
 #include <cstdint>
 #include <ctime>
 
-#include <btpdev/config.h>
-#include <btpdev/time.h>
+#include <tracekit/config.h>
+#include <tracekit/time.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class TimeKeeper {
 public:
@@ -44,6 +44,6 @@ private:
     bool sntp_started_ = false;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TIME_KEEPER_H
+#endif  // TRACEKIT_TIME_KEEPER_H

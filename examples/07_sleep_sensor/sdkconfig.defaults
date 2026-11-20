@@ -1,6 +1,6 @@
 # ESP32-S3 DevKitC-1 N16R8: 16 MB flash, the table with the recovery.
 CONFIG_PARTITION_TABLE_CUSTOM=y
-CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../partitions/btpdev_16mb.csv"
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../partitions/tracekit_16mb.csv"
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
 # The N16R8's 8 MB of octal PSRAM, with the Wi-Fi and lwIP buffers in it.

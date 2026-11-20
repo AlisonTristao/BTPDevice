@@ -12,15 +12,15 @@
 
 #if CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3
 #include <soc/rtc_cntl_reg.h>
-#define BTPDEV_FORCE_DOWNLOAD_RTC_CNTL 1
+#define TRACEKIT_FORCE_DOWNLOAD_RTC_CNTL 1
 #elif CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32C61 || CONFIG_IDF_TARGET_ESP32H2
 #include <soc/lp_aon_reg.h>
-#define BTPDEV_FORCE_DOWNLOAD_LP_AON 1
+#define TRACEKIT_FORCE_DOWNLOAD_LP_AON 1
 #endif
 
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 
@@ -29,7 +29,7 @@ constexpr const char* kTag = tag::kRecovery;
 constexpr std::uint32_t kDownloadTimeoutS = kDownloadModeTimeoutS;
 
 void restart_into_download(void*) {
-#if BTPDEV_FORCE_DOWNLOAD_RTC_CNTL
+#if TRACEKIT_FORCE_DOWNLOAD_RTC_CNTL
 #if CONFIG_IDF_TARGET_ESP32S3
     // TinyUSB may hold the USB PHY (it lives in the RTC domain, which a
     // software reset keeps): hand it back to USB-Serial-JTAG, the port the
@@ -38,7 +38,7 @@ void restart_into_download(void*) {
                         RTC_CNTL_SW_HW_USB_PHY_SEL | RTC_CNTL_SW_USB_PHY_SEL | RTC_CNTL_USB_PAD_ENABLE);
 #endif
     REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
-#elif BTPDEV_FORCE_DOWNLOAD_LP_AON
+#elif TRACEKIT_FORCE_DOWNLOAD_LP_AON
     SET_PERI_REG_MASK(LP_AON_SYS_CFG_REG, LP_AON_FORCE_DOWNLOAD_BOOT);
 #endif
     // The ROM waits for esptool forever. The RTC watchdog keeps counting in
@@ -60,7 +60,7 @@ void restart_into_download(void*) {
 }  // namespace
 
 bool download_mode_supported() noexcept {
-#if BTPDEV_FORCE_DOWNLOAD_RTC_CNTL || BTPDEV_FORCE_DOWNLOAD_LP_AON
+#if TRACEKIT_FORCE_DOWNLOAD_RTC_CNTL || TRACEKIT_FORCE_DOWNLOAD_LP_AON
     return true;
 #else
     return false;
@@ -72,7 +72,7 @@ esp_err_t enter_download_mode(std::uint32_t delay_ms) noexcept {
     ESP_LOGW(kTag, "restarting into the ROM download mode: flash over USB within %u s", static_cast<unsigned>(kDownloadTimeoutS));
     esp_timer_create_args_t args{};
     args.callback = &restart_into_download;
-    args.name = "btpdev_dl";
+    args.name = "tracekit_dl";
     esp_timer_handle_t timer = nullptr;
     if (esp_timer_create(&args, &timer) != ESP_OK || esp_timer_start_once(timer, delay_ms * 1000ULL) != ESP_OK) {
         restart_into_download(nullptr);
@@ -80,4 +80,4 @@ esp_err_t enter_download_mode(std::uint32_t delay_ms) noexcept {
     return ESP_OK;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

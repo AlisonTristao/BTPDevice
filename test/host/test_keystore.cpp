@@ -2,7 +2,7 @@
 
 #include "security/KeyStore.h"
 
-using btpdev::KeyStore;
+using tracekit::KeyStore;
 #include <btp/codec.hpp>
 
 #include <cstdint>

@@ -3,7 +3,7 @@
 # temperature sensor.
 cmake_minimum_required(VERSION 3.16)
 
-include(${CMAKE_CURRENT_LIST_DIR}/../../test_apps/btpdev_components.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../test_apps/tracekit_components.cmake)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(btpdev_07_sleep_sensor)
+project(tracekit_07_sleep_sensor)

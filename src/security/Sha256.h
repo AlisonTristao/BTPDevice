@@ -1,5 +1,5 @@
-#ifndef BTPDEV_SHA256_H
-#define BTPDEV_SHA256_H
+#ifndef TRACEKIT_SHA256_H
+#define TRACEKIT_SHA256_H
 
 // SHA-256 (FIPS 180-4) and HMAC-SHA256 (RFC 2104), self-contained and
 // allocation-free. Shared by the KeyStore (verify tags, PBKDF2) and the
@@ -27,7 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 class Sha256 {
 public:
@@ -71,6 +71,6 @@ bool equal_bytes(const std::uint8_t* left, const std::uint8_t* right, std::size_
 /// as dead on a buffer that is about to go out of scope or be reused.
 void secure_wipe(void* data, std::size_t size) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_SHA256_H
+#endif  // TRACEKIT_SHA256_H

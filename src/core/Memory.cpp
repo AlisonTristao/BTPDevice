@@ -6,7 +6,7 @@
 #include <cstdlib>
 #endif
 
-namespace btpdev {
+namespace tracekit {
 
 namespace {
 Psram g_policy = Psram::Buffers;
@@ -49,4 +49,4 @@ void free_buffer(void* buffer) noexcept {
 #endif
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

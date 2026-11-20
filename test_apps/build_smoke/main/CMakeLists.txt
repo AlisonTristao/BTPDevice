@@ -1,1 +1,1 @@
-idf_component_register(SRCS "main.cpp" REQUIRES BTPDevice)
+idf_component_register(SRCS "main.cpp" REQUIRES TraceKit)

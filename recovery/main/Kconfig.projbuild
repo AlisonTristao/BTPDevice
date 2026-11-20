@@ -1,6 +1,6 @@
-menu "BTPDevice recovery"
+menu "TraceKit recovery"
 
-    config BTPDEV_RECOVERY_TIMEOUT_MIN
+    config TRACEKIT_RECOVERY_TIMEOUT_MIN
         int "Minutes without an upload before going back to the application"
         default 10
         range 1 1440
@@ -8,7 +8,7 @@ menu "BTPDevice recovery"
             Only when entered by `btp -recovery`. After a crash loop or a
             factory reset the recovery waits for a firmware (docs/PLANO.md D25).
 
-    config BTPDEV_RECOVERY_AP
+    config TRACEKIT_RECOVERY_AP
         bool "Own Wi-Fi network when no known network answers"
         default y
         select ESP_WIFI_SOFTAP_SUPPORT
@@ -19,15 +19,15 @@ menu "BTPDevice recovery"
             itself: captive portal). Uploads stay authenticated by the key.
             Costs about 50 KB.
 
-    config BTPDEV_RECOVERY_AP_PASSWORD
+    config TRACEKIT_RECOVERY_AP_PASSWORD
         string "Password of the own network (empty: open network)"
         default ""
-        depends on BTPDEV_RECOVERY_AP
+        depends on TRACEKIT_RECOVERY_AP
         help
             8 to 63 characters for WPA2. The upload is signed with the key
             either way; this only keeps strangers off the network.
 
-    config BTPDEV_RECOVERY_INSECURE
+    config TRACEKIT_RECOVERY_INSECURE
         bool "DEVELOPMENT ONLY: accept uploads without the device key"
         default n
         help

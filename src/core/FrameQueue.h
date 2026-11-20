@@ -1,5 +1,5 @@
-#ifndef BTPDEV_FRAME_QUEUE_H
-#define BTPDEV_FRAME_QUEUE_H
+#ifndef TRACEKIT_FRAME_QUEUE_H
+#define TRACEKIT_FRAME_QUEUE_H
 
 // The send queue every link uses: a byte ring over caller-owned storage
 // (allocated once, in begin() -- CONTRIBUTING.md "Memória"), holding whole
@@ -25,7 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 enum class Priority : std::uint8_t {
     Normal = 0,     ///< replies, terminal, session/catalog traffic
@@ -112,6 +112,6 @@ private:
     Stats stats_{};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_FRAME_QUEUE_H
+#endif  // TRACEKIT_FRAME_QUEUE_H

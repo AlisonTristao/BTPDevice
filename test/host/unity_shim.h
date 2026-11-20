@@ -1,5 +1,5 @@
-#ifndef BTPDEV_UNITY_SHIM_H
-#define BTPDEV_UNITY_SHIM_H
+#ifndef TRACEKIT_UNITY_SHIM_H
+#define TRACEKIT_UNITY_SHIM_H
 
 // The few Unity macros the tests carried over from bally_OS use, mapped onto
 // check.h, so those tests move here with no rewrite (and stay diffable
@@ -25,4 +25,4 @@
 #define UNITY_BEGIN() static_cast<void>(0)
 #define UNITY_END() test_result(__FILE__)
 
-#endif  // BTPDEV_UNITY_SHIM_H
+#endif  // TRACEKIT_UNITY_SHIM_H

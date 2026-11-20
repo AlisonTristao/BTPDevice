@@ -4,7 +4,7 @@
 
 #include "security/Sha256.h"
 
-namespace btpdev::ota {
+namespace tracekit::ota {
 
 void compute_mac(const std::uint8_t* key, std::size_t key_size, const std::uint8_t* nonce, Action action,
                  const std::uint8_t* image_sha256, std::uint8_t* mac) noexcept {
@@ -59,4 +59,4 @@ bool from_hex(const char* text, std::uint8_t* out, std::size_t size) noexcept {
     return true;
 }
 
-}  // namespace btpdev::ota
+}  // namespace tracekit::ota

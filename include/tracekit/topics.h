@@ -1,44 +1,44 @@
-#ifndef BTPDEV_TOPICS_H
-#define BTPDEV_TOPICS_H
+#ifndef TRACEKIT_TOPICS_H
+#define TRACEKIT_TOPICS_H
 
 // Telemetry topics: what TraceView can plot. Declared once, in the
 // application's btp_topics.cpp, and published by the library only while
 // someone is subscribed, at the rate they asked for (up to the declared one).
 //
-//   void app_topics(btpdev::Topics& t) {
+//   void app_topics(tracekit::Topics& t) {
 //       // fields bound to variables: nothing else to write
-//       t.topic("weather", btpdev::Hz(1))
+//       t.topic("weather", tracekit::Hz(1))
 //        .f32("temperature", &temperature, "°C", -40, 85)
 //        .f32("humidity", &humidity, "%", 0, 100);
 //
 //       // or a function that fills a consistent snapshot
-//       t.topic("power", btpdev::Hz(0.2))
+//       t.topic("power", tracekit::Hz(0.2))
 //        .f32("battery_v", "V")
 //        .f32("solar_ma", "mA")
-//        .fill([](btpdev::Sample& s) {
+//        .fill([](tracekit::Sample& s) {
 //            s.put("battery_v", read_battery());
 //            s.put("solar_ma", read_solar());
 //        });
 //
 //       // free text (TraceView's Text Board)
-//       t.text("status", btpdev::Hz(0.5), [](btpdev::Text& out) {
+//       t.text("status", tracekit::Hz(0.5), [](tracekit::Text& out) {
 //           out.printf("uptime %lus", uptime_s());
 //       });
 //
 //       // blocks of samples (audio, vibration), written with
-//       // BtpDevice::write_stream() -- see Topics::stream()
+//       // TraceKit::write_stream() -- see Topics::stream()
 //       t.stream("audio.pcm", 1024, "counts").range(-2048, 2047);
 //
 //       // an opaque body the receiver decodes itself (an image, a
 //       // packed grid) -- see Topics::bytes()
-//       t.bytes("camera.matrix", btpdev::Hz(10), 1900, [](uint8_t* out, size_t cap) {
+//       t.bytes("camera.matrix", tracekit::Hz(10), 1900, [](uint8_t* out, size_t cap) {
 //           return copy_latest_frame(out, cap);   // 0: nothing new yet
 //       }).version(2);
 //   }
 //
 // Topic ids are given in declaration order from kFirstTopicId, field ids and
 // order in declaration order. Names must be unique (topics per device, fields
-// per topic). Every mistake is reported by begin() (BTPDEV_ERR_BAD_TOPIC)
+// per topic). Every mistake is reported by begin() (TRACEKIT_ERR_BAD_TOPIC)
 // with the topic's name.
 //
 // A variable bound with a pointer is read on the communication task when a
@@ -48,11 +48,11 @@
 // bound form: 8 bytes are not read atomically, and a value written on one
 // core could be published half old, half new.
 //
-// Every declaration converts to a btpdev::Topic, a handle for
-// BtpDevice::publish() / subscribed() / write_stream() that skips the
+// Every declaration converts to a tracekit::Topic, a handle for
+// TraceKit::publish() / subscribed() / write_stream() that skips the
 // by-name lookup:
 //
-//   btpdev::Topic relay = t.topic("relay", btpdev::Hz(1)).boolean("on", &on);
+//   tracekit::Topic relay = t.topic("relay", tracekit::Hz(1)).boolean("on", &on);
 //   ...
 //   device.publish(relay);
 
@@ -63,7 +63,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace btpdev {
+namespace tracekit {
 
 /// A publish rate, in millihertz. Hz(10), Hz(0.2), OnEvent.
 struct Rate {
@@ -72,10 +72,10 @@ struct Rate {
 constexpr Rate Hz(double hz) noexcept {
     return Rate{hz <= 0.0 ? 0U : static_cast<std::uint32_t>(hz * 1000.0 + 0.5)};
 }
-/// Not periodic: only sent by BtpDevice::publish() (still only to subscribers).
+/// Not periodic: only sent by TraceKit::publish() (still only to subscribers).
 constexpr Rate OnEvent{0U};
 
-/// A declared topic, for BtpDevice::publish() / subscribed() /
+/// A declared topic, for TraceKit::publish() / subscribed() /
 /// write_stream(): the declaration index, so no name is looked up. A
 /// default-constructed Topic is invalid and every call with it returns false.
 struct Topic {
@@ -239,7 +239,7 @@ public:
     const char* name() const noexcept { return name_; }
 
     /// This topic's handle (also an implicit conversion, so a chain can end
-    /// in `btpdev::Topic x = t.topic(...)...;`).
+    /// in `tracekit::Topic x = t.topic(...)...;`).
     Topic handle() const noexcept { return Topic{index_}; }
     operator Topic() const noexcept { return handle(); }
 
@@ -279,7 +279,7 @@ public:
     TopicDecl& text(const char* name, Rate rate, TextFn function);
 
     /// A stream of int16 sample blocks (audio, vibration): every block given
-    /// to BtpDevice::write_stream() is sent once, in order, while someone is
+    /// to TraceKit::write_stream() is sent once, in order, while someone is
     /// subscribed -- no rate, no "latest value". Its fields are fixed:
     ///
     ///   seq      u32         block counter (a gap = blocks lost on the way)
@@ -312,6 +312,6 @@ private:
     std::vector<TopicDecl> topics_;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TOPICS_H
+#endif  // TRACEKIT_TOPICS_H

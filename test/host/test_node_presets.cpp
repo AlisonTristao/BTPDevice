@@ -8,9 +8,9 @@
 #include "check.h"
 
 int main() {
-    const auto small = btpdev::preset_sizes(btpdev::Memory::Small);
-    const auto medium = btpdev::preset_sizes(btpdev::Memory::Medium);
-    const auto large = btpdev::preset_sizes(btpdev::Memory::Large);
+    const auto small = tracekit::preset_sizes(tracekit::Memory::Small);
+    const auto medium = tracekit::preset_sizes(tracekit::Memory::Medium);
+    const auto large = tracekit::preset_sizes(tracekit::Memory::Large);
     std::printf("node bytes: small %zu, medium %zu, large %zu\n", small.node_bytes,
                 medium.node_bytes, large.node_bytes);
     CHECK(small.node_bytes < medium.node_bytes);
@@ -18,6 +18,6 @@ int main() {
     CHECK(small.link_queue_bytes <= medium.link_queue_bytes);
     // A COMMAND_REQUEST with a full shell line plus its result must fit the
     // dedup cache's per-command storage.
-    CHECK(768U >= 20U + 512U + 30U + btpdev::kMaxResultMessage);
+    CHECK(768U >= 20U + 512U + 30U + tracekit::kMaxResultMessage);
     return test_result("test_node_presets");
 }

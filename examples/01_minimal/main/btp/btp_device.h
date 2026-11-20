@@ -1,8 +1,8 @@
 // Who the device is and how it talks to TraceView.
 #pragma once
-#include <btpdev/config.h>
+#include <tracekit/config.h>
 
-inline const btpdev::DeviceConfig device_config = {
-    .name = "btpdev-minimal",          // what TraceView shows and looks for
-    .link = btpdev::Link::Serial,      // the native USB port
+inline const tracekit::DeviceConfig device_config = {
+    .name = "tracekit-minimal",          // what TraceView shows and looks for
+    .link = tracekit::Link::Serial,      // the native USB port
 };

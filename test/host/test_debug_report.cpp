@@ -5,10 +5,10 @@
 
 #include "check.h"
 
-using btpdev::format_boot_step;
-using btpdev::format_kb;
-using btpdev::HeapUsage;
-using btpdev::TaskUsage;
+using tracekit::format_boot_step;
+using tracekit::format_kb;
+using tracekit::HeapUsage;
+using tracekit::TaskUsage;
 
 namespace {
 
@@ -19,7 +19,7 @@ std::string kb(std::size_t bytes) {
 }
 
 std::string step(std::uint64_t us, const char* name, const char* detail, long long heap) {
-    char out[btpdev::kReportLineMax];
+    char out[tracekit::kReportLineMax];
     format_boot_step(out, sizeof(out), us, name, detail, heap);
     return out;
 }
@@ -61,7 +61,7 @@ void the_report_has_heap_psram_and_one_row_per_task() {
     heap.minimum_bytes = 185242U;
     heap.largest_block = 112640U;
     TaskUsage tasks[2];
-    tasks[0].name = "btpdev_comms";
+    tasks[0].name = "tracekit_comms";
     tasks[0].core = 1;
     tasks[0].priority = 10U;
     tasks[0].stack_total = 8192U;
@@ -71,17 +71,17 @@ void the_report_has_heap_psram_and_one_row_per_task() {
     tasks[1].stack_min_free = 1100U;
 
     std::vector<std::string> lines;
-    btpdev::write_memory_report(heap, tasks, 2U, &collect, &lines);
+    tracekit::write_memory_report(heap, tasks, 2U, &collect, &lines);
     CHECK(lines.size() == 4U);  // heap, header, two tasks (no PSRAM)
     CHECK_STR_EQ(lines[0].c_str(), "heap      182.4 KB free of 320.0 KB, min 180.9 KB, largest block 110.0 KB");
     CHECK_STR_EQ(lines[1].c_str(), "task              core prio  stack peak / total min free");
-    CHECK_STR_EQ(lines[2].c_str(), "btpdev_comms         1   10    3.1 / 8.0 KB       4.9 KB");
+    CHECK_STR_EQ(lines[2].c_str(), "tracekit_comms       1   10    3.1 / 8.0 KB       4.9 KB");
     CHECK_STR_EQ(lines[3].c_str(), "wifi                 -   23      -                1.1 KB");
 
     heap.psram_total = 4194304U;
     heap.psram_free = 4108288U;
     lines.clear();
-    btpdev::write_memory_report(heap, nullptr, 0U, &collect, &lines);
+    tracekit::write_memory_report(heap, nullptr, 0U, &collect, &lines);
     CHECK(lines.size() == 2U);  // heap + psram, no task table
     CHECK_STR_EQ(lines[1].c_str(), "psram     4012.0 KB free of 4096.0 KB");
 }

@@ -3,7 +3,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kCore;
@@ -35,13 +35,13 @@ const char* link_name(Link link) noexcept {
 
 esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexcept {
     if (config.name == nullptr || config.name[0] == '\0') {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "device name is empty: set DeviceConfig::name (it is how "
                     "TraceView finds the device)");
     }
     const std::size_t name_length = std::strlen(config.name);
     if (name_length > DeviceConfig::kMaxNameLength) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "device name \"%s\" has %u characters, max is %u (BLE "
                     "advertising limit)",
                     config.name, static_cast<unsigned>(name_length),
@@ -52,75 +52,75 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
         // Printable ASCII only: the name goes into a BLE scan response, a USB
         // string descriptor and (sanitized) an mDNS hostname.
         if (c < 0x20U || c > 0x7EU) {
-            return fail(out, BTPDEV_ERR_CONFIG, kTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                         "device name has a non-printable or non-ASCII "
                         "character at position %u",
                         static_cast<unsigned>(i));
         }
     }
     if (!is_valid_link(config.link)) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::link is not a valid Link");
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag, "DeviceConfig::link is not a valid Link");
     }
     if (!is_valid_link(config.fallback) || config.fallback == Link::FromSettings) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "DeviceConfig::fallback must be a concrete link (Serial, "
                     "Tcp, Ble or EspNow), not FromSettings");
     }
     if (config.comms.core < -1 || config.comms.core > 1) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "DeviceConfig::comms.core is %d: use 0, 1 or -1 (no affinity)",
                     config.comms.core);
     }
     if (config.wifi.ssid != nullptr && std::strlen(config.wifi.ssid) > 32U) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kWifi,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kWifi,
                     "DeviceConfig::wifi.ssid is longer than 32 characters (802.11 limit)");
     }
     if (config.wifi.password != nullptr && std::strlen(config.wifi.password) > 64U) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kWifi,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kWifi,
                     "DeviceConfig::wifi.password is longer than 64 characters (WPA2 limit)");
     }
     if (config.comms.period_ms == 0U || config.comms.stack_bytes < 4096U) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "DeviceConfig::comms needs period_ms >= 1 and stack_bytes >= 4096");
     }
     if (config.shell.core < -1 || config.shell.core > 1) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "DeviceConfig::shell.core is %d: use 0, 1 or -1 (no affinity)",
                     config.shell.core);
     }
     if (config.shell.stack_bytes < 4096U) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::shell needs stack_bytes >= 4096");
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag, "DeviceConfig::shell needs stack_bytes >= 4096");
     }
     if (config.tcp.port == 0U) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::tcp.port is 0");
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag, "DeviceConfig::tcp.port is 0");
     }
     if (config.psram != Psram::Off && config.psram != Psram::Buffers && config.psram != Psram::Stacks) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::psram is not a valid Psram");
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag, "DeviceConfig::psram is not a valid Psram");
     }
     if (config.serial_port != SerialPort::Auto && config.serial_port != SerialPort::Usb &&
         config.serial_port != SerialPort::Uart && config.serial_port != SerialPort::UsbJtag) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kSerial,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kSerial,
                     "DeviceConfig::serial_port is not a valid SerialPort");
     }
     // UART numbers and pins are checked again by the driver for this chip;
     // these are the bounds every ESP32 shares.
     if (config.uart.port < 0 || config.uart.port > 2) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kSerial,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kSerial,
                     "DeviceConfig::uart.port is %d: use 0, 1 or 2", config.uart.port);
     }
     if (config.uart.baud < 9600U || config.uart.baud > 5000000U) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kSerial,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kSerial,
                     "DeviceConfig::uart.baud is %u: use 9600..5000000 (921600 is the default)",
                     static_cast<unsigned>(config.uart.baud));
     }
     if (config.uart.tx_pin < -1 || config.uart.rx_pin < -1 ||
         (config.uart.port != 0 && (config.uart.tx_pin < 0 || config.uart.rx_pin < 0))) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kSerial,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kSerial,
                     "DeviceConfig::uart pins: -1 keeps UART0's pins; UART%d needs tx_pin and rx_pin",
                     config.uart.port);
     }
     if (config.espnow.channel < 1U || config.espnow.channel > 14U) {
-        return fail(out, BTPDEV_ERR_CONFIG, kTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                     "DeviceConfig::espnow.channel is %u: Wi-Fi channels are 1..14",
                     static_cast<unsigned>(config.espnow.channel));
     }
@@ -134,13 +134,13 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
             continue;
         }
         if (ended) {
-            return fail(out, BTPDEV_ERR_CONFIG, kTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                         "DeviceConfig::source_info[%u] comes after an empty "
                         "entry: fill the array from the start",
                         static_cast<unsigned>(i));
         }
         if (entry.key[0] == '\0' || entry.value == nullptr) {
-            return fail(out, BTPDEV_ERR_CONFIG, kTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kTag,
                         "DeviceConfig::source_info[%u] needs a key and a value",
                         static_cast<unsigned>(i));
         }
@@ -154,42 +154,42 @@ esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noex
     // An empty partition name means "no LittleFS" (SD only, or no storage).
     const bool littlefs = config.fs.partition != nullptr && config.fs.partition[0] != '\0';
     if (littlefs && (config.fs.mount == nullptr || config.fs.mount[0] != '/')) {
-        return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+        return fail(out, TRACEKIT_ERR_CONFIG, kFsTag,
                     "StorageConfig::fs.mount must be an absolute path such as \"/fs\"");
     }
     if (config.key == KeySource::Nvs &&
         (config.key_file == nullptr || config.key_file[0] == '\0')) {
-        return fail(out, BTPDEV_ERR_CONFIG, tag::kKey,
+        return fail(out, TRACEKIT_ERR_CONFIG, tag::kKey,
                     "StorageConfig::key_file is empty while key = Nvs");
     }
     if (config.sd.driver != nullptr) {
         if (config.sd.mount == nullptr || config.sd.mount[0] != '/') {
-            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kFsTag,
                         "StorageConfig::sd.mount must be an absolute path such as \"/sd\"");
         }
         if (littlefs && std::strcmp(config.sd.mount, config.fs.mount) == 0) {
-            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kFsTag,
                         "StorageConfig::sd.mount and fs.mount are both \"%s\"",
                         config.sd.mount);
         }
         if (config.sd.mode == SdMode::Spi &&
             (config.sd.cs < 0 || config.sd.mosi < 0 || config.sd.miso < 0 ||
              config.sd.sck < 0)) {
-            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kFsTag,
                         "SD over SPI needs cs, mosi, miso and sck pins");
         }
     }
     if (config.app_volume != nullptr && config.app_volume[0] != '\0') {
         // FileSystem keeps the root in 64 octets and joins names after it.
         if (config.app_volume[0] != '/' || std::strlen(config.app_volume) > 32U) {
-            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kFsTag,
                         "StorageConfig::app_volume must be an absolute path of at most 32 "
                         "characters, such as \"/sdcard\"");
         }
         const bool same_as_fs = littlefs && std::strcmp(config.app_volume, config.fs.mount) == 0;
         const bool same_as_sd = config.sd.driver != nullptr && std::strcmp(config.app_volume, config.sd.mount) == 0;
         if (same_as_fs || same_as_sd) {
-            return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
+            return fail(out, TRACEKIT_ERR_CONFIG, kFsTag,
                         "StorageConfig::app_volume \"%s\" is also a volume the library mounts",
                         config.app_volume);
         }
@@ -198,4 +198,4 @@ esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noex
     return ESP_OK;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

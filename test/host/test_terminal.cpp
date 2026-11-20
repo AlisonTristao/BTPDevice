@@ -7,7 +7,7 @@
 
 #include "check.h"
 
-using btpdev::Terminal;
+using tracekit::Terminal;
 
 namespace {
 
@@ -69,13 +69,13 @@ void enter_submits_the_line_and_output_comes_back() {
 }
 
 void a_failed_command_shows_its_status() {
-    const std::string text = btpdev::render_command_output("", 255U);
+    const std::string text = tracekit::render_command_output("", 255U);
     CHECK_STR_EQ(text.c_str(), "! [status=255]\r\n");
 }
 
 void long_output_is_truncated_with_a_notice() {
     const std::string big(5000, 'x');
-    const std::string text = btpdev::render_command_output(big.c_str(), 0U);
+    const std::string text = tracekit::render_command_output(big.c_str(), 0U);
     CHECK(text.size() < 5000U);
     CHECK(contains(text, "[output truncated]"));
 }

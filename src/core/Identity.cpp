@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 
 std::uint32_t source_id_from_mac(const std::uint8_t mac[6]) noexcept {
     if (mac == nullptr) return 0U;
@@ -48,4 +48,4 @@ BootIdPlan plan_boot_id(bool woke, std::uint32_t rtc_next, std::uint32_t rtc_las
     return plan;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

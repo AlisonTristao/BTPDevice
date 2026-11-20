@@ -1,5 +1,5 @@
-#ifndef BTPDEV_TCP_LINK_H
-#define BTPDEV_TCP_LINK_H
+#ifndef TRACEKIT_TCP_LINK_H
+#define TRACEKIT_TCP_LINK_H
 
 // TCP link: a Wi-Fi station (WifiStation) plus a BTP control server on one
 // port, found by TraceView as <name>.local over mDNS. Ported from bally_OS
@@ -31,7 +31,7 @@
 #include "transport/LinkMutex.h"
 #include "transport/WifiStation.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct TcpLinkConfig {
     /// Device name: mDNS instance name, and the hostname (mDNS and DHCP) through
@@ -121,6 +121,6 @@ private:
     std::uint8_t pending_receive_buffer_[kPendingReceiveBufferSize] = {};
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TCP_LINK_H
+#endif  // TRACEKIT_TCP_LINK_H

@@ -8,8 +8,8 @@
 
 namespace {
 
-using btpdev::ParsedTime;
-using btpdev::parse_time_text;
+using tracekit::ParsedTime;
+using tracekit::parse_time_text;
 
 void offsets_and_utc() {
     ParsedTime t;
@@ -50,14 +50,14 @@ void rejects() {
 
 void utc_text() {
     char text[32];
-    btpdev::format_utc(1795107600, text, sizeof(text));
+    tracekit::format_utc(1795107600, text, sizeof(text));
     CHECK_STR_EQ(text, "2026-11-19T17:00:00Z");
-    btpdev::format_utc(0, text, sizeof(text));
+    tracekit::format_utc(0, text, sizeof(text));
     CHECK_STR_EQ(text, "1970-01-01T00:00:00Z");
-    btpdev::format_utc(1835395200 - 1, text, sizeof(text));
+    tracekit::format_utc(1835395200 - 1, text, sizeof(text));
     CHECK_STR_EQ(text, "2028-02-28T23:59:59Z");
-    CHECK(btpdev::days_from_civil(1970, 1, 1) == 0);
-    CHECK(btpdev::days_from_civil(2000, 3, 1) == 11017);
+    CHECK(tracekit::days_from_civil(1970, 1, 1) == 0);
+    CHECK(tracekit::days_from_civil(2000, 3, 1) == 11017);
 }
 
 }  // namespace

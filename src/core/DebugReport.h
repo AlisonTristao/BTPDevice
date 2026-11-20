@@ -1,5 +1,5 @@
-#ifndef BTPDEV_DEBUG_REPORT_H
-#define BTPDEV_DEBUG_REPORT_H
+#ifndef TRACEKIT_DEBUG_REPORT_H
+#define TRACEKIT_DEBUG_REPORT_H
 
 // Text of the serial debug log (DeviceConfig::debug_log) and of `btp -mem`:
 // one line per begin() step, then the heap and the task table. Portable --
@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 struct HeapUsage {
     std::size_t free_bytes = 0U;
@@ -48,6 +48,6 @@ std::size_t format_kb(char* out, std::size_t capacity, std::size_t bytes) noexce
 void write_memory_report(const HeapUsage& heap, const TaskUsage* tasks, std::size_t task_count,
                          ReportLineFn line, void* context) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_DEBUG_REPORT_H
+#endif  // TRACEKIT_DEBUG_REPORT_H

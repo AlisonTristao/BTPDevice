@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr std::uint32_t kRoundConstants[64] = {
@@ -168,4 +168,4 @@ void hmac_sha256(const std::uint8_t* key, std::size_t key_size, const std::uint8
     secure_wipe(inner_digest, sizeof(inner_digest));
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

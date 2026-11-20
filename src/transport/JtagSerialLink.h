@@ -1,5 +1,5 @@
-#ifndef BTPDEV_JTAG_SERIAL_LINK_H
-#define BTPDEV_JTAG_SERIAL_LINK_H
+#ifndef TRACEKIT_JTAG_SERIAL_LINK_H
+#define TRACEKIT_JTAG_SERIAL_LINK_H
 
 // Serial link over the chip's USB-Serial-JTAG port (ESP32-S3, C3, C5, C6,
 // H2, P4...): the USB port esptool flashes through and the console usually
@@ -32,7 +32,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct JtagSerialConfig {
     std::size_t send_queue_bytes = 16384U;
@@ -89,6 +89,6 @@ private:
     std::uint8_t tx_chunk_[256] = {};    // link task only
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_JTAG_SERIAL_LINK_H
+#endif  // TRACEKIT_JTAG_SERIAL_LINK_H

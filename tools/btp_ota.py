@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Talk to a BTPDevice recovery over Wi-Fi (docs/PLANO.md 4.14, D20-D21).
+"""Talk to a TraceKit recovery over Wi-Fi (docs/PLANO.md 4.14, D20-D21).
 
     python tools/btp_ota.py meu-sensor.local --status
     python tools/btp_ota.py meu-sensor.local firmware.bin
@@ -87,7 +87,7 @@ def get_status(args):
         raise SystemExit("%s: /status answered %d: %s" % (args.host, code, text))
     status = json.loads(text)
     if status.get("mode") != "recovery":
-        raise SystemExit("%s is not a BTPDevice recovery (mode %r)" % (args.host, status.get("mode")))
+        raise SystemExit("%s is not a TraceKit recovery (mode %r)" % (args.host, status.get("mode")))
     return status
 
 

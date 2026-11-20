@@ -1,8 +1,8 @@
-#ifndef BTPDEV_DEVICE_KEY_H
-#define BTPDEV_DEVICE_KEY_H
+#ifndef TRACEKIT_DEVICE_KEY_H
+#define TRACEKIT_DEVICE_KEY_H
 
 // The device's two keys (E for TraceView <-> device, L for dongle <-> device;
-// include/btpdev/bally_channels.h), kept in NVS (docs/PLANO.md 4.9, D14).
+// include/tracekit/bally_channels.h), kept in NVS (docs/PLANO.md 4.9, D14).
 //
 // Provisioning: tools/provision_key.py writes the 96-byte key file; the user
 // copies it to the device's file system (LittleFS or SD root). At boot -- or
@@ -15,15 +15,15 @@
 // traced, not even partially. Diagnostics show verify_e / verify_l, which are
 // public by construction.
 
-#include <btpdev/error.h>
-#include <btpdev/filesystem.h>
+#include <tracekit/error.h>
+#include <tracekit/filesystem.h>
 
 #include <cstddef>
 #include <cstdint>
 
 #include "security/KeyStore.h"
 
-namespace btpdev {
+namespace tracekit {
 
 class DeviceKey {
 public:
@@ -31,8 +31,8 @@ public:
     void load_saved() noexcept;
 
     /// Imports `name` from `fs` if the file exists: ESP_OK when imported,
-    /// ESP_ERR_NOT_FOUND when there is no file, BTPDEV_ERR_BAD_KEY (logged,
-    /// with the field) when it is invalid, BTPDEV_ERR_STORAGE when NVS failed.
+    /// ESP_ERR_NOT_FOUND when there is no file, TRACEKIT_ERR_BAD_KEY (logged,
+    /// with the field) when it is invalid, TRACEKIT_ERR_STORAGE when NVS failed.
     /// `activate`: also load it into RAM now. Only at boot -- while running,
     /// the communication task reads the key concurrently, so a new key takes
     /// effect at the next boot.
@@ -53,6 +53,6 @@ private:
     KeyStore store_;
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_DEVICE_KEY_H
+#endif  // TRACEKIT_DEVICE_KEY_H

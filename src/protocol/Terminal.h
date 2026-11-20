@@ -1,5 +1,5 @@
-#ifndef BTPDEV_TERMINAL_H
-#define BTPDEV_TERMINAL_H
+#ifndef TRACEKIT_TERMINAL_H
+#define TRACEKIT_TERMINAL_H
 
 // The BTP terminal (TERMINAL_IN / TERMINAL_OUT, session-and-terminal.md
 // section 7) served to TraceView's terminal widget: line editing runs here, in
@@ -26,7 +26,7 @@
 
 #include <ShellLineEditor.h>
 
-namespace btpdev {
+namespace tracekit {
 
 class Terminal {
 public:
@@ -132,6 +132,6 @@ private:
 /// it failed; truncated past Terminal::kMaxCommandOut with a notice.
 std::string render_command_output(const char* text, std::uint8_t status);
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_TERMINAL_H
+#endif  // TRACEKIT_TERMINAL_H

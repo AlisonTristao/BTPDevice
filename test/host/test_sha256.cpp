@@ -12,19 +12,19 @@ namespace {
 
 std::string hex(const std::uint8_t* data, std::size_t size) {
     char out[2U * 64U + 1U];
-    btpdev::ota::to_hex(data, size, out);
+    tracekit::ota::to_hex(data, size, out);
     return out;
 }
 
 std::string sha(const std::string& text) {
-    std::uint8_t digest[btpdev::Sha256::kDigestSize];
-    btpdev::Sha256::hash(text.data(), text.size(), digest);
+    std::uint8_t digest[tracekit::Sha256::kDigestSize];
+    tracekit::Sha256::hash(text.data(), text.size(), digest);
     return hex(digest, sizeof(digest));
 }
 
 std::string hmac(const std::string& key, const std::string& message) {
-    std::uint8_t digest[btpdev::Sha256::kDigestSize];
-    btpdev::hmac_sha256(reinterpret_cast<const std::uint8_t*>(key.data()), key.size(),
+    std::uint8_t digest[tracekit::Sha256::kDigestSize];
+    tracekit::hmac_sha256(reinterpret_cast<const std::uint8_t*>(key.data()), key.size(),
                         reinterpret_cast<const std::uint8_t*>(message.data()), message.size(), digest);
     return hex(digest, sizeof(digest));
 }
@@ -39,7 +39,7 @@ void fips_vectors() {
 void streaming_matches_one_shot_whatever_the_chunking() {
     // One million 'a' (FIPS 180-2 B.3), fed in uneven chunks the way the
     // recovery feeds an HTTP body.
-    btpdev::Sha256 sha256;
+    tracekit::Sha256 sha256;
     const std::string chunk(997U, 'a');
     std::size_t left = 1000000U;
     while (left != 0U) {
@@ -47,18 +47,18 @@ void streaming_matches_one_shot_whatever_the_chunking() {
         sha256.update(chunk.data(), take);
         left -= take;
     }
-    std::uint8_t digest[btpdev::Sha256::kDigestSize];
+    std::uint8_t digest[tracekit::Sha256::kDigestSize];
     sha256.finish(digest);
     CHECK(hex(digest, sizeof(digest)) == "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0");
 
     // Lengths around the padding boundary (55, 56, 63, 64 octets).
     for (std::size_t n : {55U, 56U, 63U, 64U, 65U}) {
         const std::string text(n, 'x');
-        btpdev::Sha256 a;
+        tracekit::Sha256 a;
         for (char c : text) a.update(&c, 1U);
         std::uint8_t one[32], two[32];
         a.finish(one);
-        btpdev::Sha256::hash(text.data(), text.size(), two);
+        tracekit::Sha256::hash(text.data(), text.size(), two);
         CHECK(std::memcmp(one, two, 32U) == 0);
     }
 }

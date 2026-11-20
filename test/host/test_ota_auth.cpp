@@ -17,7 +17,7 @@
 
 namespace {
 
-using namespace btpdev::ota;
+using namespace tracekit::ota;
 
 constexpr char kImageSha[] = "3f5a0b3dfe39f2714a5b2c004faa882dd9a768296bb1bca2d47435894341d11f";
 constexpr char kUpdateMac[] = "6ef143d06ec211459855a0c6588c7ef795799e78d6d002265e82dbf38c89fc8e";
@@ -32,7 +32,7 @@ struct Fixture {
         for (std::size_t i = 0U; i < sizeof(nonce); ++i) nonce[i] = static_cast<std::uint8_t>(0xA0U + i);
         std::string image;
         for (int i = 0; i < 100; ++i) image += "firmware image bytes";
-        btpdev::Sha256::hash(image.data(), image.size(), sha);
+        tracekit::Sha256::hash(image.data(), image.size(), sha);
     }
 };
 

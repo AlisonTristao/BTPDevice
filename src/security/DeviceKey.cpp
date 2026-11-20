@@ -8,11 +8,11 @@
 
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kKey;
-constexpr const char* kNamespace = "btpdev";
+constexpr const char* kNamespace = "btpdev";  // the old name, kept: devices in the field have data there
 constexpr const char* kBlob = "keyfile";
 
 // The buffers below hold both keys in the clear: overwrite them before they
@@ -66,7 +66,7 @@ esp_err_t DeviceKey::import_file(FileSystem& fs, const char* name, ErrorInfo& er
                            : parsed == KeyStore::Error::VerifyL ? "wrong password L"
                            : parsed == KeyStore::Error::Crc32   ? "the file is corrupted"
                                                                 : "not a key file from tools/provision_key.py";
-        return fail(error, BTPDEV_ERR_BAD_KEY, kTag, "%s%s rejected (%s: %s); the key in use did not change",
+        return fail(error, TRACEKIT_ERR_BAD_KEY, kTag, "%s%s rejected (%s: %s); the key in use did not change",
                     fs.root(), name, KeyStore::error_field(parsed), hint);
     }
 
@@ -77,7 +77,7 @@ esp_err_t DeviceKey::import_file(FileSystem& fs, const char* name, ErrorInfo& er
     if (handle != 0) nvs_close(handle);
     if (err != ESP_OK) {
         wipe(image, sizeof(image));
-        return fail(error, BTPDEV_ERR_STORAGE, kTag, "could not save the key in NVS (%s)", esp_err_to_name(err));
+        return fail(error, TRACEKIT_ERR_STORAGE, kTag, "could not save the key in NVS (%s)", esp_err_to_name(err));
     }
     if (activate) store_.load(image, KeyStore::kFileSize);
     wipe(image, sizeof(image));
@@ -121,4 +121,4 @@ void DeviceKey::describe(char* out, std::size_t capacity) const noexcept {
     std::snprintf(out, capacity, "verify_e %s, verify_l %s", e, l);
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

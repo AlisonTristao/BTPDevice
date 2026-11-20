@@ -1,5 +1,5 @@
-#ifndef BTPDEV_OTA_AUTH_H
-#define BTPDEV_OTA_AUTH_H
+#ifndef TRACEKIT_OTA_AUTH_H
+#define TRACEKIT_OTA_AUTH_H
 
 // Authentication of the recovery's HTTP requests (docs/PLANO.md D21, 4.14).
 //
@@ -17,7 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace btpdev::ota {
+namespace tracekit::ota {
 
 constexpr char kLabel[] = "btp-ota-1";
 constexpr std::size_t kLabelSize = sizeof(kLabel) - 1U;  // no NUL
@@ -45,6 +45,6 @@ void to_hex(const std::uint8_t* data, std::size_t size, char* out) noexcept;
 /// Exactly 2 * size hex digits (either case), nothing else. False otherwise.
 bool from_hex(const char* text, std::uint8_t* out, std::size_t size) noexcept;
 
-}  // namespace btpdev::ota
+}  // namespace tracekit::ota
 
-#endif  // BTPDEV_OTA_AUTH_H
+#endif  // TRACEKIT_OTA_AUTH_H

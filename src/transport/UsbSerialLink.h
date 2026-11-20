@@ -1,5 +1,5 @@
-#ifndef BTPDEV_USB_SERIAL_LINK_H
-#define BTPDEV_USB_SERIAL_LINK_H
+#ifndef TRACEKIT_USB_SERIAL_LINK_H
+#define TRACEKIT_USB_SERIAL_LINK_H
 
 // Serial link over the chip's native USB (TinyUSB CDC-ACM): ESP32-S2/S3/P4.
 // Ported from bally_OS lib/UsbSerialBtpServer, with three changes: the queue
@@ -14,7 +14,7 @@
 // second-session rejection here.
 //
 // Needs CONFIG_TINYUSB_CDC_ENABLED (esp_tinyusb menu). Without it -- or on a
-// chip without USB OTG -- start() reports BTPDEV_ERR_LINK_UNSUPPORTED.
+// chip without USB OTG -- start() reports TRACEKIT_ERR_LINK_UNSUPPORTED.
 
 #include <atomic>
 #include <cstddef>
@@ -25,7 +25,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
-namespace btpdev {
+namespace tracekit {
 
 struct UsbSerialConfig {
     /// Device name: USB product string and CDC interface string. Must stay
@@ -79,6 +79,6 @@ private:
     std::uint8_t rx_buffer_[512] = {};   // one tinyusb_cdcacm_read() chunk
 };
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_USB_SERIAL_LINK_H
+#endif  // TRACEKIT_USB_SERIAL_LINK_H

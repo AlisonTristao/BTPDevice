@@ -6,13 +6,13 @@
 
 #include "core/LogTags.h"
 
-#if CONFIG_BTPDEV_LINK_BLE && CONFIG_BT_NIMBLE_ENABLED
-#define BTPDEV_HAS_BLE 1
+#if CONFIG_TRACEKIT_LINK_BLE && CONFIG_BT_NIMBLE_ENABLED
+#define TRACEKIT_HAS_BLE 1
 #else
-#define BTPDEV_HAS_BLE 0
+#define TRACEKIT_HAS_BLE 0
 #endif
 
-#if BTPDEV_HAS_BLE
+#if TRACEKIT_HAS_BLE
 #include <esp_log.h>
 
 #include "host/ble_gap.h"
@@ -28,12 +28,12 @@
 #include "services/gatt/ble_svc_gatt.h"
 #endif
 
-namespace btpdev {
+namespace tracekit {
 
 BleLink::BleLink(const BleLinkConfig& config) noexcept : config_(config) {
     const char* name = config.device_name != nullptr && config.device_name[0] != '\0'
                            ? config.device_name
-                           : "BTPDevice";
+                           : "TraceKit";
     std::size_t length = std::strlen(name);
     if (length > kMaxNameLength) {
         length = kMaxNameLength;
@@ -44,7 +44,7 @@ BleLink::BleLink(const BleLinkConfig& config) noexcept : config_(config) {
     device_name_[length] = '\0';
 }
 
-#if BTPDEV_HAS_BLE
+#if TRACEKIT_HAS_BLE
 
 namespace {
 
@@ -134,7 +134,7 @@ esp_err_t BleLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     }
     if (!mutex_.create()) return fail(error, ESP_ERR_NO_MEM, kTag, "no memory for the BLE link mutex");
     if (!queue_storage_.allocate(config_.send_queue_bytes)) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the BLE send queue (%u bytes)",
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the BLE send queue (%u bytes)",
                     static_cast<unsigned>(config_.send_queue_bytes));
     }
     queue_.bind(queue_storage_.data(), queue_storage_.size(), queue_storage_.size() / 4U);
@@ -145,7 +145,7 @@ esp_err_t BleLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     if (err != ESP_OK) {
         g_link = nullptr;
         queue_storage_.reset();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag,
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag,
                     "nimble_port_init() failed (%s): usually not enough internal RAM for the "
                     "Bluetooth controller",
                     esp_err_to_name(err));
@@ -164,7 +164,7 @@ esp_err_t BleLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
         nimble_port_deinit();
         g_link = nullptr;
         queue_storage_.reset();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "could not register the BTP GATT service (rc %d)", rc);
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "could not register the BTP GATT service (rc %d)", rc);
     }
     ble_svc_gap_device_name_set(device_name_);
 
@@ -373,15 +373,15 @@ void BleLink::drain() noexcept {
     }
 }
 
-#else  // !BTPDEV_HAS_BLE
+#else  // !TRACEKIT_HAS_BLE
 
 BleLink::~BleLink() = default;
 esp_err_t BleLink::start(const LinkEvents&, ErrorInfo& error) noexcept {
-#if !CONFIG_BTPDEV_LINK_BLE
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kBle,
-                "the BLE link is disabled in menuconfig (BTPDevice > Links)");
+#if !CONFIG_TRACEKIT_LINK_BLE
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kBle,
+                "the BLE link is disabled in menuconfig (TraceKit > Links)");
 #else
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kBle,
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kBle,
                 "Bluetooth is off: enable Component config > Bluetooth with the NimBLE host");
 #endif
 }
@@ -395,7 +395,7 @@ int BleLink::on_rx_write(std::uint16_t, const std::uint8_t*, std::size_t) noexce
 void BleLink::drain() noexcept {}
 void BleLink::start_advertising() noexcept {}
 
-#endif  // BTPDEV_HAS_BLE
+#endif  // TRACEKIT_HAS_BLE
 
 LinkStats BleLink::stats() const noexcept {
     LinkStats s;
@@ -406,4 +406,4 @@ LinkStats BleLink::stats() const noexcept {
     return s;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

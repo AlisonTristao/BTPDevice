@@ -1,5 +1,5 @@
-#ifndef BTPDEV_DOWNLOAD_MODE_H
-#define BTPDEV_DOWNLOAD_MODE_H
+#ifndef TRACEKIT_DOWNLOAD_MODE_H
+#define TRACEKIT_DOWNLOAD_MODE_H
 
 // `btp -bootloader`: restart into the ROM's download mode, the state the BOOT
 // button gives, so a USB flash (`pio run -t upload`, esptool) works without
@@ -15,7 +15,7 @@
 
 #include <esp_err.h>
 
-namespace btpdev {
+namespace tracekit {
 
 /// Seconds the ROM waits for esptool before the board boots normally again.
 constexpr std::uint32_t kDownloadModeTimeoutS = 30U;
@@ -28,6 +28,6 @@ bool download_mode_supported() noexcept;
 /// command's reply can leave first). ESP_ERR_NOT_SUPPORTED on other chips.
 esp_err_t enter_download_mode(std::uint32_t delay_ms) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_DOWNLOAD_MODE_H
+#endif  // TRACEKIT_DOWNLOAD_MODE_H

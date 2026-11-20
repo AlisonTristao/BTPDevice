@@ -1,8 +1,8 @@
-# PlatformIO extra script: flash the BTPDevice recovery firmware into the
+# PlatformIO extra script: flash the TraceKit recovery firmware into the
 # `ota_0` partition together with the application (docs/PLANO.md 4.14, D26).
 #
 #   [env:esp32-s3]
-#   board_build.partitions = <one of partitions/btpdev_<size>.csv>
+#   board_build.partitions = <one of partitions/tracekit_<size>.csv>
 #   extra_scripts = post:<path to>/tools/pio_recovery.py
 #
 # `pio run -t upload` then also writes the recovery, building recovery/ for
@@ -20,9 +20,9 @@ import subprocess
 Import("env")  # noqa: F821  (SCons)
 
 def _library_root():
-    """The BTPDevice checkout this script belongs to."""
-    if os.environ.get("BTPDEV_ROOT"):
-        return os.path.abspath(os.environ["BTPDEV_ROOT"])
+    """The TraceKit checkout this script belongs to."""
+    if os.environ.get("TRACEKIT_ROOT"):
+        return os.path.abspath(os.environ["TRACEKIT_ROOT"])
     try:
         here = inspect.getframeinfo(inspect.currentframe()).filename
         root = os.path.dirname(os.path.dirname(os.path.abspath(here)))
@@ -37,7 +37,7 @@ def _library_root():
             return directory
         parent = os.path.dirname(directory)
         if parent == directory:
-            raise SystemExit("pio_recovery.py: BTPDevice not found; set BTPDEV_ROOT")
+            raise SystemExit("pio_recovery.py: TraceKit not found; set TRACEKIT_ROOT")
         directory = parent
 
 
@@ -53,7 +53,7 @@ def _recovery_offset(table):
             return int(fields[3], 0), int(fields[4], 0)
     raise SystemExit(
         "pio_recovery.py: %s has no app/ota_0 partition for the recovery. "
-        "Use one of partitions/btpdev_<size>.csv." % table)
+        "Use one of partitions/tracekit_<size>.csv." % table)
 
 
 def _newest(paths):
@@ -89,15 +89,15 @@ SOURCES = [
 def build_recovery(*_args, **_kwargs):
     stale = not os.path.isfile(RECOVERY_BIN) or os.path.getmtime(RECOVERY_BIN) < _newest(SOURCES)
     if stale:
-        print("BTPDevice recovery: building recovery/ for %s (once per change)" % MCU)
+        print("TraceKit recovery: building recovery/ for %s (once per change)" % MCU)
         python = env.subst("$PYTHONEXE")  # noqa: F821
         result = subprocess.call([python, "-m", "platformio", "run", "-d", RECOVERY_DIR, "-e", MCU])
         if result != 0 or not os.path.isfile(RECOVERY_BIN):
-            raise SystemExit("BTPDevice recovery: the build failed (pio run -d %s -e %s)" % (RECOVERY_DIR, MCU))
+            raise SystemExit("TraceKit recovery: the build failed (pio run -d %s -e %s)" % (RECOVERY_DIR, MCU))
     size = os.path.getsize(RECOVERY_BIN)
     if size > SIZE:
-        raise SystemExit("BTPDevice recovery: %d bytes, over the %d-byte ota_0 partition" % (size, SIZE))
-    print("BTPDevice recovery: %s, %d KB of %d KB, at 0x%x" % (MCU, size // 1024, SIZE // 1024, OFFSET))
+        raise SystemExit("TraceKit recovery: %d bytes, over the %d-byte ota_0 partition" % (size, SIZE))
+    print("TraceKit recovery: %s, %d KB of %d KB, at 0x%x" % (MCU, size // 1024, SIZE // 1024, OFFSET))
     return 0
 
 
@@ -119,6 +119,6 @@ env.AddCustomTarget(  # noqa: F821
         '"$PYTHONEXE" "$UPLOADER" --chip %s --port "$UPLOAD_PORT" --baud $UPLOAD_SPEED write_flash -z 0x%x "%s"'
         % (MCU, OFFSET, RECOVERY_BIN),
     ],
-    title="BTPDevice recovery",
+    title="TraceKit recovery",
     description="Build recovery/ for this chip and flash it into ota_0",
 )

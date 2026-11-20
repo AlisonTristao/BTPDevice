@@ -11,7 +11,7 @@
 #include <btp/codec.hpp>
 
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 // Field offsets of the layout documented in KeyStore.h. Named rather than
@@ -190,4 +190,4 @@ const std::uint8_t* KeyStore::verify_l() const noexcept {
     return loaded_ ? contents_.verify_l : nullptr;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

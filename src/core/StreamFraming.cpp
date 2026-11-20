@@ -1,6 +1,6 @@
 #include "core/StreamFraming.h"
 
-namespace btpdev {
+namespace tracekit {
 
 std::size_t stream_encoded_capacity(std::size_t frame_size) noexcept {
     std::size_t encoded = 0U;
@@ -56,4 +56,4 @@ void StreamDecoder::reset() noexcept {
     if (decoder_ != nullptr) decoder_->reset();
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

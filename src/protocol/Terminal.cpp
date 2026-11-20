@@ -6,7 +6,7 @@
 
 #include <ShellStyle.h>
 
-namespace btpdev {
+namespace tracekit {
 
 std::string render_command_output(const char* text, std::uint8_t status) {
     const std::string input = text != nullptr ? text : "";
@@ -231,4 +231,4 @@ void Terminal::emit(const std::string& bytes) {
     }
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

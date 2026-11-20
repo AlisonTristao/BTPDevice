@@ -1,4 +1,4 @@
-#include <btpdev/identity.h>
+#include <tracekit/identity.h>
 
 #include <esp_log.h>
 #include <esp_mac.h>
@@ -11,11 +11,11 @@
 #include "core/Identity.h"
 #include "core/LogTags.h"
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 constexpr const char* kTag = tag::kCore;
-constexpr const char* kNvsNamespace = "btpdev";
+constexpr const char* kNvsNamespace = "btpdev";  // the old name, kept: devices in the field have data there
 constexpr std::uint32_t kRtcMagic = 0xB7D0B007U;
 
 // The boot_id block reserved by the last cold boot (Identity.h, D31): kept
@@ -74,4 +74,4 @@ const Identity& identity() noexcept {
     return id;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

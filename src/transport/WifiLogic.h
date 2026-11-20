@@ -1,5 +1,5 @@
-#ifndef BTPDEV_WIFI_LOGIC_H
-#define BTPDEV_WIFI_LOGIC_H
+#ifndef TRACEKIT_WIFI_LOGIC_H
+#define TRACEKIT_WIFI_LOGIC_H
 
 // The Wi-Fi station's decisions, separated from the ESP-IDF calls that carry
 // them out (WifiStation.cpp) so every path -- including the ones that are
@@ -23,7 +23,7 @@
 
 #include "transport/WifiNetworks.h"
 
-namespace btpdev {
+namespace tracekit {
 
 class WifiLogic {
 public:
@@ -109,6 +109,6 @@ private:
 const char* wifi_state_name(WifiLogic::State state) noexcept;
 const char* wifi_failure_name(WifiLogic::Failure failure) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_WIFI_LOGIC_H
+#endif  // TRACEKIT_WIFI_LOGIC_H

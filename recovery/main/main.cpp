@@ -1,4 +1,4 @@
-// BTPDevice recovery firmware (docs/PLANO.md D19-D26, section 4.14).
+// TraceKit recovery firmware (docs/PLANO.md D19-D26, section 4.14).
 //
 // Lives in the `ota_0` partition and runs only when the application pointed
 // the otadata at it (`btp -recovery`, the crash-loop detector, a factory
@@ -37,7 +37,7 @@
 #include <nvs_flash.h>
 #include <sdkconfig.h>
 
-#ifdef CONFIG_BTPDEV_RECOVERY_AP
+#ifdef CONFIG_TRACEKIT_RECOVERY_AP
 #include <dhcpserver/dhcpserver.h>
 #endif
 
@@ -47,8 +47,8 @@
 #include "update/OtaAuth.h"
 #include "update/RecoveryContract.h"
 
-namespace rec = btpdev::recovery;
-namespace ota = btpdev::ota;
+namespace rec = tracekit::recovery;
+namespace ota = tracekit::ota;
 
 namespace {
 
@@ -56,14 +56,14 @@ const char* version() { return esp_app_get_description()->version; }
 
 constexpr const char* TAG = "recovery";
 
-#ifdef CONFIG_BTPDEV_RECOVERY_INSECURE
+#ifdef CONFIG_TRACEKIT_RECOVERY_INSECURE
 constexpr bool kInsecure = true;
 #else
 constexpr bool kInsecure = false;
 #endif
 
 constexpr std::int64_t kReturnTimeoutUs =
-    static_cast<std::int64_t>(CONFIG_BTPDEV_RECOVERY_TIMEOUT_MIN) * 60LL * 1000000LL;
+    static_cast<std::int64_t>(CONFIG_TRACEKIT_RECOVERY_TIMEOUT_MIN) * 60LL * 1000000LL;
 constexpr std::size_t kChunk = 4096U;
 constexpr std::size_t kEraseBlock = 64U * 1024U;
 
@@ -80,12 +80,12 @@ constexpr EventBits_t kDisconnected = BIT1;
 // ---------------------------------------------------------------------------
 
 struct State {
-    char name[btpdev::recovery::WifiBlob::kSsid] = "btpdev";
-    char host[64] = "btpdev";
+    char name[tracekit::recovery::WifiBlob::kSsid] = "tracekit";
+    char host[64] = "tracekit";
     rec::Reason reason = rec::Reason::None;
     bool nvs_ok = false;
     bool has_key = false;
-    std::uint8_t key_e[btpdev::KeyStore::kKeyLength] = {};
+    std::uint8_t key_e[tracekit::KeyStore::kKeyLength] = {};
     rec::WifiBlob wifi = {};
     const esp_partition_t* app = nullptr;
     bool app_valid = false;
@@ -156,25 +156,25 @@ void load_contract() {
         std::memset(&g.wifi, 0, sizeof(g.wifi));
     }
     nvs_close(h);
-    if (!btpdev::mdns_host_from_name(g.name, g.host, sizeof(g.host))) std::snprintf(g.host, sizeof(g.host), "btpdev");
+    if (!tracekit::mdns_host_from_name(g.name, g.host, sizeof(g.host))) std::snprintf(g.host, sizeof(g.host), "tracekit");
 }
 
 void load_key() {
     nvs_handle_t h = 0;
     if (nvs_open(rec::kKeyNamespace, NVS_READONLY, &h) != ESP_OK) return;
-    std::uint8_t image[btpdev::KeyStore::kFileSize];
+    std::uint8_t image[tracekit::KeyStore::kFileSize];
     std::size_t size = sizeof(image);
     const esp_err_t err = nvs_get_blob(h, rec::kKeyBlob, image, &size);
     nvs_close(h);
     if (err != ESP_OK) return;
-    btpdev::KeyStore store;
+    tracekit::KeyStore store;
     if (size == sizeof(image) && store.load(image, size)) {
         std::memcpy(g.key_e, store.key_e(), sizeof(g.key_e));
         g.has_key = true;
     } else {
         ESP_LOGE(TAG, "the key in NVS is damaged: uploads refused (provision it again)");
     }
-    btpdev::secure_wipe(image, sizeof(image));
+    tracekit::secure_wipe(image, sizeof(image));
     store.unload();
 }
 
@@ -208,7 +208,7 @@ void factory_reset(bool all) {
         nvs_flash_erase();
         g.nvs_ok = nvs_flash_init() == ESP_OK;
         g.has_key = false;
-        btpdev::secure_wipe(g.key_e, sizeof(g.key_e));
+        tracekit::secure_wipe(g.key_e, sizeof(g.key_e));
         std::memset(&g.wifi, 0, sizeof(g.wifi));
         ESP_LOGW(TAG, "NVS erased: no key and no Wi-Fi any more. Flash a firmware over USB.");
     }
@@ -243,7 +243,7 @@ void start_wifi() {
     esp_event_loop_create_default();
     esp_netif_t* netif = esp_netif_create_default_wifi_sta();
     esp_netif_set_hostname(netif, g.host);
-#ifdef CONFIG_BTPDEV_RECOVERY_AP
+#ifdef CONFIG_TRACEKIT_RECOVERY_AP
     g.ap = esp_netif_create_default_wifi_ap();
 #endif
     wifi_init_config_t init = WIFI_INIT_CONFIG_DEFAULT();
@@ -262,10 +262,10 @@ void start_wifi() {
 }
 
 // ---------------------------------------------------------------------------
-// Own network (CONFIG_BTPDEV_RECOVERY_AP) and its captive-portal DNS
+// Own network (CONFIG_TRACEKIT_RECOVERY_AP) and its captive-portal DNS
 // ---------------------------------------------------------------------------
 
-#ifdef CONFIG_BTPDEV_RECOVERY_AP
+#ifdef CONFIG_TRACEKIT_RECOVERY_AP
 // Answers every A query with the access point's address, so a phone that
 // joins the network finds "no internet" behind a portal and opens the page.
 void dns_task(void*) {
@@ -319,14 +319,14 @@ void start_ap() {
     config.ap.ssid_len = static_cast<std::uint8_t>(ssid_len);
     config.ap.channel = 1;
     config.ap.max_connection = 2;
-    const char* password = CONFIG_BTPDEV_RECOVERY_AP_PASSWORD;
+    const char* password = CONFIG_TRACEKIT_RECOVERY_AP_PASSWORD;
     const std::size_t password_len = std::strlen(password);
     if (password_len >= 8U && password_len < sizeof(config.ap.password)) {
         std::memcpy(config.ap.password, password, password_len);
         config.ap.authmode = WIFI_AUTH_WPA2_PSK;
     } else {
         if (password_len != 0U) {
-            ESP_LOGW(TAG, "CONFIG_BTPDEV_RECOVERY_AP_PASSWORD needs 8 to 63 characters: network left open");
+            ESP_LOGW(TAG, "CONFIG_TRACEKIT_RECOVERY_AP_PASSWORD needs 8 to 63 characters: network left open");
         }
         config.ap.authmode = WIFI_AUTH_OPEN;
     }
@@ -363,7 +363,7 @@ std::size_t ap_clients() {
 // them. Runs forever on its own task.
 void wifi_task(void*) {
     if (g.wifi.count == 0U) {
-#ifdef CONFIG_BTPDEV_RECOVERY_AP
+#ifdef CONFIG_TRACEKIT_RECOVERY_AP
         ESP_LOGW(TAG, "no Wi-Fi network known (the application never mirrored one)");
         start_ap();
 #else
@@ -404,7 +404,7 @@ void wifi_task(void*) {
             vTaskDelay(pdMS_TO_TICKS(1000));
             continue;
         }
-#ifdef CONFIG_BTPDEV_RECOVERY_AP
+#ifdef CONFIG_TRACEKIT_RECOVERY_AP
         start_ap();
         // Retry the known networks every 30 s, but not while someone uses ours.
         for (int i = 0; i < 30 || ap_clients() > 0U; ++i) vTaskDelay(pdMS_TO_TICKS(1000));
@@ -479,7 +479,7 @@ const char* authorize(httpd_req_t* req, ota::Action action, const std::uint8_t* 
     if (!g.has_key) {
         return kInsecure ? nullptr
                          : "no device key in NVS: provision it (tools/provision_key.py) and boot the application "
-                           "once, or build the recovery with CONFIG_BTPDEV_RECOVERY_INSECURE for a bench";
+                           "once, or build the recovery with CONFIG_TRACEKIT_RECOVERY_INSECURE for a bench";
     }
     char text[2U * ota::kMacSize + 1U] = "";
     std::uint8_t mac[ota::kMacSize];
@@ -524,7 +524,7 @@ esp_err_t handle_update(httpd_req_t* req) {
     }
 
     static std::uint8_t buffer[kChunk];
-    btpdev::Sha256 sha;
+    tracekit::Sha256 sha;
     std::size_t received = 0U;
     std::size_t erased = 0U;
     unsigned last_tenth = 0U;
@@ -586,7 +586,7 @@ esp_err_t handle_update(httpd_req_t* req) {
     if (failure == nullptr) {
         std::uint8_t digest[ota::kHashSize];
         sha.finish(digest);
-        if (has_claim && !btpdev::equal_bytes(digest, claimed, sizeof(digest))) {
+        if (has_claim && !tracekit::equal_bytes(digest, claimed, sizeof(digest))) {
             failure = "SHA-256 of the received image does not match X-OTA-SHA256";
             status = "400 Bad Request";
         } else if (esp_ota_set_boot_partition(g.app) != ESP_OK) {
@@ -685,10 +685,10 @@ extern "C" void app_main() {
         factory_reset(g.reason == rec::Reason::FactoryResetAll);
     }
     check_app();
-    ESP_LOGI(TAG, "BTPDevice recovery %s on \"%s\" (%s), reason %s, key %s, app %s %s", version(), g.name,
+    ESP_LOGI(TAG, "TraceKit recovery %s on \"%s\" (%s), reason %s, key %s, app %s %s", version(), g.name,
              CONFIG_IDF_TARGET, rec::reason_name(g.reason), g.has_key ? "loaded" : (kInsecure ? "none (INSECURE)" : "none"),
              g.app_valid ? g.app_desc.project_name : "none", g.app_valid ? g.app_desc.version : "");
-    if (kInsecure) ESP_LOGW(TAG, "CONFIG_BTPDEV_RECOVERY_INSECURE: anyone on the network can flash this device");
+    if (kInsecure) ESP_LOGW(TAG, "CONFIG_TRACEKIT_RECOVERY_INSECURE: anyone on the network can flash this device");
 
     start_wifi();
     start_http();
@@ -707,7 +707,7 @@ extern "C" void app_main() {
             due = g.app_valid && !g.busy && esp_timer_get_time() - g.last_activity_us > kReturnTimeoutUs;
         }
         if (due) {
-            ESP_LOGI(TAG, "no upload in %d min: back to the application", CONFIG_BTPDEV_RECOVERY_TIMEOUT_MIN);
+            ESP_LOGI(TAG, "no upload in %d min: back to the application", CONFIG_TRACEKIT_RECOVERY_TIMEOUT_MIN);
             if (boot_app()) esp_restart();
             Lock lock;
             g.last_activity_us = esp_timer_get_time();

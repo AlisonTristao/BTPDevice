@@ -15,7 +15,7 @@ menu "Link echo"
 
     config ECHO_DEVICE_NAME
         string "Device name (USB, BLE, mDNS)"
-        default "btpdev-echo"
+        default "tracekit-echo"
 
     config ECHO_WIFI_SSID
         string "Wi-Fi SSID (TCP)"

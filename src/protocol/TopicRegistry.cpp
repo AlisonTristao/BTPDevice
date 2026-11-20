@@ -8,7 +8,7 @@
 #include <new>
 #include <utility>
 
-namespace btpdev {
+namespace tracekit {
 
 // ---- Sample / Text / Topics (the public declaration types) -----------------
 
@@ -110,7 +110,7 @@ TopicDecl& Topics::stream(const char* name, std::uint16_t max_samples, const cha
 
 namespace {
 
-constexpr const char* kTag = "btpdev.topic";
+constexpr const char* kTag = "tracekit.topic";
 
 bool empty_name(const char* name) { return name == nullptr || name[0] == '\0'; }
 
@@ -142,9 +142,9 @@ std::uint64_t get_le64(const std::uint8_t* in) noexcept {
 // fold every catalogue helper into install()'s frame: each one gets its own
 // frame instead, released before the next.
 #if defined(__GNUC__)
-#define BTPDEV_NOINLINE __attribute__((noinline))
+#define TRACEKIT_NOINLINE __attribute__((noinline))
 #else
-#define BTPDEV_NOINLINE
+#define TRACEKIT_NOINLINE
 #endif
 
 btp::FieldRecord field_record(const FieldDecl& field) {
@@ -173,7 +173,7 @@ btp::FieldRecord field_record(const FieldDecl& field) {
 // begin() runs on the caller's stack -- app_main's is 3.5 KB by default. The
 // overflow went past the stack into the heap block next to it (an assert in
 // the allocator much later, on the first malloc that walked over it).
-BTPDEV_NOINLINE btp::MessageError add_field_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
+TRACEKIT_NOINLINE btp::MessageError add_field_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
                                                   std::uint16_t version, btp::TelemetryEncoding encoding,
                                                   std::uint32_t rate_millihz,
                                                   const std::vector<FieldDecl>& fields) {
@@ -185,7 +185,7 @@ BTPDEV_NOINLINE btp::MessageError add_field_topic(btp::Catalog& catalog, std::ui
                              fields.size(), /*min_rate_millihz=*/0U, /*default_rate_millihz=*/rate_millihz);
 }
 
-BTPDEV_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
+TRACEKIT_NOINLINE btp::MessageError add_stream_topic(btp::Catalog& catalog, std::uint16_t id, const char* name,
                                                    std::uint16_t version, const FieldDecl& seq,
                                                    const FieldDecl& rate, const FieldDecl& samples) {
     btp::FieldRecord fields[3] = {btp::u32(seq.name), btp::u32(rate.name, 1.0, rate.unit),
@@ -212,7 +212,7 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
     std::vector<TopicDecl>& list = topics_.topics_;
 
     if (list.size() > max_topics) {
-        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+        return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                     "%u topics declared, the memory preset holds %u: use a larger preset "
                     "(DeviceConfig::memory)",
                     static_cast<unsigned>(list.size()), static_cast<unsigned>(max_topics));
@@ -221,15 +221,15 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
     for (std::size_t i = 0U; i < list.size(); ++i) {
         TopicDecl& t = list[i];
         if (empty_name(t.name_)) {
-            return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic #%u has no name", static_cast<unsigned>(i + 1U));
+            return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topic #%u has no name", static_cast<unsigned>(i + 1U));
         }
         if (t.id_ == 0U) t.id_ = static_cast<std::uint16_t>(Topics::kFirstTopicId + i);
         for (std::size_t j = 0U; j < i; ++j) {
             if (std::strcmp(list[j].name_, t.name_) == 0) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\" is declared twice", t.name_);
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topic \"%s\" is declared twice", t.name_);
             }
             if (list[j].id_ == t.id_) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topics \"%s\" and \"%s\" have the same id 0x%04x",
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topics \"%s\" and \"%s\" have the same id 0x%04x",
                             list[j].name_, t.name_, static_cast<unsigned>(t.id_));
             }
         }
@@ -240,21 +240,21 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
         }
         if (t.is_text_) {
             if (!t.fields_.empty()) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "text topic \"%s\" cannot have fields", t.name_);
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "text topic \"%s\" cannot have fields", t.name_);
             }
             if (!t.text_) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "text topic \"%s\" has no text function", t.name_);
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "text topic \"%s\" has no text function", t.name_);
             }
         } else if (t.is_bytes_) {
             if (!t.fields_.empty() || t.fill_) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "bytes topic \"%s\" cannot have fields", t.name_);
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "bytes topic \"%s\" cannot have fields", t.name_);
             }
             if (!t.bytes_) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "bytes topic \"%s\" has no function", t.name_);
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "bytes topic \"%s\" has no function", t.name_);
             }
             const std::size_t payload = kBytesHead + t.bytes_max_;
             if (t.bytes_max_ == 0U || payload > max_message_payload) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                             "bytes topic \"%s\": max_size must be 1..%u for this memory preset (use a "
                             "larger preset for more)",
                             t.name_, static_cast<unsigned>(max_message_payload - kBytesHead));
@@ -262,27 +262,27 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
             if (payload > bytes_capacity_) bytes_capacity_ = payload;
         } else {
             if (t.fields_.empty()) {
-                return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\" has no fields", t.name_);
+                return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topic \"%s\" has no fields", t.name_);
             }
             for (std::size_t f = 0U; f < t.fields_.size(); ++f) {
                 const FieldDecl& field = t.fields_[f];
                 if (empty_name(field.name)) {
-                    return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\": field #%u has no name",
+                    return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topic \"%s\": field #%u has no name",
                                 t.name_, static_cast<unsigned>(f + 1U));
                 }
                 for (std::size_t g = 0U; g < f; ++g) {
                     if (std::strcmp(t.fields_[g].name, field.name) == 0) {
-                        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\": field \"%s\" is declared twice",
+                        return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topic \"%s\": field \"%s\" is declared twice",
                                     t.name_, field.name);
                     }
                 }
                 if (!t.fill_ && field.variable == nullptr) {
-                    return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                    return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                                 "topic \"%s\": field \"%s\" has no variable and the topic has no .fill()",
                                 t.name_, field.name);
                 }
                 if (t.fill_ && field.variable != nullptr) {
-                    return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+                    return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                                 "topic \"%s\": field \"%s\" is bound to a variable but the topic uses "
                                 ".fill(): use one or the other",
                                 t.name_, field.name);
@@ -296,19 +296,19 @@ esp_err_t TopicRegistry::install(Topics& topics, btp::Node& node, btp::Catalog& 
         const btp::MessageError added =
             add_field_topic(catalog, t.id_, t.name_, t.version_, encoding, t.rate_.millihz, t.fields_);
         if (added != btp::MessageError::Ok) {
-            return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+            return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                         "topic \"%s\" does not fit the catalogue (%s): too many fields or names for "
                         "the memory preset, or more than 32 fields in one topic",
                         t.name_, btp::message_error_string(added));
         }
         if (!body_only(t) && !node.on_publish(t.id_, &TopicRegistry::fill_fields, &t)) {
-            return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "topic \"%s\": the publish registry is full", t.name_);
+            return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "topic \"%s\": the publish registry is full", t.name_);
         }
     }
     if (bytes_capacity_ != 0U) {
         bytes_payload_.reset(static_cast<std::uint8_t*>(std::malloc(bytes_capacity_)));
         if (bytes_payload_ == nullptr) {
-            return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for the %u-byte bytes topic buffer",
+            return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for the %u-byte bytes topic buffer",
                         static_cast<unsigned>(bytes_capacity_));
         }
     }
@@ -320,18 +320,18 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
     // Topics::stream() declared seq, rate and samples; anything chained after
     // it would not be in the payload write_stream() builds.
     if (t.fields_.size() != 3U || t.fill_) {
-        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+        return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                     "stream \"%s\": its fields are fixed (seq, rate, samples), chain only .range()",
                     t.name_);
     }
     const FieldDecl& samples = t.fields_[2];
     if (samples.max_count == 0U || t.stream_blocks_ == 0U) {
-        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag, "stream \"%s\": max_samples and queue_blocks must be > 0",
+        return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag, "stream \"%s\": max_samples and queue_blocks must be > 0",
                     t.name_);
     }
     const std::size_t payload = kStreamHead + 2U * samples.max_count;
     if (payload > max_stream_payload) {
-        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+        return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                     "stream \"%s\": %u samples need %u bytes, one frame of this link holds %u: use at "
                     "most %u samples per block",
                     t.name_, static_cast<unsigned>(samples.max_count), static_cast<unsigned>(payload),
@@ -342,7 +342,7 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
     const btp::MessageError added =
         add_stream_topic(catalog, t.id_, t.name_, t.version_, t.fields_[0], t.fields_[1], samples);
     if (added != btp::MessageError::Ok) {
-        return fail(error, BTPDEV_ERR_BAD_TOPIC, kTag,
+        return fail(error, TRACEKIT_ERR_BAD_TOPIC, kTag,
                     "stream \"%s\" does not fit the catalogue (%s): too many fields or names for the "
                     "memory preset",
                     t.name_, btp::message_error_string(added));
@@ -350,7 +350,7 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
 
     std::unique_ptr<Stream> stream(new (std::nothrow) Stream);
     if (stream == nullptr) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag, "no memory for stream \"%s\"", t.name_);
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag, "no memory for stream \"%s\"", t.name_);
     }
     stream->topic_index = index;
     stream->topic_id = t.id_;
@@ -360,7 +360,7 @@ esp_err_t TopicRegistry::add_stream(const TopicDecl& t, std::size_t index, btp::
     const std::size_t bytes = stream->slot_bytes * stream->slots;
     stream->storage.reset(static_cast<std::uint8_t*>(std::malloc(bytes)));
     if (stream->storage == nullptr) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag,
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag,
                     "no memory for stream \"%s\" (%u bytes in one block): use fewer queue_blocks or "
                     "max_samples",
                     t.name_, static_cast<unsigned>(bytes));
@@ -583,4 +583,4 @@ void TopicRegistry::publish_pending(btp::Node& node, std::uint64_t now_ms) noexc
     }
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

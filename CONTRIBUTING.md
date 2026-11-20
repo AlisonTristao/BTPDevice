@@ -1,12 +1,12 @@
-# Como contribuir com a BTPDevice
+# Como contribuir com a TraceKit
 
-Este documento define como o código da BTPDevice é organizado e quais regras toda
+Este documento define como o código da TraceKit é organizado e quais regras toda
 mudança precisa seguir. As decisões de arquitetura e o andamento ficam em
 [docs/PLANO.md](docs/PLANO.md). Leia o plano antes de propor algo grande.
 
 ## 1. O princípio: a vida de quem usa vem primeiro
 
-A BTPDevice existe para que um dispositivo IoT novo fale com o TraceView em poucas
+A TraceKit existe para que um dispositivo IoT novo fale com o TraceView em poucas
 linhas. Toda mudança é julgada primeiro por isso.
 
 - **O caminho simples não cresce.** O `main` do exemplo mínimo tem que continuar
@@ -14,7 +14,7 @@ linhas. Toda mudança é julgada primeiro por isso.
   sensato**, nunca como um parâmetro obrigatório.
 - **Obrigatório é só o que não tem padrão possível:** o nome do dispositivo e o link.
 - **A complexidade fica nos arquivos de configuração** (comandos, tópicos,
-  armazenamento, dispositivo) e nos exemplos, não na classe `BtpDevice`.
+  armazenamento, dispositivo) e nos exemplos, não na classe `TraceKit`.
 - **Funções avançadas são opt-in**: `device.node()`, `device.shell()` e similares
   dão acesso às camadas de baixo sem obrigar ninguém a conhecê-las.
 - **A lib é genérica.** Nada aqui pode assumir robô, motor, botão ou qualquer
@@ -24,9 +24,9 @@ linhas. Toda mudança é julgada primeiro por isso.
 ## 2. Organização do repositório
 
 ```
-include/BtpDevice.h        única include necessária para o usuário
-include/btpdev/            tipos públicos (config, commands, topics, erros)
-src/core/                  BtpDevice: composição, tasks, ciclo de vida
+include/TraceKit.h         única include necessária para o usuário
+include/tracekit/          tipos públicos (config, commands, topics, erros)
+src/core/                  TraceKit: composição, tasks, ciclo de vida
 src/transport/             links: serial, TCP, BLE, ESP-NOW (sem conhecer o BTP)
 src/protocol/              comandos, terminal, telemetria, status, catálogo
 src/security/              chave e seal/open
@@ -62,7 +62,7 @@ core  →  security, storage
 
 - C++20, sem exceções e sem RTTI no código da lib (compila com
   `CONFIG_COMPILER_CXX_EXCEPTIONS` desligado).
-- `namespace btpdev` para tudo, exceto a classe de fachada `BtpDevice`.
+- `namespace tracekit` para tudo, exceto a classe de fachada `TraceKit`.
 - Classes, arquivos e pastas em `PascalCase`. Métodos, funções e variáveis em
   `snake_case`, como no BTP. Membros privados terminam com `_`. Constantes são
   `kNomeDaConstante`.
@@ -99,9 +99,9 @@ core  →  security, storage
 
 ### Erros e logs
 
-- Cada módulo tem sua tag: `btpdev`, `btpdev.serial`, `btpdev.tcp`, `btpdev.ble`,
-  `btpdev.espnow`, `btpdev.wifi`, `btpdev.key`, `btpdev.fs`, `btpdev.cmd` e
-  `btpdev.topic`.
+- Cada módulo tem sua tag: `tracekit`, `tracekit.serial`, `tracekit.tcp`, `tracekit.ble`,
+  `tracekit.espnow`, `tracekit.wifi`, `tracekit.key`, `tracekit.fs`, `tracekit.cmd` e
+  `tracekit.topic`.
 - Níveis:
 
   | Nível | Quando usar |
@@ -131,7 +131,7 @@ core  →  security, storage
 
 - BTP e TinyShell são consumidos **fixados em tag**, nunca em branch. Subir a tag
   é um commit próprio, com uma nota no CHANGELOG explicando o motivo.
-- `include/btpdev/bally_channels.h` é o contrato de canais e chaves do ecossistema
+- `include/tracekit/bally_channels.h` é o contrato de canais e chaves do ecossistema
   e existe em cópias **idênticas byte a byte** aqui, no bally_dongle e no
   TraceView. Para mudar: edite num repositório, copie para os outros dois e
   atualize o hash esperado nos três testes. Não existe edição parcial correta.
@@ -141,7 +141,7 @@ core  →  security, storage
 
 Os projetos de `test_apps/` e `examples/` esperam o BTP e o TinyShell clonados
 **ao lado** deste repositório (`../BTP`, `../TinyShell`); ver
-`test_apps/btpdev_components.cmake`.
+`test_apps/tracekit_components.cmake`.
 
 ```text
 # Testes no PC (código portável: protocolo, chave, config, parsers)
@@ -158,8 +158,8 @@ Depois de mudar a lista de fontes ou as dependências do `CMakeLists.txt` do
 componente, apague o build do PlatformIO (`.pio/build`): ele não reconfigura o
 CMake sozinho e o erro aparece como `undefined reference` no link.
 
-Código portável (sem chamadas do IDF) entra na lista `btpdev_portable` de
-`test/host/CMakeLists.txt` e ganha teste. O header `btpdev/error.h` traz um
+Código portável (sem chamadas do IDF) entra na lista `tracekit_portable` de
+`test/host/CMakeLists.txt` e ganha teste. O header `tracekit/error.h` traz um
 substituto do `esp_err.h` para o host, com os mesmos valores.
 
 Antes de considerar uma mudança de código pronta:

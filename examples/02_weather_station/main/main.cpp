@@ -5,7 +5,7 @@
 //      estacao-quintal.local.
 //   3. Plot "weather"; open the Text Board on "status"; `weather -now`.
 
-#include <BtpDevice.h>
+#include <TraceKit.h>
 #include <cmath>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -19,10 +19,10 @@ float humidity = 50.0f;
 float pressure = 1013.0f;
 uint32_t readings = 0U;
 
-void app_commands(btpdev::Commands& c);
-void app_topics(btpdev::Topics& t);
+void app_commands(tracekit::Commands& c);
+void app_topics(tracekit::Topics& t);
 
-static BtpDevice device(device_config, storage_config);
+static TraceKit device(device_config, storage_config);
 
 extern "C" void app_main() {
     if (device.begin(app_commands, app_topics) != ESP_OK) return;

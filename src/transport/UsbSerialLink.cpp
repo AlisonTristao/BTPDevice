@@ -4,13 +4,13 @@
 
 #include "core/LogTags.h"
 
-#if CONFIG_BTPDEV_LINK_SERIAL && CONFIG_TINYUSB_CDC_ENABLED
-#define BTPDEV_HAS_USB_SERIAL 1
+#if CONFIG_TRACEKIT_LINK_SERIAL && CONFIG_TINYUSB_CDC_ENABLED
+#define TRACEKIT_HAS_USB_SERIAL 1
 #else
-#define BTPDEV_HAS_USB_SERIAL 0
+#define TRACEKIT_HAS_USB_SERIAL 0
 #endif
 
-#if BTPDEV_HAS_USB_SERIAL
+#if TRACEKIT_HAS_USB_SERIAL
 #include <esp_log.h>
 #include <esp_mac.h>
 
@@ -20,9 +20,9 @@
 #include "tusb.h"
 #endif
 
-namespace btpdev {
+namespace tracekit {
 
-#if BTPDEV_HAS_USB_SERIAL
+#if TRACEKIT_HAS_USB_SERIAL
 
 namespace {
 
@@ -47,17 +47,17 @@ void on_cdc_line_state(int /*itf*/, cdcacm_event_t* event) {
 
 }  // namespace
 
-}  // namespace btpdev
+}  // namespace tracekit
 
 // TinyUSB's weak hook (cdc_device.c): the previous IN transfer finished, the
 // CDC TX FIFO has room again -- keep draining from here, on the TinyUSB task.
 // An application that defines this hook itself cannot use the Serial link.
 extern "C" void tud_cdc_tx_complete_cb(uint8_t itf) {
     (void)itf;
-    if (btpdev::g_link != nullptr) btpdev::g_link->drain();
+    if (tracekit::g_link != nullptr) tracekit::g_link->drain();
 }
 
-namespace btpdev {
+namespace tracekit {
 
 UsbSerialLink::~UsbSerialLink() { stop(); }
 
@@ -74,7 +74,7 @@ esp_err_t UsbSerialLink::start(const LinkEvents& events, ErrorInfo& error) noexc
         return fail(error, ESP_ERR_NO_MEM, kTag, "no memory for the Serial link mutex");
     }
     if (!queue_storage_.allocate(config_.send_queue_bytes)) {
-        return fail(error, BTPDEV_ERR_MEMORY_BUDGET, kTag,
+        return fail(error, TRACEKIT_ERR_MEMORY_BUDGET, kTag,
                     "no memory for the Serial send queue (%u bytes)",
                     static_cast<unsigned>(config_.send_queue_bytes));
     }
@@ -108,7 +108,7 @@ esp_err_t UsbSerialLink::start(const LinkEvents& events, ErrorInfo& error) noexc
         const esp_err_t err = tinyusb_driver_install(&usb);
         if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
             queue_storage_.reset();
-            return fail(error, BTPDEV_ERR_LINK_START, kTag,
+            return fail(error, TRACEKIT_ERR_LINK_START, kTag,
                         "tinyusb_driver_install() failed (%s)", esp_err_to_name(err));
         }
         if (err == ESP_ERR_INVALID_STATE) {
@@ -125,7 +125,7 @@ esp_err_t UsbSerialLink::start(const LinkEvents& events, ErrorInfo& error) noexc
     if (err != ESP_OK) {
         g_link = nullptr;
         queue_storage_.reset();
-        return fail(error, BTPDEV_ERR_LINK_START, kTag, "tinyusb_cdcacm_init() failed (%s)",
+        return fail(error, TRACEKIT_ERR_LINK_START, kTag, "tinyusb_cdcacm_init() failed (%s)",
                     esp_err_to_name(err));
     }
     running_.store(true);
@@ -230,17 +230,17 @@ void UsbSerialLink::drain() noexcept {
     if (wrote) tinyusb_cdcacm_write_flush(TINYUSB_CDC_ACM_0, 0);
 }
 
-#else  // !BTPDEV_HAS_USB_SERIAL
+#else  // !TRACEKIT_HAS_USB_SERIAL
 
 UsbSerialLink::~UsbSerialLink() = default;
 
 esp_err_t UsbSerialLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     (void)events;
-#if !CONFIG_BTPDEV_LINK_SERIAL
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kSerial,
-                "the Serial link is disabled in menuconfig (BTPDevice > Links)");
+#if !CONFIG_TRACEKIT_LINK_SERIAL
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kSerial,
+                "the Serial link is disabled in menuconfig (TraceKit > Links)");
 #else
-    return fail(error, BTPDEV_ERR_LINK_UNSUPPORTED, tag::kSerial,
+    return fail(error, TRACEKIT_ERR_LINK_UNSUPPORTED, tag::kSerial,
                 "USB CDC is not available: this chip has no USB OTG, or "
                 "CONFIG_TINYUSB_CDC_ENABLED is off (menuconfig > TinyUSB Stack > CDC)");
 #endif
@@ -254,7 +254,7 @@ void UsbSerialLink::drain() noexcept {}
 void UsbSerialLink::open_session() noexcept {}
 void UsbSerialLink::close_session() noexcept {}
 
-#endif  // BTPDEV_HAS_USB_SERIAL
+#endif  // TRACEKIT_HAS_USB_SERIAL
 
 LinkStats UsbSerialLink::stats() const noexcept {
     LinkStats s;
@@ -265,4 +265,4 @@ LinkStats UsbSerialLink::stats() const noexcept {
     return s;
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

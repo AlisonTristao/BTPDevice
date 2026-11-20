@@ -5,15 +5,15 @@
 //   1. data/bally.key (tools/provision_key.py) and data/wifi.txt
 //      ("ssid,password"), then `pio run -t uploadfs`.
 //   2. `pio run -t upload`: the app goes to `factory`, the recovery to `ota_0`.
-//   3. TraceView: add "btpdev-s3-demo" (TCP, btpdev-s3-demo.local, password E).
+//   3. TraceView: add "tracekit-s3-demo" (TCP, tracekit-s3-demo.local, password E).
 //      Plot "chip"; terminal: `led -rgb 0, 30, 0`, `chip -temp`.
 //      Settings, kept across reboots: `cfg -list`, `cfg -set led_pin, 38`,
 //      `cfg -set sample_ms, 1000`, `cfg -set power_save, on` (then `btp -power`).
 //   4. Update over Wi-Fi: `btp -recovery`, then
-//      python tools/btp_ota.py btpdev-s3-demo.local .pio/build/esp32-s3/firmware.bin
+//      python tools/btp_ota.py tracekit-s3-demo.local .pio/build/esp32-s3/firmware.bin
 //   5. Crash loop: `demo -crash` three times in a row lands in the recovery.
 
-#include <BtpDevice.h>
+#include <TraceKit.h>
 
 #include <cmath>
 #include <cstdint>
@@ -26,20 +26,20 @@
 #include "chip_temp.h"
 #include "rgb_led.h"
 
-class S3Demo : public btpdev::App {
+class S3Demo : public tracekit::App {
 public:
-    btpdev::DeviceConfig config() const override {
+    tracekit::DeviceConfig config() const override {
         return {
-            .name = "btpdev-s3-demo",
-            .link = btpdev::Link::Tcp,         // networks from data/wifi.txt
-            .memory = btpdev::Memory::Small,
+            .name = "tracekit-s3-demo",
+            .link = tracekit::Link::Tcp,         // networks from data/wifi.txt
+            .memory = tracekit::Memory::Small,
             .debug_log = true,                 // boot steps on the serial console
             .recovery = {.crash_loop = 3},     // three crashes in a row -> recovery
         };
     }
 
     // Loaded from NVS before commands() and topics(); `cfg -set` changes them.
-    void settings(btpdev::Settings& s) override {
+    void settings(tracekit::Settings& s) override {
         s.u8("led_pin", &led_pin_, rgb_led::kDefaultPin)
             .range(0, 48)
             .help("48: DevKitC-1 v1.0, 38: v1.1")
@@ -52,25 +52,25 @@ public:
             .on_change([this] { apply_power(); });
     }
 
-    void commands(btpdev::Commands& c) override {
+    void commands(tracekit::Commands& c) override {
         c.module("led", "On-board RGB LED")
             .add("rgb", [this](uint8_t r, uint8_t g, uint8_t b) { return rgb(r, g, b); }, "led -rgb <r>, <g>, <b>")
             .add("off", [this]() { return rgb(0, 0, 0); }, "led -off");
         c.module("chip", "ESP32-S3 die")
             .add("temp", [this]() {
-                btpdev::printf("%.1f C\n", static_cast<double>(temperature_));
+                tracekit::printf("%.1f C\n", static_cast<double>(temperature_));
                 return static_cast<uint8_t>(RESULT_OK);
             }, "chip -temp");
         c.module("demo", "Recovery tests")
             .add("crash", []() -> uint8_t {
-                btpdev::printf("crashing on purpose\n");
+                tracekit::printf("crashing on purpose\n");
                 vTaskDelay(pdMS_TO_TICKS(200));  // let the line leave
                 std::abort();
             }, "demo -crash (three in a row enter the recovery)");
     }
 
-    void topics(btpdev::Topics& t) override {
-        chip_ = t.topic("chip", btpdev::Hz(2))
+    void topics(tracekit::Topics& t) override {
+        chip_ = t.topic("chip", tracekit::Hz(2))
                     .f32("temperature", &temperature_, "°C", 20.f, 80.f)
                     .u8("r", &r_)
                     .u8("g", &g_)
@@ -78,7 +78,7 @@ public:
     }
 
     void apply_power() {
-        device().set_power_mode(power_save_ ? btpdev::PowerMode::Saving : btpdev::PowerMode::Performance);
+        device().set_power_mode(power_save_ ? tracekit::PowerMode::Saving : tracekit::PowerMode::Performance);
     }
 
     void start_hardware() {
@@ -112,11 +112,11 @@ private:
     bool power_save_ = false;
     float temperature_ = NAN;
     uint8_t r_ = 0, g_ = 0, b_ = 0;
-    btpdev::Topic chip_;
+    tracekit::Topic chip_;
 };
 
 S3Demo app;
-BtpDevice device(app);
+TraceKit device(app);
 
 extern "C" void app_main() {
     if (device.begin() != ESP_OK) return;  // the cause is already in the log

@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 
 WifiLogic::Action WifiLogic::begin(const WifiNetwork* networks, std::size_t count,
                                    std::uint32_t now_ms) noexcept {
@@ -136,4 +136,4 @@ const char* wifi_failure_name(WifiLogic::Failure failure) noexcept {
     return "?";
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

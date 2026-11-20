@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace btpdev {
+namespace tracekit {
 namespace {
 
 // Exactly `digits` decimal digits at *p; advances past them.
@@ -126,4 +126,4 @@ void format_utc(std::int64_t epoch, char* out, std::size_t size) noexcept {
                   static_cast<unsigned>(secs / 60 % 60), static_cast<unsigned>(secs % 60));
 }
 
-}  // namespace btpdev
+}  // namespace tracekit

@@ -1,5 +1,5 @@
-#ifndef BTPDEV_IDENTITY_H
-#define BTPDEV_IDENTITY_H
+#ifndef TRACEKIT_IDENTITY_H
+#define TRACEKIT_IDENTITY_H
 
 // How a device derives its BTP identity. The same rules as bally_OS, so a
 // device migrated to the library keeps the identity TraceView already knows
@@ -12,11 +12,11 @@
 //              lets a peer tell a reboot from a retransmission (the command
 //              dedup key is source_id + boot_id + sequence)
 //
-// Portable; the NVS part lives in BtpDevice.cpp.
+// Portable; the NVS part lives in TraceKit.cpp.
 
 #include <cstdint>
 
-namespace btpdev {
+namespace tracekit {
 
 std::uint32_t source_id_from_mac(const std::uint8_t mac[6]) noexcept;
 void uuid_from_mac(const std::uint8_t mac[6], std::uint8_t uuid_out[16]) noexcept;
@@ -43,6 +43,6 @@ struct BootIdPlan {
 BootIdPlan plan_boot_id(bool woke, std::uint32_t rtc_next, std::uint32_t rtc_last,
                         std::uint32_t nvs_previous) noexcept;
 
-}  // namespace btpdev
+}  // namespace tracekit
 
-#endif  // BTPDEV_IDENTITY_H
+#endif  // TRACEKIT_IDENTITY_H
