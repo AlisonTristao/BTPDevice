@@ -30,4 +30,22 @@ std::uint32_t next_boot_id(std::uint32_t previous) noexcept {
     return previous == 0xFFFFFFFFU ? 1U : previous + 1U;
 }
 
+BootIdPlan plan_boot_id(bool woke, std::uint32_t rtc_next, std::uint32_t rtc_last,
+                        std::uint32_t nvs_previous) noexcept {
+    BootIdPlan plan;
+    if (woke && rtc_next != 0U && rtc_next <= rtc_last) {
+        plan.id = rtc_next;
+        plan.rtc_next = rtc_next < rtc_last ? rtc_next + 1U : 0U;  // 0: block used up
+        plan.rtc_last = rtc_last;
+        return plan;
+    }
+    plan.id = next_boot_id(nvs_previous);
+    // Near the wrap no block: the next boot is a cold one again.
+    plan.saved = plan.id <= 0xFFFFFFFFU - (kBootBlock - 1U) ? plan.id + (kBootBlock - 1U) : plan.id;
+    plan.save = true;
+    plan.rtc_next = plan.saved > plan.id ? plan.id + 1U : 0U;
+    plan.rtc_last = plan.saved;
+    return plan;
+}
+
 }  // namespace btpdev

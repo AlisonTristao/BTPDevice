@@ -38,6 +38,7 @@ set(btpdev_srcs
     "src/core/DebugReport.cpp"
     "src/core/DeviceCore.cpp"
     "src/core/PeerLink.cpp"
+    "src/core/Power.cpp"
     "src/core/Error.cpp"
     "src/core/FrameQueue.cpp"
     "src/core/Identity.cpp"
@@ -76,7 +77,7 @@ set(btpdev_srcs
 # expands component requirements, so an if(CONFIG_BT_NIMBLE_ENABLED) here is
 # always false. BleLink.cpp compiles to a stub when NimBLE is off. esp_tinyusb
 # and mdns come from idf_component.yml (esp_tinyusb only on chips with USB OTG).
-set(btpdev_priv_requires log esp_driver_uart esp_driver_usb_serial_jtag esp_hal_wdt esp_hw_support esp_rom esp_timer esp_event esp_netif esp_wifi nvs_flash lwip bt esp_app_format app_update esp_partition
+set(btpdev_priv_requires log esp_pm esp_driver_gpio esp_driver_uart esp_driver_usb_serial_jtag esp_hal_wdt esp_hw_support esp_rom esp_timer esp_event esp_netif esp_wifi nvs_flash lwip bt esp_app_format app_update esp_partition
     fatfs sdmmc esp_driver_sdspi esp_driver_sdmmc esp_driver_spi)
 
 idf_component_register(

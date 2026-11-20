@@ -259,6 +259,36 @@ No código, `device.time_valid()` diz se a hora é confiável (use antes de grav
 com data), `device.now()` dá os segundos UTC e `localtime_r()` converte para o fuso.
 Um RTC externo ou GPS entra com `device.set_time()`.
 
+## Energia e sono
+
+**Economia sem desconectar:** `DeviceConfig::power = {.mode = btpdev::PowerMode::Saving}`
+(ou `device.set_power_mode()` / `btp -power_set saving` a qualquer hora). O Wi-Fi dorme
+entre os beacons do roteador e, com estas linhas no `sdkconfig.defaults`, o chip entra
+em light sleep sozinho quando nada roda:
+
+```ini
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+```
+
+O TraceView continua conectado; as respostas ficam ~100 ms mais lentas. `btp -power`
+mostra o estado. No link Serial o chip não entra em light sleep (perderia bytes).
+
+**Sono profundo** (sensor a bateria, [exemplo 07](examples/07_sleep_sensor)):
+
+```cpp
+extern "C" void app_main() {
+    device.begin();
+    mede_e_publica();
+    device.sleep_for(5 * 60 * 1000);   // acorda como um boot novo
+}
+```
+
+`device.wake_reason()` diz por que acordou, e a hora (`time_valid()`) e as
+configurações sobrevivem ao sono. Para alcançar um dispositivo que dorme, mande
+`btp -awake 10` numa janela acordada: o `sleep_for()` recusa por 10 minutos (tempo para
+um `btp -recovery`). `SleepConfig::awake_gpio` faz o mesmo com um botão segurado no boot.
+
 ## Memória e PSRAM
 
 Em placas com PSRAM (ESP32-S3 N8R8, N16R8...), ligue-a no `sdkconfig.defaults` e a lib

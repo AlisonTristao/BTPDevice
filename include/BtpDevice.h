@@ -16,6 +16,7 @@
 #include <btpdev/identity.h>
 #include <btpdev/log.h>
 #include <btpdev/settings.h>
+#include <btpdev/sleep.h>
 #include <btpdev/time.h>
 #include <btpdev/topics.h>
 
@@ -136,6 +137,24 @@ public:
     btpdev::TimeSource time_source() const noexcept;
     /// From the application's own source (an RTC chip, GPS): UTC seconds.
     bool set_time(std::time_t utc) noexcept;
+
+    /// PowerConfig at run time (btp -power_set does the same). Any task.
+    void set_power_mode(btpdev::PowerMode mode) noexcept;
+    btpdev::PowerMode power_mode() const noexcept;
+
+    /// Deep sleep for `ms` (btpdev/sleep.h): queued data gets
+    /// SleepConfig::flush_ms to leave, the link stops, the chip sleeps and
+    /// wakes as a new boot. Does not return -- except false when the device
+    /// is kept awake (btp -awake, SleepConfig::awake_gpio).
+    bool sleep_for(std::uint64_t ms) noexcept;
+    /// Until a wall-clock time (needs time_valid()). False: no valid time,
+    /// already past, or kept awake.
+    bool sleep_until(std::time_t utc) noexcept;
+    btpdev::WakeReason wake_reason() const noexcept;
+    /// Wakes from deep sleep since the last power-up / reset.
+    std::uint32_t wake_count() const noexcept;
+    /// sleep_for() would refuse now (btp -awake or the awake GPIO).
+    bool stay_awake() const noexcept;
 
     /// This boot's BTP boot_id (an NVS counter), with source_id() the
     /// identity every message carries.

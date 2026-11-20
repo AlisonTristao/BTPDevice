@@ -60,6 +60,7 @@ jobs:
           - examples/04_ble_secure
           - examples/05_espnow_dongle
           - examples/06_recovery_s3
+          - examples/07_sleep_sensor
           - recovery
         target:
           - esp32s3

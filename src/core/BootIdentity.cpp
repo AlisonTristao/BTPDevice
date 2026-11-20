@@ -2,7 +2,9 @@
 
 #include <esp_log.h>
 #include <esp_mac.h>
+#include <esp_attr.h>
 #include <esp_random.h>
+#include <esp_system.h>
 #include <nvs.h>
 #include <nvs_flash.h>
 
@@ -14,6 +16,13 @@ namespace {
 
 constexpr const char* kTag = tag::kCore;
 constexpr const char* kNvsNamespace = "btpdev";
+constexpr std::uint32_t kRtcMagic = 0xB7D0B007U;
+
+// The boot_id block reserved by the last cold boot (Identity.h, D31): kept
+// through deep sleep, garbage after a power-up (the magic tells).
+RTC_NOINIT_ATTR std::uint32_t s_rtc_magic;
+RTC_NOINIT_ATTR std::uint32_t s_rtc_next;
+RTC_NOINIT_ATTR std::uint32_t s_rtc_last;
 
 Identity make_identity() noexcept {
     Identity id;
@@ -34,9 +43,16 @@ Identity make_identity() noexcept {
         if (get != ESP_OK && get != ESP_ERR_NVS_NOT_FOUND) err = get;
     }
     if (err == ESP_OK) {
-        id.boot_id = next_boot_id(previous);
-        err = nvs_set_u32(handle, "boot", id.boot_id);
-        if (err == ESP_OK) err = nvs_commit(handle);
+        const bool woke = esp_reset_reason() == ESP_RST_DEEPSLEEP && s_rtc_magic == kRtcMagic;
+        const BootIdPlan plan = plan_boot_id(woke, s_rtc_next, s_rtc_last, previous);
+        id.boot_id = plan.id;
+        if (plan.save) {
+            err = nvs_set_u32(handle, "boot", plan.saved);  // the block's end, not this id
+            if (err == ESP_OK) err = nvs_commit(handle);
+        }
+        s_rtc_next = plan.rtc_next;
+        s_rtc_last = plan.rtc_last;
+        s_rtc_magic = kRtcMagic;
     }
     if (handle != 0) nvs_close(handle);
     if (err != ESP_OK) {

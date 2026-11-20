@@ -16,6 +16,14 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - Recovery: rede própria `btp-<nome>` com portal cativo quando nenhuma rede conhecida responde, e
   página em `/` para enviar o `.bin` pelo navegador, com a assinatura HMAC calculada na página
   (`CONFIG_BTPDEV_RECOVERY_AP`, `CONFIG_BTPDEV_RECOVERY_AP_PASSWORD`).
+- **Economia de energia** (`DeviceConfig::power`, `PowerMode::Saving`): modem sleep do Wi-Fi, light
+  sleep automático e CPU no cristal quando ocioso (com `CONFIG_PM_ENABLE` e
+  `CONFIG_FREERTOS_USE_TICKLESS_IDLE`), sem desconectar. `btp -power`, `btp -power_set`,
+  `BtpDevice::set_power_mode()`. No S3 com TCP: ~78% do tempo em light sleep, ping de 10 para 99 ms.
+- **Sono profundo** (`btpdev/sleep.h`, `DeviceConfig::sleep`): `sleep_for()`, `sleep_until()`,
+  `wake_reason()`, `wake_count()`, GPIO de despertar e de manter acordado, `btp -awake <min>` e
+  `btp -sleep`. O `boot_id` vem de blocos reservados no NVS e segue pela memória do RTC: nenhuma
+  escrita na flash por despertar. Exemplo `07_sleep_sensor`.
 - **Hora** (`DeviceConfig::time`, `btpdev/time.h`): SNTP quando o link TCP tem IP, `btp -time`,
   `btp -time_set <hora>` (ISO 8601, hora local ou segundos desde 1970) e `btp -tz <POSIX>` (salvo
   no NVS; padrão Brasília, `<-03>3`). `BtpDevice::time_valid()`, `now()`, `now_us()`,

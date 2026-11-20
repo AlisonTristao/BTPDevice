@@ -164,6 +164,43 @@ struct WifiConfig {
     WifiBuffers buffers = WifiBuffers::Lean;
 };
 
+/// docs/PLANO.md D30. Switchable at run time too (BtpDevice::set_power_mode,
+/// btp -power_set).
+enum class PowerMode : std::uint8_t {
+    /// Radio always listening, CPU at full speed: the lowest latency.
+    Performance,
+    /// Wi-Fi modem sleep (wakes for the AP's beacons) and, with
+    /// CONFIG_PM_ENABLE and CONFIG_FREERTOS_USE_TICKLESS_IDLE in the
+    /// project's sdkconfig, automatic light sleep and a slower CPU whenever
+    /// nothing runs. The TCP link stays connected; replies take tens of
+    /// milliseconds longer. On the Serial link the chip never light-sleeps
+    /// (USB and UART would lose bytes).
+    Saving,
+};
+
+struct PowerConfig {
+    PowerMode mode = PowerMode::Performance;
+    /// Saving: the communication task's longest pause, so the chip can sleep
+    /// between passes. Received data still wakes it at once; telemetry faster
+    /// than 1000 / idle_ms Hz is sent in bursts.
+    std::uint32_t idle_ms = 50U;
+};
+
+/// Deep sleep (BtpDevice::sleep_for, docs/PLANO.md D31).
+struct SleepConfig {
+    /// A GPIO that wakes the device from deep sleep (a button), -1: none.
+    /// Must be an RTC-capable pin (ESP32-S3: 0-21; C3: 0-5).
+    int wake_gpio = -1;
+    bool wake_level = false;   ///< the level that wakes (false: low)
+    /// Held at `awake_level` at boot, the device does not sleep (sleep_for()
+    /// returns false): how to reach a device that sleeps, e.g. to update it.
+    /// -1: none. `btp -awake <minutes>` does the same from the terminal.
+    int awake_gpio = -1;
+    bool awake_level = false;
+    /// Time given to queued telemetry, logs and replies before sleeping.
+    std::uint32_t flush_ms = 300U;
+};
+
 /// Wall-clock time (btpdev/time.h, docs/PLANO.md D29).
 struct TimeConfig {
     /// POSIX TZ string. `btp -tz` replaces it and the choice is kept in NVS.
@@ -246,6 +283,10 @@ struct DeviceConfig {
     bool debug_log = false;
     /// Wall-clock time: zone and SNTP (TimeConfig).
     TimeConfig time{};
+    /// Power saving (PowerConfig).
+    PowerConfig power{};
+    /// Deep sleep (SleepConfig).
+    SleepConfig sleep{};
     /// Updates over Wi-Fi through the recovery firmware (RecoveryConfig).
     RecoveryConfig recovery{};
     /// What of the library's memory may live in PSRAM (Psram).

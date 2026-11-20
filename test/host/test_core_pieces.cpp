@@ -26,6 +26,21 @@ void identity_matches_bally_os() {
     CHECK(btpdev::next_boot_id(0U) == 1U);
     CHECK(btpdev::next_boot_id(41U) == 42U);
     CHECK(btpdev::next_boot_id(0xFFFFFFFFU) == 1U);
+
+    // Deep sleep: a block of ids per cold boot, the rest from RTC memory.
+    btpdev::BootIdPlan p = btpdev::plan_boot_id(false, 0U, 0U, 41U);  // cold
+    CHECK(p.id == 42U && p.save && p.saved == 42U + btpdev::kBootBlock - 1U);
+    CHECK(p.rtc_next == 43U && p.rtc_last == p.saved);
+    btpdev::BootIdPlan w = btpdev::plan_boot_id(true, p.rtc_next, p.rtc_last, p.saved);  // wake
+    CHECK(w.id == 43U && !w.save && w.rtc_next == 44U);
+    w = btpdev::plan_boot_id(true, p.rtc_last, p.rtc_last, p.saved);  // the block's last id
+    CHECK(w.id == p.rtc_last && !w.save && w.rtc_next == 0U);
+    w = btpdev::plan_boot_id(true, 0U, p.rtc_last, p.saved);  // used up: a new block
+    CHECK(w.id == p.saved + 1U && w.save);
+    w = btpdev::plan_boot_id(false, 50U, p.rtc_last, p.saved);  // power loss / reset: never reuse
+    CHECK(w.id == p.saved + 1U && w.save);
+    w = btpdev::plan_boot_id(false, 0U, 0U, 0xFFFFFFF0U);  // near the wrap: no block
+    CHECK(w.id == 0xFFFFFFF1U && w.saved == w.id && w.rtc_next == 0U);
 }
 
 struct Reported {

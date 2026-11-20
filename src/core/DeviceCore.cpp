@@ -10,6 +10,12 @@
 #include <btpdev/version.h>
 #include <esp_app_desc.h>
 #include <esp_cpu.h>
+#include <esp_sleep.h>
+#include <esp_rtc_time.h>
+#include <esp_rom_sys.h>
+#include <driver/gpio.h>
+#include <esp_attr.h>
+#include <soc/soc_caps.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_mac.h>
@@ -136,6 +142,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
               static_cast<unsigned>(mac_[0]), static_cast<unsigned>(mac_[1]), static_cast<unsigned>(mac_[2]),
               static_cast<unsigned>(mac_[3]), static_cast<unsigned>(mac_[4]), static_cast<unsigned>(mac_[5]));
     time_.begin(device_.time);  // the zone, from NVS or the config
+    begin_sleep();               // why this boot happened
     // Before anything that can crash: a crash loop has to be counted (and
     // may end here, in the recovery). NVS is up since load_identity().
     recovery_.boot(device_.recovery);
@@ -178,6 +185,8 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     boot_step("link", "%s started%s, %s", link_name(active_link_),
               active_link_ != requested ? " (fallback)" : "", sealed_ ? "sealed" : "in clear");
     if (active_link_ == Link::Tcp) time_.start_sntp();
+    power_.begin(device_.power, active_link_ == Link::Tcp || active_link_ == Link::EspNow,
+                 active_link_ == Link::Serial, device_.comms.period_ms);
     err = create_node(topics);
     if (err != ESP_OK) return err;
     boot_step("node", "%u topic(s)", static_cast<unsigned>(registry_.size()));
@@ -218,6 +227,8 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     if (device_.recovery.enabled) register_recovery_commands();
     if (!settings_.empty()) register_settings_commands();
     register_time_commands();
+    register_power_commands();
+    register_sleep_commands();
     if (commands != nullptr) {
         Commands declared(shell_);
         commands(declared);
@@ -722,8 +733,10 @@ void DeviceCore::comms_loop() noexcept {
     // once per period for telemetry, the watchdog and link housekeeping --
     // by the esp_timer with TaskConfig::timer (exact), else by the timeout
     // (rounded up to whole FreeRTOS ticks).
-    const TickType_t wait = device_.comms.timer ? portMAX_DELAY : ms_to_ticks(device_.comms.period_ms);
+    // PowerMode::Saving stretches the pause so the chip can light-sleep.
     for (;;) {
+        const TickType_t wait =
+            device_.comms.timer ? portMAX_DELAY : ms_to_ticks(power_.idle_ms(device_.comms.period_ms));
         ulTaskNotifyTake(pdTRUE, wait);
         routine();
     }
@@ -1554,6 +1567,175 @@ void DeviceCore::register_recovery_commands() noexcept {
                        : RESULT_ERROR;
         },
         "factory_reset", "Erase the application (yes) or everything (all), through the recovery", "btp");
+}
+
+// ============================================================================
+// Deep sleep (docs/PLANO.md D31)
+// ============================================================================
+
+namespace {
+constexpr std::uint32_t kSleepMagic = 0xB7D05EE9U;
+// Kept through deep sleep, garbage after a power-up (the magic tells).
+RTC_NOINIT_ATTR std::uint32_t s_sleep_magic;
+RTC_NOINIT_ATTR std::uint32_t s_wake_count;
+RTC_NOINIT_ATTR std::uint64_t s_awake_until_us;  // esp_rtc_get_time_us(): counts through deep sleep
+}  // namespace
+
+const char* wake_reason_name(WakeReason reason) noexcept {
+    switch (reason) {
+        case WakeReason::Timer: return "timer";
+        case WakeReason::Gpio: return "GPIO";
+        case WakeReason::Other: return "other";
+        case WakeReason::PowerOn: break;
+    }
+    return "power-on / reset";
+}
+
+void DeviceCore::begin_sleep() noexcept {
+    const bool woke = esp_reset_reason() == ESP_RST_DEEPSLEEP && s_sleep_magic == kSleepMagic;
+    if (!woke) {
+        s_sleep_magic = kSleepMagic;
+        s_wake_count = 0U;
+        s_awake_until_us = 0U;
+        wake_reason_ = WakeReason::PowerOn;
+    } else {
+        ++s_wake_count;
+        const std::uint32_t causes = esp_sleep_get_wakeup_causes();
+        if (causes & (1U << ESP_SLEEP_WAKEUP_TIMER)) {
+            wake_reason_ = WakeReason::Timer;
+        } else if (causes & ((1U << ESP_SLEEP_WAKEUP_EXT1) | (1U << ESP_SLEEP_WAKEUP_EXT0) | (1U << ESP_SLEEP_WAKEUP_GPIO))) {
+            wake_reason_ = WakeReason::Gpio;
+        } else {
+            wake_reason_ = WakeReason::Other;
+        }
+    }
+    const SleepConfig& cfg = device_.sleep;
+    if (cfg.awake_gpio >= 0) {
+        gpio_config_t io{};
+        io.pin_bit_mask = 1ULL << cfg.awake_gpio;
+        io.mode = GPIO_MODE_INPUT;
+        io.pull_up_en = cfg.awake_level ? GPIO_PULLUP_DISABLE : GPIO_PULLUP_ENABLE;
+        io.pull_down_en = cfg.awake_level ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
+        if (gpio_config(&io) == ESP_OK) {
+            esp_rom_delay_us(50);
+            awake_pin_ = (gpio_get_level(static_cast<gpio_num_t>(cfg.awake_gpio)) != 0) == cfg.awake_level;
+            if (awake_pin_) ESP_LOGW(kTag, "GPIO%d held: the device stays awake this boot", cfg.awake_gpio);
+        }
+    }
+}
+
+std::uint32_t DeviceCore::wake_count() const noexcept { return s_sleep_magic == kSleepMagic ? s_wake_count : 0U; }
+
+bool DeviceCore::stay_awake() const noexcept {
+    return awake_pin_ || (s_sleep_magic == kSleepMagic && esp_rtc_get_time_us() < s_awake_until_us);
+}
+
+bool DeviceCore::sleep_for(std::uint64_t ms) noexcept {
+    if (stay_awake()) {
+        ESP_LOGW(kTag, "sleep_for(%llu ms) refused: kept awake (btp -awake / the awake GPIO)",
+                 static_cast<unsigned long long>(ms));
+        return false;
+    }
+    ESP_LOGI(kTag, "deep sleep for %llu ms (wake #%lu next)", static_cast<unsigned long long>(ms),
+             static_cast<unsigned long>(wake_count() + 1U));
+    // Whatever is queued (telemetry, a reply, a log line) gets time to leave.
+    vTaskDelay(ms_to_ticks(device_.sleep.flush_ms));
+    // routine() does nothing from here on; then the link stops cleanly (the
+    // TCP client sees the connection close, Wi-Fi leaves the AP).
+    state_.store(State::Stopped);
+    vTaskDelay(ms_to_ticks(power_.idle_ms(device_.comms.period_ms) + 20U));
+    if (link_ != nullptr) link_->stop();
+    esp_sleep_enable_timer_wakeup(ms * 1000ULL);
+    const SleepConfig& cfg = device_.sleep;
+    if (cfg.wake_gpio >= 0) {
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+#if CONFIG_IDF_TARGET_ESP32
+        // The original ESP32 has no ANY_LOW; with one pin ALL_LOW is the same.
+        constexpr esp_sleep_ext1_wakeup_mode_t kLow = ESP_EXT1_WAKEUP_ALL_LOW;
+#else
+        constexpr esp_sleep_ext1_wakeup_mode_t kLow = ESP_EXT1_WAKEUP_ANY_LOW;
+#endif
+        esp_sleep_enable_ext1_wakeup_io(1ULL << cfg.wake_gpio, cfg.wake_level ? ESP_EXT1_WAKEUP_ANY_HIGH : kLow);
+#elif SOC_GPIO_SUPPORT_DEEPSLEEP_WAKEUP
+        esp_deep_sleep_enable_gpio_wakeup(1ULL << cfg.wake_gpio,
+                                          cfg.wake_level ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW);
+#endif
+    }
+    esp_deep_sleep_start();
+    return false;  // not reached
+}
+
+void DeviceCore::register_sleep_commands() noexcept {
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char text[256];
+            const std::uint64_t now = esp_rtc_get_time_us();
+            const std::uint64_t until = s_sleep_magic == kSleepMagic ? s_awake_until_us : 0U;
+            std::snprintf(text, sizeof(text),
+                          "woke by   %s\n"
+                          "wakes     %lu since the last power-up\n"
+                          "awake     %s\n",
+                          wake_reason_name(wake_reason_), static_cast<unsigned long>(wake_count()),
+                          awake_pin_    ? "yes (GPIO held at boot)"
+                          : until > now ? "yes (btp -awake)"
+                                        : "no: sleep_for() sleeps");
+            shell_print(text);
+            if (until > now) {
+                std::snprintf(text, sizeof(text), "          for %lu more min\n",
+                              static_cast<unsigned long>((until - now) / 60000000ULL + 1U));
+                shell_print(text);
+            }
+            return RESULT_OK;
+        },
+        "sleep", "Deep sleep: why this boot woke, wakes, kept awake", "btp");
+    shell_.add(
+        [this](std::uint32_t minutes) -> std::uint8_t {
+            s_sleep_magic = kSleepMagic;
+            s_awake_until_us = minutes == 0U ? 0U : esp_rtc_get_time_us() + static_cast<std::uint64_t>(minutes) * 60000000ULL;
+            char text[128];
+            std::snprintf(text, sizeof(text),
+                          minutes == 0U ? "sleep allowed again\n" : "staying awake for %lu min: sleep_for() refuses until then\n",
+                          static_cast<unsigned long>(minutes));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "awake", "btp -awake <minutes> (0: sleep allowed again)", "btp");
+}
+
+// ============================================================================
+// Power (docs/PLANO.md D30)
+// ============================================================================
+
+void DeviceCore::set_power_mode(PowerMode mode) noexcept {
+    power_.set(mode);
+    if (comms_task_ != nullptr) xTaskNotifyGive(comms_task_);  // pick up the new pause now
+}
+
+void DeviceCore::register_power_commands() noexcept {
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char text[1024];
+            power_.describe(text, sizeof(text));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "power", "Power mode: Wi-Fi sleep, light sleep, CPU", "btp");
+    shell_.add(
+        [this](const char* mode) -> std::uint8_t {
+            if (std::strcmp(mode, "saving") == 0) {
+                set_power_mode(PowerMode::Saving);
+            } else if (std::strcmp(mode, "performance") == 0) {
+                set_power_mode(PowerMode::Performance);
+            } else {
+                shell_print("btp -power_set saving | performance\n");
+                return RESULT_ERROR;
+            }
+            char text[1024];
+            power_.describe(text, sizeof(text));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "power_set", "btp -power_set <saving|performance> (until the next boot)", "btp");
 }
 
 // ============================================================================

@@ -751,18 +751,22 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [x] Na placa: SNTP acertando em segundos (igual ao relógio do PC) e corrigindo uma hora manual errada depois do reboot; `btp -time_set` local e com fuso; recusa de data inválida e de antes de 2025; `btp -tz` trocando e recusando lixo; hora e fuso mantidos após `btp -reboot`.
 
 **S3. Economia sem desconectar (D30)**
-- [ ] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`), `esp_pm_configure` e `esp_wifi_set_ps`.
-- [ ] Lock de PM no link Serial; conferir `CONFIG_PM_ENABLE` e avisar.
-- [ ] `btp -power`: modo, frequência, tempo em light sleep.
+- [x] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`, `idle_ms`), `esp_pm_configure` (CPU mínima = cristal, light sleep) e `esp_wifi_set_ps(MIN_MODEM)`. Troca em tempo de execução: `BtpDevice::set_power_mode()`, `btp -power_set`.
+- [x] No `Saving`, a task `comms` espaça as passadas (`idle_ms`, 50 ms): acordando a cada tick o chip nunca ficava ocioso o bastante para dormir.
+- [x] Lock `ESP_PM_NO_LIGHT_SLEEP` no link Serial; sem `CONFIG_PM_ENABLE`/`TICKLESS_IDLE` a lib avisa e fica só no modem sleep.
+- [x] `btp -power`: modo, Wi-Fi, light sleep, pausa e, com `CONFIG_PM_PROFILING`, o tempo em cada modo.
+- [x] Na placa (exemplo 06, `cfg -set power_save, on`, TCP conectado): **~78% do tempo em light sleep**, CPU em 40 MHz quando ocioso; ping médio 10 ms → 99 ms (47–217).
 - [ ] Medir a corrente na bancada (multímetro em série no 5 V) com e sem.
 
 **S4. Sono profundo (D31)**
-- [ ] `device.sleep_for()`, `sleep_until()`, `wake_reason()`, `wake_count()`; `SleepConfig` com GPIO de despertar e GPIO de manter acordado.
-- [ ] Antes de dormir: esvaziar filas de telemetria e log (com prazo), fechar a sessão, parar o Wi-Fi.
-- [ ] `boot_id` em blocos reservados no NVS + RTC; Wi-Fi com canal/BSSID do RTC (reconexão rápida).
-- [ ] `btp -awake <min>`: o próximo ciclo não dorme por N minutos.
-- [ ] O detector de crash loop ignora o despertar do sono.
-- [ ] Exemplo 07: sensor que acorda, mede, grava no LittleFS com hora, publica e dorme.
+- [x] `BtpDevice::sleep_for()`, `sleep_until()`, `wake_reason()`, `wake_count()`, `stay_awake()`; `SleepConfig` com GPIO de despertar (ext1 ou GPIO conforme o chip) e GPIO de manter acordado.
+- [x] Antes de dormir: `flush_ms` para as filas saírem, a lib para de rodar, o link para (o cliente TCP vê a conexão fechar, o Wi-Fi sai do AP).
+- [x] `boot_id` em blocos de 64 reservados no NVS + RTC (`plan_boot_id`, testado no host): ao acordar, nenhuma escrita na flash.
+- [ ] Wi-Fi com canal/BSSID do RTC (reconexão rápida). Ainda não: hoje cada despertar faz o scan, e a primeira tentativa de autenticação costuma falhar (`reason 2`), o que leva ~5–10 s para conectar.
+- [x] `btp -awake <min>` (0 libera) e `btp -sleep` (motivo, número de despertares, se está mantido acordado).
+- [x] O detector de crash loop não conta o despertar (o motivo do reset é `DEEPSLEEP`).
+- [x] Exemplo 07 (`07_sleep_sensor`): acorda, mede, grava `log.csv` com data, publica, fica `awake_ms` e dorme `period_s` (configurações).
+- [x] Na placa: ciclos de 60 s com `boot_id` seguido (430, 431, 432...) sem gravar na flash; `btp -awake` pego numa janela acordada; a hora (do SNTP) sobrevive ao sono profundo; o log mostra os despertares. GPIO de despertar e de manter acordado não testados (nada ligado na placa).
 
 **S5. Fechamento**
 - [ ] README, CHANGELOG, matriz de suporte; build dos exemplos no CI.

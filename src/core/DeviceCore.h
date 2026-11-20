@@ -49,6 +49,9 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
+#include <btpdev/sleep.h>
+
+#include "core/Power.h"
 #include "core/TaskSpawn.h"
 #include "core/TimeKeeper.h"
 #include "protocol/SettingsRegistry.h"
@@ -75,6 +78,12 @@ public:
     bool get_setting(const char* name, char* out, std::size_t size) noexcept;
     /// The task that called BtpDevice::begin() (the memory report lists it).
     void set_begin_task(TaskHandle_t task) noexcept { begin_task_ = task; }
+    void set_power_mode(PowerMode mode) noexcept;
+    bool sleep_for(std::uint64_t ms) noexcept;
+    WakeReason wake_reason() const noexcept { return wake_reason_; }
+    std::uint32_t wake_count() const noexcept;
+    bool stay_awake() const noexcept;
+    PowerMode power_mode() const noexcept { return power_.mode(); }
     TimeKeeper& wall_clock() noexcept { return time_; }
     const TimeKeeper& wall_clock() const noexcept { return time_; }
 
@@ -195,6 +204,9 @@ private:
     void register_recovery_commands() noexcept;
     void register_settings_commands() noexcept;
     void register_time_commands() noexcept;
+    void register_power_commands() noexcept;
+    void register_sleep_commands() noexcept;
+    void begin_sleep() noexcept;
 
     // Keys (docs/PLANO.md 4.9): which one seals / opens a message.
     bool channel_b(const btp::Header& header) const noexcept;
@@ -293,6 +305,9 @@ private:
     TopicRegistry registry_;
     SettingsRegistry settings_;
     TimeKeeper time_;
+    Power power_;
+    WakeReason wake_reason_ = WakeReason::PowerOn;
+    bool awake_pin_ = false;  // SleepConfig::awake_gpio held at boot
     NvsSettingsStore settings_store_;
     LinkMutex settings_mutex_;  // cfg commands (shell task) vs set_setting() (any task)
 

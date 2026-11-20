@@ -178,6 +178,24 @@ std::int64_t BtpDevice::now_us() const noexcept { return core_ != nullptr ? core
 btpdev::TimeSource BtpDevice::time_source() const noexcept {
     return core_ != nullptr ? core_->wall_clock().source() : btpdev::TimeSource::None;
 }
+void BtpDevice::set_power_mode(btpdev::PowerMode mode) noexcept {
+    if (core_ != nullptr) core_->set_power_mode(mode);
+}
+btpdev::PowerMode BtpDevice::power_mode() const noexcept {
+    return core_ != nullptr ? core_->power_mode() : device_.power.mode;
+}
+bool BtpDevice::sleep_for(std::uint64_t ms) noexcept { return core_ != nullptr && core_->sleep_for(ms); }
+bool BtpDevice::sleep_until(std::time_t utc) noexcept {
+    if (core_ == nullptr || !core_->wall_clock().valid()) return false;
+    const std::time_t now = std::time(nullptr);
+    if (utc <= now) return false;
+    return core_->sleep_for(static_cast<std::uint64_t>(utc - now) * 1000ULL);
+}
+btpdev::WakeReason BtpDevice::wake_reason() const noexcept {
+    return core_ != nullptr ? core_->wake_reason() : btpdev::WakeReason::PowerOn;
+}
+std::uint32_t BtpDevice::wake_count() const noexcept { return core_ != nullptr ? core_->wake_count() : 0U; }
+bool BtpDevice::stay_awake() const noexcept { return core_ != nullptr && core_->stay_awake(); }
 bool BtpDevice::set_time(std::time_t utc) noexcept {
     return core_ != nullptr && core_->wall_clock().set(static_cast<std::int64_t>(utc), btpdev::TimeSource::Application);
 }

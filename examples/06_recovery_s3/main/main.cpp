@@ -8,7 +8,7 @@
 //   3. TraceView: add "btpdev-s3-demo" (TCP, btpdev-s3-demo.local, password E).
 //      Plot "chip"; terminal: `led -rgb 0, 30, 0`, `chip -temp`.
 //      Settings, kept across reboots: `cfg -list`, `cfg -set led_pin, 38`,
-//      `cfg -set sample_ms, 1000`.
+//      `cfg -set sample_ms, 1000`, `cfg -set power_save, on` (then `btp -power`).
 //   4. Update over Wi-Fi: `btp -recovery`, then
 //      python tools/btp_ota.py btpdev-s3-demo.local .pio/build/esp32-s3/firmware.bin
 //   5. Crash loop: `demo -crash` three times in a row lands in the recovery.
@@ -47,6 +47,9 @@ public:
                 if (led_started_) rgb_led::set_pin(led_pin_);
             });
         s.u32("sample_ms", &sample_ms_, 500U).range(100, 60000).unit("ms").help("temperature sampling period");
+        s.boolean("power_save", &power_save_, false)
+            .help("Wi-Fi modem sleep + light sleep when idle")
+            .on_change([this] { apply_power(); });
     }
 
     void commands(btpdev::Commands& c) override {
@@ -74,7 +77,12 @@ public:
                     .u8("b", &b_);
     }
 
+    void apply_power() {
+        device().set_power_mode(power_save_ ? btpdev::PowerMode::Saving : btpdev::PowerMode::Performance);
+    }
+
     void start_hardware() {
+        apply_power();
         chip_temp::begin();
         led_started_ = rgb_led::begin(led_pin_);
         rgb_led::set(0, 0, 16);  // dim blue: the application is up
@@ -101,6 +109,7 @@ private:
     std::uint8_t led_pin_ = rgb_led::kDefaultPin;
     std::uint32_t sample_ms_ = 500U;
     bool led_started_ = false;
+    bool power_save_ = false;
     float temperature_ = NAN;
     uint8_t r_ = 0, g_ = 0, b_ = 0;
     btpdev::Topic chip_;
