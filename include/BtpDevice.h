@@ -15,6 +15,7 @@
 #include <btpdev/filesystem.h>
 #include <btpdev/identity.h>
 #include <btpdev/log.h>
+#include <btpdev/settings.h>
 #include <btpdev/topics.h>
 
 #include <cstddef>
@@ -57,6 +58,7 @@ public:
     /// btp_topics.cpp): a plain function, or a lambda that captures.
     using CommandsFn = std::function<void(btpdev::Commands&)>;
     using TopicsFn = std::function<void(btpdev::Topics&)>;
+    using SettingsFn = std::function<void(btpdev::Settings&)>;
 
     /// Both configs are copied; they do not need to outlive the device.
     BtpDevice(const btpdev::DeviceConfig& device,
@@ -76,7 +78,8 @@ public:
     /// function may be empty. With an App, call it with no arguments: the
     /// App's commands() and topics() are used (a function given here
     /// replaces the App's).
-    esp_err_t begin(CommandsFn commands = nullptr, TopicsFn topics = nullptr) noexcept;
+    esp_err_t begin(CommandsFn commands = nullptr, TopicsFn topics = nullptr,
+                    SettingsFn settings = nullptr) noexcept;
 
     /// Publishes a topic now (an event), on top of its periodic rate -- only
     /// if someone is subscribed. Any task. False: no topic by that name.
@@ -112,6 +115,15 @@ public:
     /// line is too long. The output goes to TraceView's log panel
     /// (LogLevel::Command).
     bool run(const char* command_line) noexcept;
+
+    /// What `cfg -set <name>, <value>` does: checks the text against the
+    /// setting's type and range, writes the variable, saves it, calls its
+    /// on_change. Any task. False with the reason in the log.
+    bool set_setting(const char* name, const char* value) noexcept;
+    /// Saves the value the application put in the setting's variable.
+    bool save_setting(const char* name) noexcept;
+    /// The current value as text ("30", "true"). False: no such setting.
+    bool get_setting(const char* name, char* out, std::size_t size) const noexcept;
 
     /// This boot's BTP boot_id (an NVS counter), with source_id() the
     /// identity every message carries.

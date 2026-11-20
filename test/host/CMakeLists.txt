@@ -43,6 +43,7 @@ add_library(btpdev_portable STATIC
     ${BTPDEV_ROOT}/src/protocol/ShellText.cpp
     ${BTPDEV_ROOT}/src/protocol/Terminal.cpp
     ${BTPDEV_ROOT}/src/protocol/TopicRegistry.cpp
+    ${BTPDEV_ROOT}/src/protocol/SettingsRegistry.cpp
     ${BTPDEV_ROOT}/src/security/KeyStore.cpp
     ${BTPDEV_ROOT}/src/security/Sha256.cpp
     ${BTPDEV_ROOT}/src/update/OtaAuth.cpp
@@ -69,7 +70,7 @@ enable_testing()
 foreach(test_name test_error test_config_check test_frame_queue test_stream_framing test_wifi
                   test_core_pieces test_terminal test_node_presets test_topics
                   test_keystore test_filesystem test_debug_report
-                  test_sha256 test_ota_auth)
+                  test_sha256 test_ota_auth test_settings)
     add_executable(${test_name} ${test_name}.cpp)
     target_link_libraries(${test_name} PRIVATE btpdev_portable)
     btpdev_warnings(${test_name})

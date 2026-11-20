@@ -731,13 +731,15 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [ ] Picos das stacks com o TraceView e um preset Large (manifesto maior).
 
 **S1. Configurações persistentes (D28)**
-- [ ] `include/btpdev/settings.h`: `Settings` com `boolean`, `u8`, `u16`, `u32`, `i32`, `f32`, `text` (até 64 octetos); `.range()`, `.unit()`, `.description()`, `.reboot()`; `on_change`.
-- [ ] `src/protocol/SettingsRegistry`: validação no `begin()` (nome ≤ 15, repetido, faixa do padrão, tipo), carga do NVS com tipo gravado junto (tipo mudou: volta ao padrão e avisa), escrita só quando muda.
-- [ ] Módulo `cfg`: `-list`, `-get <nome>`, `-set <nome>, <valor>`, `-reset <nome|all>`. Valores de até 4 octetos trocados de forma atômica; `text` sob lock.
-- [ ] API no código: `device.setting("setpoint")`, `set()`, `save()`.
-- [ ] `App::settings()` e o estilo de funções livres (`begin(commands, topics, settings)`).
-- [ ] Testes de host: parse dos valores, faixa, tipo, nomes, o NVS simulado.
-- [ ] Exemplo 06: o pino do LED e o período de amostragem viram configurações (sai o NVS feito à mão).
+- [x] `include/btpdev/settings.h`: `Settings` com `boolean`, `u8`, `u16`, `u32`, `i32`, `f32`, `text` (até 64 octetos); `.range()`, `.unit()`, `.help()`, `.reboot()`, `.on_change()`.
+- [x] `src/protocol/SettingsRegistry` (portável): validação no `begin()` (nome de 1 a 15 caracteres, repetido, `all` reservado, faixa cabendo no tipo, padrão dentro da faixa), carga do NVS com o tipo gravado junto (tipo ou faixa mudou: volta ao padrão, avisa e apaga o valor velho), o padrão não é gravado.
+- [x] `NvsSettingsStore`: um blob por configuração no namespace `btpcfg`.
+- [x] Módulo `cfg`: `-list`, `-get`, `-set`, `-reset <nome|all>`, sob um lock (shell e `set_setting()` de outra task).
+- [x] API no código: `BtpDevice::set_setting()`, `save_setting()`, `get_setting()`.
+- [x] `App::settings()` e `begin(commands, topics, settings)`.
+- [x] Testes de host (`test_settings`): carga, reboot simulado, valores inválidos, reset, declaração que mudou, store que recusa, linhas do `cfg -list`.
+- [x] Exemplo 06: `led_pin` (com `on_change`) e `sample_ms` viram configurações; saiu o NVS feito à mão e o `led -pin`.
+- [x] Na placa: `cfg -list/-get/-set/-reset`, recusa de faixa, tipo e nome, valores mantidos após reboot, `on_change` movendo o LED. Custo: 0,2 KB de heap com 2 configurações.
 
 **S2. Hora (D29)**
 - [ ] `DeviceConfig::time` (`TimeConfig`: `tz`, `sntp`, dois servidores, período de ressincronização).

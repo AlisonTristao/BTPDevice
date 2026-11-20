@@ -2,13 +2,11 @@
 
 #include <esp_log.h>
 #include <led_strip.h>
-#include <nvs.h>
 
 namespace rgb_led {
 namespace {
 
 constexpr const char* kTag = "rgb_led";
-constexpr const char* kNamespace = "demo";
 
 led_strip_handle_t s_strip = nullptr;
 int s_pin = kDefaultPin;
@@ -40,25 +38,12 @@ bool start(int gpio) {
 
 }  // namespace
 
-bool begin() {
-    nvs_handle_t h = 0;
-    if (nvs_open(kNamespace, NVS_READONLY, &h) == ESP_OK) {
-        std::int32_t saved = 0;
-        if (nvs_get_i32(h, "led_pin", &saved) == ESP_OK) s_pin = static_cast<int>(saved);
-        nvs_close(h);
-    }
-    ESP_LOGI(kTag, "RGB LED on GPIO%d (`led -pin 38` for a DevKitC-1 v1.1)", s_pin);
-    return start(s_pin);
+bool begin(int gpio) {
+    ESP_LOGI(kTag, "RGB LED on GPIO%d (`cfg -set led_pin, 38` for a DevKitC-1 v1.1)", gpio);
+    return start(gpio);
 }
 
-bool set_pin(int gpio) {
-    if (!start(gpio)) return false;
-    nvs_handle_t h = 0;
-    if (nvs_open(kNamespace, NVS_READWRITE, &h) != ESP_OK) return false;
-    const bool ok = nvs_set_i32(h, "led_pin", gpio) == ESP_OK && nvs_commit(h) == ESP_OK;
-    nvs_close(h);
-    return ok;
-}
+bool set_pin(int gpio) { return start(gpio); }
 
 int pin() { return s_pin; }
 

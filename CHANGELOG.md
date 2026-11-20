@@ -16,6 +16,11 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - Recovery: rede própria `btp-<nome>` com portal cativo quando nenhuma rede conhecida responde, e
   página em `/` para enviar o `.bin` pelo navegador, com a assinatura HMAC calculada na página
   (`CONFIG_BTPDEV_RECOVERY_AP`, `CONFIG_BTPDEV_RECOVERY_AP_PASSWORD`).
+- **Configurações persistentes** (`App::settings()`, `btpdev/settings.h`): variáveis do app ligadas
+  ao NVS com padrão, faixa, unidade, ajuda, `.reboot()` e `.on_change()`; carregadas antes de
+  `commands()` e `topics()`. Módulo `cfg` (`-list`, `-get`, `-set`, `-reset`) e
+  `BtpDevice::set_setting()`, `save_setting()`, `get_setting()`. O exemplo 06 guarda o pino do LED e o
+  período de amostragem assim.
 - Link Serial pela **USB-Serial-JTAG** (`SerialPort::UsbJtag`; o `Auto` a escolhe quando há um
   computador nela): a porta USB de gravação do S3, C3 e C6.
 - `btp -bootloader`: reinicia no modo download da ROM para gravar por USB sem o botão BOOT;

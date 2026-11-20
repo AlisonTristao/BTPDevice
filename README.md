@@ -212,6 +212,36 @@ xTaskCreatePinnedToCore(control_loop, "control", 4096, nullptr, 20, nullptr, 1);
   outro núcleo. `float` e inteiros de até 4 bytes alinhados são lidos de forma
   atômica. `f64` não tem forma ligada (8 bytes não são atômicos): use `.fill()`.
 
+## Configurações persistentes
+
+O que o app precisa ajustar em campo (um setpoint, um período, um pino) vira uma
+configuração: fica no NVS, sobrevive a reboot e muda pelo terminal sem recompilar.
+
+```cpp
+void settings(btpdev::Settings& s) override {
+    s.f32("setpoint", &setpoint_, 25.0f).range(0, 100).unit("°C");
+    s.u32("period_ms", &period_ms_, 500).range(100, 60000);
+    s.u8("led_pin", &pin_, 48).reboot();             // lido só no boot
+    s.text("local", local_, sizeof(local_), "bancada");
+    s.boolean("alarme", &alarme_, true).on_change([this] { atualiza_alarme(); });
+}
+```
+
+A lib carrega os valores salvos **antes** de `commands()` e `topics()`, então as
+variáveis já estão certas quando o seu código roda. No terminal:
+
+```text
+cfg -list                  valor, tipo, padrão e faixa de cada uma
+cfg -set setpoint, 30      confere tipo e faixa, salva e chama o on_change
+cfg -reset setpoint        volta ao padrão (cfg -reset all)
+```
+
+No código, `device.set_setting("setpoint", "30")` faz o mesmo que o `cfg -set`, e
+`device.save_setting("setpoint")` salva um valor que o próprio app mudou na variável.
+O nome vira a chave do NVS (até 15 caracteres). Um valor salvo com outro tipo ou fora
+da faixa nova volta ao padrão, com aviso. `btp -factory_reset yes` mantém as
+configurações; `all` apaga.
+
 ## Memória e PSRAM
 
 Em placas com PSRAM (ESP32-S3 N8R8, N16R8...), ligue-a no `sdkconfig.defaults` e a lib

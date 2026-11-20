@@ -50,6 +50,8 @@
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
 #include "core/TaskSpawn.h"
+#include "protocol/SettingsRegistry.h"
+#include "storage/NvsSettingsStore.h"
 #include "update/DownloadMode.h"
 #include "update/Recovery.h"
 
@@ -65,7 +67,11 @@ public:
     DeviceCore& operator=(const DeviceCore&) = delete;
 
     /// The whole of begin(). On failure, `error` says why and nothing runs.
-    esp_err_t start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics) noexcept;
+    esp_err_t start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics,
+                    const BtpDevice::SettingsFn& settings) noexcept;
+    bool set_setting(const char* name, const char* value) noexcept;
+    bool save_setting(const char* name) noexcept;
+    bool get_setting(const char* name, char* out, std::size_t size) noexcept;
 
     /// Any task: publish a topic on the next pass (see TopicRegistry).
     bool publish(const char* topic) noexcept;
@@ -182,6 +188,7 @@ private:
     void shell_print(const char* text) noexcept;  // shell task, inside a command
     void register_storage_commands() noexcept;
     void register_recovery_commands() noexcept;
+    void register_settings_commands() noexcept;
 
     // Keys (docs/PLANO.md 4.9): which one seals / opens a message.
     bool channel_b(const btp::Header& header) const noexcept;
@@ -278,6 +285,9 @@ private:
 
     // Telemetry.
     TopicRegistry registry_;
+    SettingsRegistry settings_;
+    NvsSettingsStore settings_store_;
+    LinkMutex settings_mutex_;  // cfg commands (shell task) vs set_setting() (any task)
 
     // btpdev::printf() from outside a command: any task -> comms -> terminal.
     static constexpr std::size_t kPrintQueueBytes = 2048U;

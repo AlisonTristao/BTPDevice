@@ -1,8 +1,8 @@
 // The DevKitC-1's on-board RGB LED (one WS2812, driven by the RMT).
 //
 // Board revisions put it on different pins: GPIO48 on v1.0 (and most
-// clones), GPIO38 on v1.1. The pin is kept in NVS, so `led -pin 38` fixes a
-// board without rebuilding.
+// clones), GPIO38 on v1.1. The application keeps the pin as a setting
+// (`cfg -set led_pin, 38`), so a board is fixed without rebuilding.
 #pragma once
 
 #include <cstdint>
@@ -11,9 +11,9 @@ namespace rgb_led {
 
 constexpr int kDefaultPin = 48;
 
-/// Reads the saved pin (kDefaultPin when none) and starts the driver.
-bool begin();
-/// Moves the LED to `gpio` and saves it for the next boots.
+/// Starts the driver on `gpio`.
+bool begin(int gpio);
+/// Moves the LED to `gpio` (after begin()).
 bool set_pin(int gpio);
 int pin();
 

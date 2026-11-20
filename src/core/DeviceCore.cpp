@@ -118,7 +118,8 @@ DeviceCore::~DeviceCore() {
 // start(): the whole of begin()
 // ============================================================================
 
-esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics) noexcept {
+esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics,
+                            const BtpDevice::SettingsFn& settings) noexcept {
     state_.store(State::Starting);
     set_psram_policy(device_.psram);
     const PresetSizes sizes = preset_sizes(device_.memory);
@@ -166,6 +167,17 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
         load_wifi_networks();
         recovery_.mirror(device_.name, networks_, network_count_);
         boot_step("recovery", "installed, %u network(s) mirrored", static_cast<unsigned>(network_count_));
+    }
+    if (settings) {
+        // Before topics() and commands(): they may read the values (D28).
+        Settings declared;
+        settings(declared);
+        if (!settings_mutex_.create()) return fail(error_, ESP_ERR_NO_MEM, kTag, "no memory for the settings lock");
+        const esp_err_t installed = settings_.install(declared, &settings_store_, error_, [](const char* warning) {
+            ESP_LOGW(tag::kSettings, "%s", warning);
+        });
+        if (installed != ESP_OK) return installed;
+        if (!settings_.empty()) boot_step("settings", "%u setting(s)", static_cast<unsigned>(settings_.size()));
     }
     const Link requested = resolve_link();
     boot_step("link", "%s requested%s", link_name(requested),
@@ -221,6 +233,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     register_builtin_commands();
     register_storage_commands();
     if (device_.recovery.enabled) register_recovery_commands();
+    if (!settings_.empty()) register_settings_commands();
     if (commands != nullptr) {
         Commands declared(shell_);
         commands(declared);
@@ -1557,6 +1570,105 @@ void DeviceCore::register_recovery_commands() noexcept {
                        : RESULT_ERROR;
         },
         "factory_reset", "Erase the application (yes) or everything (all), through the recovery", "btp");
+}
+
+// ============================================================================
+// Settings (docs/PLANO.md D28)
+// ============================================================================
+
+void DeviceCore::register_settings_commands() noexcept {
+    shell_.create_module("cfg", "Settings kept in NVS (cfg -list)");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            LinkLock lock(settings_mutex_);
+            char line[192];
+            for (std::size_t i = 0U; i < settings_.size(); ++i) {
+                settings_.describe(i, line, sizeof(line));
+                shell_print(line);
+                shell_print("\n");
+            }
+            return RESULT_OK;
+        },
+        "list", "Every setting: value, type, default, range", "cfg");
+    shell_.add(
+        [this](const char* name) -> std::uint8_t {
+            char value[Settings::kMaxText + 1U];
+            bool found;
+            {
+                LinkLock lock(settings_mutex_);
+                found = settings_.get(name, value, sizeof(value));
+            }
+            char text[Settings::kMaxText + 48U];
+            if (!found) {
+                std::snprintf(text, sizeof(text), "no setting \"%s\" (cfg -list)\n", name);
+                shell_print(text);
+                return RESULT_ERROR;
+            }
+            std::snprintf(text, sizeof(text), "%s = %s\n", name, value);
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "get", "cfg -get <name>", "cfg");
+    shell_.add(
+        [this](const char* name, const char* value) -> std::uint8_t {
+            char text[128];
+            SettingsRegistry::Result result;
+            {
+                LinkLock lock(settings_mutex_);
+                result = settings_.set(name, value);
+                settings_.explain(result, name, text, sizeof(text) - 1U);
+            }
+            std::strncat(text, "\n", sizeof(text) - std::strlen(text) - 1U);
+            shell_print(text);
+            return result == SettingsRegistry::Result::Ok || result == SettingsRegistry::Result::OkReboot
+                       ? RESULT_OK
+                       : RESULT_ERROR;
+        },
+        "set", "cfg -set <name>, <value>", "cfg");
+    shell_.add(
+        [this](const char* name) -> std::uint8_t {
+            SettingsRegistry::Result result;
+            {
+                LinkLock lock(settings_mutex_);
+                result = settings_.reset(name);
+            }
+            char text[128];
+            if (result == SettingsRegistry::Result::UnknownName) {
+                std::snprintf(text, sizeof(text), "no setting \"%s\" (cfg -list; \"all\" resets every one)\n", name);
+            } else {
+                std::snprintf(text, sizeof(text), "%s back to the default%s\n", name,
+                              result == SettingsRegistry::Result::OkReboot ? ": takes effect after btp -reboot" : "");
+            }
+            shell_print(text);
+            return result == SettingsRegistry::Result::UnknownName ? RESULT_ERROR : RESULT_OK;
+        },
+        "reset", "cfg -reset <name|all>", "cfg");
+}
+
+bool DeviceCore::set_setting(const char* name, const char* value) noexcept {
+    if (settings_.empty()) return false;
+    SettingsRegistry::Result result;
+    char text[128];
+    {
+        LinkLock lock(settings_mutex_);
+        result = settings_.set(name, value);
+        settings_.explain(result, name != nullptr ? name : "", text, sizeof(text));
+    }
+    const bool ok = result == SettingsRegistry::Result::Ok || result == SettingsRegistry::Result::OkReboot;
+    if (!ok) ESP_LOGW(tag::kSettings, "set_setting: %s", text);
+    return ok;
+}
+
+bool DeviceCore::save_setting(const char* name) noexcept {
+    if (settings_.empty()) return false;
+    LinkLock lock(settings_mutex_);
+    return settings_.save(name) == SettingsRegistry::Result::Ok;
+}
+
+bool DeviceCore::get_setting(const char* name, char* out, std::size_t size) noexcept {
+    if (settings_.empty()) return false;
+    LinkLock lock(settings_mutex_);
+    return settings_.get(name, out, size);
 }
 
 void DeviceCore::register_storage_commands() noexcept {

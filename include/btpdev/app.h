@@ -43,6 +43,7 @@
 
 #include <btpdev/commands.h>
 #include <btpdev/config.h>
+#include <btpdev/settings.h>
 #include <btpdev/topics.h>
 
 class BtpDevice;
@@ -62,6 +63,9 @@ public:
     virtual void commands(Commands& commands) { (void)commands; }
     /// What TraceView can plot. Default: nothing.
     virtual void topics(Topics& topics) { (void)topics; }
+    /// Values kept in NVS and changed with `cfg -set` (btpdev/settings.h).
+    /// Loaded before commands() and topics(). Default: none.
+    virtual void settings(Settings& settings) { (void)settings; }
 
     /// The device running this App: valid from inside commands() / topics()
     /// on, i.e. once begin() was called. Any task.

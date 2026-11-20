@@ -56,7 +56,7 @@ BtpDevice::BtpDevice(btpdev::App& app) noexcept : app_(&app) {}
 
 BtpDevice::~BtpDevice() { delete core_; }
 
-esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
+esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics, SettingsFn settings) noexcept {
     if (started_) {
         btpdev::fail(error_, BTPDEV_ERR_ALREADY_STARTED, btpdev::tag::kCore,
                      "begin() called twice: the device is already running");
@@ -75,6 +75,7 @@ esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
         btpdev::App* app = app_;
         if (!commands) commands = [app](btpdev::Commands& c) { app->commands(c); };
         if (!topics) topics = [app](btpdev::Topics& t) { app->topics(t); };
+        if (!settings) settings = [app](btpdev::Settings& s) { app->settings(s); };
     }
 
     if (btpdev::check_device_config(device_, error_) != ESP_OK ||
@@ -91,7 +92,7 @@ esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics) noexcept {
         log_failure(error_);
         return error_.code;
     }
-    const esp_err_t err = core_->start(commands, topics);
+    const esp_err_t err = core_->start(commands, topics, settings);
     if (err != ESP_OK) {
         log_failure(error_);
         delete core_;  // stops whatever did start
@@ -107,6 +108,18 @@ std::uint32_t BtpDevice::boot_id() const noexcept {
 
 bool BtpDevice::run(const char* command_line) noexcept {
     return core_ != nullptr && core_->run(command_line);
+}
+
+bool BtpDevice::set_setting(const char* name, const char* value) noexcept {
+    return core_ != nullptr && core_->set_setting(name, value);
+}
+
+bool BtpDevice::save_setting(const char* name) noexcept {
+    return core_ != nullptr && core_->save_setting(name);
+}
+
+bool BtpDevice::get_setting(const char* name, char* out, std::size_t size) const noexcept {
+    return core_ != nullptr && core_->get_setting(name, out, size);
 }
 
 bool BtpDevice::subscribed(const char* topic) const noexcept {

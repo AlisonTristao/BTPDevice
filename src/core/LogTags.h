@@ -21,9 +21,10 @@ constexpr const char* kFs = "btpdev.fs";
 constexpr const char* kCmd = "btpdev.cmd";
 constexpr const char* kTopic = "btpdev.topic";
 constexpr const char* kRecovery = "btpdev.recovery";
+constexpr const char* kSettings = "btpdev.cfg";
 
 constexpr const char* kAll[] = {kCore, kSerial, kTcp,  kWifi, kBle,
-                                kEspNow, kKey, kFs, kCmd, kTopic, kRecovery};
+                                kEspNow, kKey, kFs, kCmd, kTopic, kRecovery, kSettings};
 constexpr std::size_t kCount = sizeof(kAll) / sizeof(kAll[0]);
 
 }  // namespace tag
