@@ -161,6 +161,10 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   uma vez no log), em vez de correr em paralelo sobre o nó BTP.
 
 ### Corrigido
+- **Estouro de stack no `begin()` ao importar a chave:** montar o LittleFS e importar o `bally.key`
+  passavam dos 3,5 KB padrão do `app_main` (crash loop no exemplo 06 depois de um `uploadfs`). O
+  `begin()` agora roda numa task própria de 8 KB, temporária, no mesmo núcleo e prioridade de quem
+  chamou; o `app_main` usa 1,2 KB. Saiu o aviso de stack curta, que não faz mais sentido.
 - **Corrupção de heap no `begin()` com a stack padrão do `app_main` (3,5 KB):** o
   `btp::TopicBuilder` punha 32 `FieldRecord` (~2,5 KB) na stack de quem chama o `begin()`, e o
   estouro sobrescrevia o bloco do heap vizinho (assert no alocador bem depois, em outro lugar;

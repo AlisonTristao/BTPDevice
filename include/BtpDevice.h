@@ -204,6 +204,8 @@ public:
     btp::Node* node() noexcept;
 
 private:
+    esp_err_t start_core(const CommandsFn& commands, const TopicsFn& topics,
+                         const SettingsFn& settings) noexcept;
     btpdev::DeviceConfig device_;
     btpdev::StorageConfig storage_;
     btpdev::App* app_ = nullptr;

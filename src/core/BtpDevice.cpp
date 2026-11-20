@@ -5,6 +5,9 @@
 #include <btp/version.hpp>
 #include <btpdev/version.h>
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#include <freertos/task.h>
 
 #include "core/ConfigCheck.h"
 #include "core/DeviceCore.h"
@@ -56,6 +59,53 @@ BtpDevice::BtpDevice(btpdev::App& app) noexcept : app_(&app) {}
 
 BtpDevice::~BtpDevice() { delete core_; }
 
+namespace {
+
+// begin() does its work on a task of its own: mounting LittleFS, importing a
+// key file and starting Wi-Fi go deep, and app_main's stack is 3.5 KB by
+// default. Run on the caller's stack, an overflow there landed in the heap
+// block next to it and crashed somewhere else, much later.
+constexpr std::uint32_t kBeginStackBytes = 8192U;
+
+struct StartJob {
+    btpdev::DeviceCore* core;
+    const BtpDevice::CommandsFn* commands;
+    const BtpDevice::TopicsFn* topics;
+    const BtpDevice::SettingsFn* settings;
+    esp_err_t result;
+    SemaphoreHandle_t done;
+};
+
+void start_task(void* arg) {
+    auto* job = static_cast<StartJob*>(arg);
+    job->result = job->core->start(*job->commands, *job->topics, *job->settings);
+    xSemaphoreGive(job->done);
+    vTaskDelete(nullptr);
+}
+
+}  // namespace
+
+esp_err_t BtpDevice::start_core(const CommandsFn& commands, const TopicsFn& topics,
+                                const SettingsFn& settings) noexcept {
+    core_->set_begin_task(xTaskGetCurrentTaskHandle());
+    StartJob job{core_, &commands, &topics, &settings, ESP_FAIL, xSemaphoreCreateBinary()};
+    // Same core as the caller: drivers install their interrupts on the core
+    // that installs them. Same priority, so nothing changes for the caller.
+    TaskHandle_t task = nullptr;
+    if (job.done != nullptr &&
+        xTaskCreatePinnedToCore(&start_task, "btpdev_begin", kBeginStackBytes, &job, uxTaskPriorityGet(nullptr),
+                                &task, xPortGetCoreID()) == pdPASS) {
+        xSemaphoreTake(job.done, portMAX_DELAY);
+        vSemaphoreDelete(job.done);
+        return job.result;
+    }
+    // No memory for the helper: run here and hope the caller's stack holds.
+    if (job.done != nullptr) vSemaphoreDelete(job.done);
+    ESP_LOGW(btpdev::tag::kCore, "no memory for a %u-byte begin() task: running on the caller's stack",
+             static_cast<unsigned>(kBeginStackBytes));
+    return core_->start(commands, topics, settings);
+}
+
 esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics, SettingsFn settings) noexcept {
     if (started_) {
         btpdev::fail(error_, BTPDEV_ERR_ALREADY_STARTED, btpdev::tag::kCore,
@@ -92,7 +142,7 @@ esp_err_t BtpDevice::begin(CommandsFn commands, TopicsFn topics, SettingsFn sett
         log_failure(error_);
         return error_.code;
     }
-    const esp_err_t err = core_->start(commands, topics, settings);
+    const esp_err_t err = start_core(commands, topics, settings);
     if (err != ESP_OK) {
         log_failure(error_);
         delete core_;  // stops whatever did start

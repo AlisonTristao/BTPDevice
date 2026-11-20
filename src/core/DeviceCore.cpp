@@ -40,8 +40,6 @@ namespace btpdev {
 namespace {
 
 constexpr const char* kTag = tag::kCore;
-// Stack begin() needs from its caller (measured: ~2.4 KB on an ESP32-S3).
-constexpr UBaseType_t kBeginStackBytes = 2560U;
 constexpr const char* kNvsNamespace = "btpdev";
 
 std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time() / 1000LL); }
@@ -126,23 +124,6 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     boot_started_us_ = esp_timer_get_time();
     boot_heap_start_ = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     boot_heap_ = boot_heap_start_;
-    begin_task_ = xTaskGetCurrentTaskHandle();
-    {
-        // begin() runs on the caller's stack and needs about 2.5 KB of it.
-        // A task stack lives in the heap: an overflow here silently corrupts
-        // a heap block and the crash comes much later, somewhere else.
-        // What is left below the current stack pointer: the high-water mark
-        // would also count what the IDF's startup code used before app_main.
-        const auto* start = reinterpret_cast<const std::uint8_t*>(xTaskGetStackStart(nullptr));
-        const auto* sp = reinterpret_cast<const std::uint8_t*>(esp_cpu_get_sp());
-        const UBaseType_t free_bytes = sp > start ? static_cast<UBaseType_t>(sp - start) : 0U;
-        if (free_bytes < kBeginStackBytes) {
-            ESP_LOGW(kTag,
-                     "begin() runs with %u bytes of stack left in this task and needs about %u: raise it "
-                     "(app_main: CONFIG_ESP_MAIN_TASK_STACK_SIZE, 6144 is plenty)",
-                     static_cast<unsigned>(free_bytes), static_cast<unsigned>(kBeginStackBytes));
-        }
-    }
     {
         const esp_app_desc_t* app = esp_app_get_description();
         boot_step("boot", "BTPDevice %s, %s, IDF %s, fw %s", BTPDEV_VERSION_STRING, CONFIG_IDF_TARGET,

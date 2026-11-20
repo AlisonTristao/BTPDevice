@@ -73,6 +73,8 @@ public:
     bool set_setting(const char* name, const char* value) noexcept;
     bool save_setting(const char* name) noexcept;
     bool get_setting(const char* name, char* out, std::size_t size) noexcept;
+    /// The task that called BtpDevice::begin() (the memory report lists it).
+    void set_begin_task(TaskHandle_t task) noexcept { begin_task_ = task; }
     TimeKeeper& wall_clock() noexcept { return time_; }
     const TimeKeeper& wall_clock() const noexcept { return time_; }
 

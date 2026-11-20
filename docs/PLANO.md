@@ -722,6 +722,7 @@ Branch `feature/settings-time-power`, a partir da `feature/recovery`. Decisões 
 Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, configurações ~6 KB, sono e PM ~4 KB) e ~2 KB de RAM.
 
 **S0. Memória (antes das funcionalidades)**
+- [x] O `begin()` roda numa task própria de 8 KB (temporária, mesmo núcleo e prioridade de quem chamou): importar o `bally.key` do LittleFS estourava os 3,5 KB do `app_main` (achado na placa, virava crash loop).
 - [x] SD fora do binário de quem não usa (`SdConfig::driver = btpdev::sd_card`): −114 KB de flash, −10 KB de RAM estática.
 - [x] Stacks pelo pico medido (manifesto, assinatura a 50 Hz e comandos juntos): `comms` 5 KB (pico 3,4), `shell` 5 KB (2,8), TCP 3 KB (1,3); eram 8, 8 e 6.
 - [x] `DeviceConfig::psram` (`Off`, `Buffers`, `Stacks`); exemplo 06 com a PSRAM e o Wi-Fi/lwIP nela.
@@ -747,7 +748,7 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [x] `btp -time` (hora local, UTC, fuso, fonte, idade), `btp -time_set <hora>` (ISO 8601 com fuso, local sem fuso, ou segundos desde 1970: o que o TraceView mandará), `btp -tz <POSIX>` (salvo no NVS). Comandos separados porque o TinyShell exige um número fixo de argumentos.
 - [x] `BtpDevice::time_valid()`, `now()`, `now_us()`, `time_source()`, `set_time()`. Validade e fonte na memória do RTC, junto do relógio.
 - [x] Testes de host (`test_time_text`): fusos, Z, sem segundos, local, época, datas inválidas, ano bissexto, formatação UTC (conferidos contra o `datetime` do Python).
-- [ ] Na placa: SNTP acertando (o hotspot de teste caiu antes da resposta), `btp -time_set`, `btp -tz`, hora mantida após `btp -reboot`.
+- [x] Na placa: SNTP acertando em segundos (igual ao relógio do PC) e corrigindo uma hora manual errada depois do reboot; `btp -time_set` local e com fuso; recusa de data inválida e de antes de 2025; `btp -tz` trocando e recusando lixo; hora e fuso mantidos após `btp -reboot`.
 
 **S3. Economia sem desconectar (D30)**
 - [ ] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`), `esp_pm_configure` e `esp_wifi_set_ps`.
