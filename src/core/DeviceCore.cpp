@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <new>
 #include <string>
 #include <vector>
@@ -32,6 +33,7 @@
 
 #include "core/ConfigCheck.h"
 #include "core/Identity.h"
+#include "core/TimeText.h"
 #include "core/LogTags.h"
 #include "storage/Mount.h"
 #include "transport/BleLink.h"
@@ -47,6 +49,9 @@ namespace {
 
 constexpr const char* kTag = tag::kCore;
 constexpr const char* kNvsNamespace = "btpdev";  // the old name, kept: devices in the field have data there
+// The JSON replies for TraceView (cfg -json, btp -wifi_json) fit one
+// COMMAND_RESULT, whose message the Small preset caps at 768 octets.
+constexpr std::size_t kJsonReplyBytes = 700U;
 
 std::uint64_t now_ms() { return static_cast<std::uint64_t>(esp_timer_get_time() / 1000LL); }
 
@@ -225,7 +230,7 @@ esp_err_t DeviceCore::start(const TraceKit::CommandsFn& commands, const TraceKit
     register_builtin_commands();
     register_storage_commands();
     if (device_.recovery.enabled) register_recovery_commands();
-    if (!settings_.empty()) register_settings_commands();
+    register_settings_commands();  // even empty: `cfg -json 0` answers {"count":0}
     register_time_commands();
     register_power_commands();
     register_sleep_commands();
@@ -624,6 +629,15 @@ void DeviceCore::fill_catalog() noexcept {
         }
     };
     for (const Entry& e : automatic) add(e.key, e.label, e.value);
+    // Where the recovery answers (TraceView's OTA tab uses it as the address
+    // when the user typed none). The recovery takes the same <name>.local.
+    if (device_.recovery.enabled && recovery_.available()) {
+        char host[64] = "";
+        if (mdns_host_from_name(device_.name, host, sizeof(host))) {
+            std::snprintf(ota_endpoint_, sizeof(ota_endpoint_), "%s.local", host);
+            add("ota_endpoint", "Recovery", ota_endpoint_);
+        }
+    }
     for (const SourceInfo& e : device_.source_info) {
         if (e.key == nullptr) break;
         add(e.key, e.label, e.value);
@@ -1777,6 +1791,25 @@ void DeviceCore::register_time_commands() noexcept {
             return RESULT_OK;
         },
         "tz", "btp -tz <POSIX TZ> (saved; <-03>3 is Brasilia)", "btp");
+    shell_.add(
+        [this](const char* epoch_text) -> std::uint8_t {
+            char* end = nullptr;
+            const long long epoch = std::strtoll(epoch_text != nullptr ? epoch_text : "", &end, 10);
+            if (end == epoch_text || epoch < kMinValidEpoch) {
+                shell_print("usage: btp -time_sync <seconds since 1970, UTC>\n");
+                return RESULT_ERROR;
+            }
+            // A clock from SNTP is better than a PC's: keep it. Anything else
+            // (none, typed, an old sync) takes the PC's.
+            if (time_.valid() && time_.source() == TimeSource::Sntp) {
+                shell_print("kept: the clock comes from SNTP\n");
+                return RESULT_OK;
+            }
+            if (!time_.set(static_cast<std::int64_t>(epoch), TimeSource::Manual)) return RESULT_ERROR;
+            shell_print("clock set from TraceView\n");
+            return RESULT_OK;
+        },
+        "time_sync", "btp -time_sync <epoch>: TraceView's clock, unless SNTP already set it", "btp");
 }
 
 // ============================================================================
@@ -1797,6 +1830,24 @@ void DeviceCore::register_settings_commands() noexcept {
             return RESULT_OK;
         },
         "list", "Every setting: value, type, default, range", "cfg");
+    shell_.add(
+        [this](int index) -> std::uint8_t {
+            char json[kJsonReplyBytes];
+            bool ok;
+            {
+                LinkLock lock(settings_mutex_);
+                ok = settings_.describe_json(index < 0 ? settings_.size() : static_cast<std::size_t>(index), json,
+                                             sizeof(json) - 1U);
+            }
+            if (!ok) {
+                shell_print("{\"error\":\"too long\"}\n");
+                return RESULT_ERROR;
+            }
+            std::strncat(json, "\n", sizeof(json) - std::strlen(json) - 1U);
+            shell_print(json);
+            return RESULT_OK;
+        },
+        "json", "cfg -json <index>: one setting as JSON, with the count (for TraceView)", "cfg");
     shell_.add(
         [this](const char* name) -> std::uint8_t {
             char value[Settings::kMaxText + 1U];
@@ -1979,6 +2030,78 @@ void DeviceCore::register_storage_commands() noexcept {
             return RESULT_OK;
         },
         "wifi_add", "Add a network to the networks file", "btp");
+    shell_.add(
+        [this]() -> std::uint8_t {
+            // Names only, never the passwords. The one from DeviceConfig::wifi
+            // (always first) is "config": it cannot be removed from here.
+            const bool has_config = device_.wifi.ssid != nullptr && device_.wifi.ssid[0] != '\0';
+            char json[kJsonReplyBytes];
+            int used = std::snprintf(json, sizeof(json), "{\"max\":%u,\"networks\":[",
+                                     static_cast<unsigned>(kMaxWifiNetworks));
+            for (std::size_t i = 0U; i < network_count_ && used > 0 && used < static_cast<int>(sizeof(json)); ++i) {
+                char ssid[2U * WifiNetwork::kMaxSsid + 1U];
+                std::size_t n = 0U;
+                for (const char* p = networks_[i].ssid; *p != '\0' && n + 2U < sizeof(ssid); ++p) {
+                    if (*p == '"' || *p == '\\') ssid[n++] = '\\';
+                    ssid[n++] = *p;
+                }
+                ssid[n] = '\0';
+                used += std::snprintf(json + used, sizeof(json) - static_cast<std::size_t>(used),
+                                      "%s{\"ssid\":\"%s\",\"source\":\"%s\"}", i == 0U ? "" : ",", ssid,
+                                      i == 0U && has_config ? "config" : "file");
+            }
+            if (used > 0 && used < static_cast<int>(sizeof(json))) {
+                std::snprintf(json + used, sizeof(json) - static_cast<std::size_t>(used), "]}\n");
+            }
+            shell_print(json);
+            return RESULT_OK;
+        },
+        "wifi_json", "Known Wi-Fi networks as JSON (names only, for TraceView)", "btp");
+    shell_.add(
+        [this](const char* ssid) -> std::uint8_t {
+            FileSystem* volume = fs();
+            if (volume == nullptr || device_.wifi.file == nullptr || ssid == nullptr || ssid[0] == '\0') {
+                shell_print("usage: btp -wifi_remove <ssid>  (needs a mounted file system)\n");
+                return RESULT_ERROR;
+            }
+            constexpr std::size_t kCapacity = kMaxWifiNetworks * (WifiNetwork::kMaxSsid + WifiNetwork::kMaxPassword + 4U);
+            std::unique_ptr<char[]> text(new (std::nothrow) char[kCapacity + 1U]);
+            std::unique_ptr<char[]> kept(new (std::nothrow) char[kCapacity + 1U]);
+            std::size_t size = 0U;
+            if (!text || !kept || !volume->read(device_.wifi.file, text.get(), kCapacity, &size)) {
+                shell_print("no networks file\n");
+                return RESULT_ERROR;
+            }
+            text[size] = '\0';
+            // Every line whose name (before the first comma) is `ssid` goes.
+            std::size_t out = 0U;
+            unsigned removed = 0U;
+            const std::size_t want = std::strlen(ssid);
+            for (char* line = text.get(); *line != '\0';) {
+                char* next = std::strchr(line, '\n');
+                const std::size_t length = next != nullptr ? static_cast<std::size_t>(next - line) + 1U : std::strlen(line);
+                const char* comma = static_cast<const char*>(std::memchr(line, ',', length));
+                const std::size_t name = comma != nullptr ? static_cast<std::size_t>(comma - line) : 0U;
+                if (comma != nullptr && name == want && std::strncmp(line, ssid, want) == 0) {
+                    ++removed;
+                } else {
+                    std::memcpy(kept.get() + out, line, length);
+                    out += length;
+                }
+                line += length;
+            }
+            std::memset(text.get(), 0, kCapacity + 1U);  // passwords
+            if (removed == 0U) {
+                std::memset(kept.get(), 0, kCapacity + 1U);
+                shell_print("not in the networks file\n");
+                return RESULT_ERROR;
+            }
+            const bool written = volume->write(device_.wifi.file, kept.get(), out);
+            std::memset(kept.get(), 0, kCapacity + 1U);
+            shell_print(written ? "removed: restart to stop using it (btp -reboot)\n" : "could not write the file\n");
+            return written ? RESULT_OK : RESULT_ERROR;
+        },
+        "wifi_remove", "btp -wifi_remove <ssid>: take a network out of the networks file", "btp");
     shell_.add(
         [this]() -> std::uint8_t {
             FileSystem* volume = fs();

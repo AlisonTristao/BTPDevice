@@ -6,6 +6,14 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- **Integração com o TraceView**: o manifesto traz `ota_endpoint` (`<nome>.local` do recovery,
+  quando há um), e comandos com saída para programas: `cfg -json <i>` (uma configuração por
+  chamada, com tipo, valor, padrão, faixa, unidade, ajuda e se exige reboot; cabe num
+  COMMAND_RESULT), `btp -wifi_json` (só os nomes) e `btp -wifi_remove <ssid>`. `btp -time_sync
+  <epoch>` acerta a hora pelo TraceView, a menos que o SNTP já tenha acertado. O módulo `cfg`
+  existe mesmo sem configurações (`cfg -json 0` responde `{"count":0}`).
+
 ### Alterado
 - **A biblioteca agora se chama TraceKit** (antes BTPDevice). O componente é `TraceKit` (a pasta do
   checkout tem de ter esse nome), a classe `TraceKit`, o header `<TraceKit.h>`, o namespace e a pasta

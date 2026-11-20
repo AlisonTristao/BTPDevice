@@ -428,6 +428,92 @@ void SettingsRegistry::describe(std::size_t index, char* out, std::size_t size) 
                   d.help_);
 }
 
+namespace {
+
+// Appends `text` to out[*used] as a JSON string (quotes, escapes).
+void append_json_string(const char* text, char* out, std::size_t size, std::size_t* used) noexcept {
+    auto put = [&](char c) {
+        if (*used + 1U < size) out[(*used)++] = c;
+    };
+    put('"');
+    for (const char* p = text != nullptr ? text : ""; *p != '\0'; ++p) {
+        const unsigned char c = static_cast<unsigned char>(*p);
+        if (c == '"' || c == '\\') {
+            put('\\');
+            put(static_cast<char>(c));
+        } else if (c < 0x20U) {
+            char escaped[8];
+            std::snprintf(escaped, sizeof(escaped), "\\u%04x", c);
+            for (const char* e = escaped; *e != '\0'; ++e) put(*e);
+        } else {
+            put(static_cast<char>(c));
+        }
+    }
+    put('"');
+    out[*used < size ? *used : size - 1U] = '\0';
+}
+
+// A JSON number, or null for what JSON has no number for (inf, nan).
+void append_json_number(double v, char* out, std::size_t size, std::size_t* used) noexcept {
+    if (*used >= size) return;
+    const int n = std::isfinite(v) ? std::snprintf(out + *used, size - *used, "%.9g", v)
+                                   : std::snprintf(out + *used, size - *used, "null");
+    if (n > 0) *used += static_cast<std::size_t>(n);
+}
+
+void append_raw(const char* text, char* out, std::size_t size, std::size_t* used) noexcept {
+    if (*used >= size) return;
+    const int n = std::snprintf(out + *used, size - *used, "%s", text);
+    if (n > 0) *used += static_cast<std::size_t>(n);
+}
+
+}  // namespace
+
+bool SettingsRegistry::describe_json(std::size_t index, char* out, std::size_t size) const noexcept {
+    if (size == 0U) return false;
+    std::size_t used = 0U;
+    char head[48];
+    std::snprintf(head, sizeof(head), "{\"count\":%u", static_cast<unsigned>(list_.size()));
+    append_raw(head, out, size, &used);
+    if (index >= list_.size()) {
+        append_raw("}", out, size, &used);
+        return used < size;
+    }
+    const SettingDecl& d = list_[index];
+    std::snprintf(head, sizeof(head), ",\"index\":%u,\"name\":", static_cast<unsigned>(index));
+    append_raw(head, out, size, &used);
+    append_json_string(d.name_, out, size, &used);
+    append_raw(",\"type\":", out, size, &used);
+    append_json_string(type_name(d.type_), out, size, &used);
+    if (d.type_ == SettingType::Text) {
+        append_raw(",\"value\":", out, size, &used);
+        append_json_string(static_cast<const char*>(d.variable_), out, size, &used);
+        append_raw(",\"default\":", out, size, &used);
+        append_json_string(d.default_text_, out, size, &used);
+        append_raw(",\"max\":", out, size, &used);
+        append_json_number(static_cast<double>(d.text_size_ > 0U ? d.text_size_ - 1U : 0U), out, size, &used);
+    } else if (d.type_ == SettingType::Bool) {
+        append_raw(read_number(d, d.type_, d.variable_) != 0.0 ? ",\"value\":true" : ",\"value\":false", out, size,
+                   &used);
+        append_raw(d.default_number_ != 0.0 ? ",\"default\":true" : ",\"default\":false", out, size, &used);
+    } else {
+        append_raw(",\"value\":", out, size, &used);
+        append_json_number(read_number(d, d.type_, d.variable_), out, size, &used);
+        append_raw(",\"default\":", out, size, &used);
+        append_json_number(d.default_number_, out, size, &used);
+        append_raw(",\"min\":", out, size, &used);
+        append_json_number(std::isnan(d.min_) ? type_min(d.type_) : d.min_, out, size, &used);
+        append_raw(",\"max\":", out, size, &used);
+        append_json_number(std::isnan(d.max_) ? type_max(d.type_) : d.max_, out, size, &used);
+    }
+    append_raw(",\"unit\":", out, size, &used);
+    append_json_string(d.unit_, out, size, &used);
+    append_raw(",\"help\":", out, size, &used);
+    append_json_string(d.help_, out, size, &used);
+    append_raw(d.reboot_ ? ",\"reboot\":true}" : ",\"reboot\":false}", out, size, &used);
+    return used + 1U < size;
+}
+
 void SettingsRegistry::explain(Result result, const char* name, char* out, std::size_t size) const noexcept {
     const SettingDecl* d = find(name);
     switch (result) {

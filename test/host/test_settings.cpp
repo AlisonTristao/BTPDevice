@@ -255,6 +255,39 @@ void list_lines() {
     CHECK_CONTAINS(line, "\"bench\"");
 }
 
+// cfg -json <i>: what TraceView builds its settings editor from.
+void json_one_setting_per_index() {
+    App app;
+    Settings s;
+    app.declare(s);
+    SettingsRegistry reg;
+    tracekit::ErrorInfo error;
+    CHECK(reg.install(s, nullptr, error) == ESP_OK);
+    char json[512];
+    CHECK(reg.describe_json(0, json, sizeof(json)));
+    CHECK_STR_EQ(json,
+                 "{\"count\":6,\"index\":0,\"name\":\"setpoint\",\"type\":\"f32\",\"value\":25,"
+                 "\"default\":25,\"min\":0,\"max\":100,\"unit\":\"C\",\"help\":\"\",\"reboot\":false}");
+    CHECK(reg.describe_json(2, json, sizeof(json)));
+    CHECK_CONTAINS(json, "\"reboot\":true");
+    CHECK_CONTAINS(json, "\"min\":0,\"max\":255");  // u8 without a range: the type's
+    CHECK(reg.describe_json(3, json, sizeof(json)));
+    CHECK_CONTAINS(json, "\"type\":\"bool\",\"value\":true,\"default\":true");
+    CHECK(reg.describe_json(4, json, sizeof(json)));
+    CHECK_CONTAINS(json, "\"value\":-5");
+    // Text: quoted, escaped, with its longest length.
+    std::strcpy(app.site, "a\"b\\c");
+    CHECK(reg.describe_json(5, json, sizeof(json)));
+    CHECK_CONTAINS(json, "\"value\":\"a\\\"b\\\\c\",\"default\":\"bench\",\"max\":15");
+    // Past the end, only the count.
+    CHECK(reg.describe_json(6, json, sizeof(json)));
+    CHECK_STR_EQ(json, "{\"count\":6}");
+    // Too small a buffer is reported, never overrun.
+    char tiny[24];
+    CHECK(!reg.describe_json(0, tiny, sizeof(tiny)));
+    CHECK(std::strlen(tiny) < sizeof(tiny));
+}
+
 }  // namespace
 
 int main() {
@@ -265,5 +298,6 @@ int main() {
     declarations_are_checked();
     a_refusing_store_is_reported();
     list_lines();
+    json_one_setting_per_index();
     return test_result("test_settings");
 }

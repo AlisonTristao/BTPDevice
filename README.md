@@ -418,6 +418,11 @@ cfg -reset setpoint        volta ao padrão (cfg -reset all)
 - Um valor salvo com outro tipo, ou fora da faixa nova, volta ao padrão, com aviso.
 - `btp -factory_reset yes` mantém as configurações; `all` apaga.
 
+**No TraceView**, o ícone de ajustes no card de um dispositivo TraceKit abre um painel com
+estas configurações já com o editor certo para cada tipo e faixa (`cfg -json`), as redes
+Wi-Fi (adicionar e tirar) e as ações (`btp -reboot`, `-recovery`, `-bootloader`, `-awake`,
+reset de fábrica). Nada a configurar: cada dispositivo descreve as suas.
+
 ## Hora
 
 O ESP32 não tem relógio com bateria. A hora sobrevive a reboot e a sono profundo, mas não
@@ -569,6 +574,11 @@ python tools/btp_ota.py meu-sensor.local .pio/build/esp32-s3/firmware.bin
 
 Ou pelo navegador: `http://<nome>.local/` abre uma página para escolher o `.bin`.
 
+**Pelo TraceView**, a aba OTA (*File → Upload Firmware*) faz tudo com um clique: com o
+dispositivo conectado, ela manda `btp -recovery`, espera o recovery e envia o firmware,
+assinado com a mesma senha da conexão. O endereço vem do manifesto (`ota_endpoint`, que a
+lib preenche com `<nome>.local` quando há recovery).
+
 - **Sem rede conhecida**, o recovery cria a própria, `btp-<nome>`. Conecte o celular nela
   e a página abre sozinha (ou abra `http://192.168.4.1/`).
 - **Autenticação:** o upload é autenticado pela chave E. A senha é digitada no PC ou na
@@ -705,10 +715,12 @@ Disponíveis em todo dispositivo, no terminal do TraceView (ou pelo
 | `btp -topics` | Tópicos declarados |
 | `btp -reboot` | Reinicia |
 | `btp -link` / `-link_set <serial\|tcp\|ble\|espnow>` | Link em uso / salva o do próximo boot |
-| `btp -wifi` / `-wifi_add <ssid>, <senha>` | Redes conhecidas (só nomes) / acrescenta uma |
+| `btp -wifi` / `-wifi_add <ssid>, <senha>` / `-wifi_remove <ssid>` | Redes conhecidas (só nomes) / acrescenta / tira uma |
+| `btp -wifi_json` | As redes em JSON, para o TraceView (só nomes) |
 | `btp -fs` | Arquivos e espaço |
 | `btp -key` / `-key_import` / `-key_forget yes` | Situação da chave / importa o arquivo / apaga |
 | `btp -time` / `-time_set <data>` / `-tz <POSIX>` | Hora / acerta / fuso |
+| `btp -time_sync <epoch>` | A hora do TraceView, a menos que o SNTP já tenha acertado (o TraceView manda ao conectar) |
 | `btp -power` / `-power_set <saving\|performance>` | Modo de energia |
 | `btp -sleep` / `-awake <min>` | Por que acordou / impede o sono por N minutos |
 | `btp -recovery` / `-recovery_info` | Reinicia no recovery / partição, versão, crashes |
@@ -716,6 +728,7 @@ Disponíveis em todo dispositivo, no terminal do TraceView (ou pelo
 | `btp -bootloader` | Modo download da ROM por 30 s |
 | `btp -peer` / `-peer_password <texto>` | Link entre dispositivos |
 | `cfg -list` / `-get` / `-set` / `-reset` | [Configurações](#configurações-persistentes) |
+| `cfg -json <i>` | A configuração `i` em JSON, com o total, para o TraceView |
 
 ## Referência: API do `TraceKit`
 

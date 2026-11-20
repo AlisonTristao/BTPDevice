@@ -60,6 +60,15 @@ public:
 
     /// One `cfg -list` line for setting `index`.
     void describe(std::size_t index, char* out, std::size_t size) const noexcept;
+
+    /// `cfg -json <index>`: setting `index` as one JSON object, for a program
+    /// (TraceView builds its settings editor from it). One per call because
+    /// a COMMAND_RESULT is under 1 KB:
+    ///   {"count":3,"index":0,"name":"period_s","type":"u32","value":60,
+    ///    "default":60,"min":10,"max":86400,"unit":"s","help":"...","reboot":false}
+    /// Text has "max" = its longest length. Past the end, or with no
+    /// settings, just {"count":N}. False when `out` was too small.
+    bool describe_json(std::size_t index, char* out, std::size_t size) const noexcept;
     /// A sentence for a Result about `name` (with the range when relevant).
     void explain(Result result, const char* name, char* out, std::size_t size) const noexcept;
 

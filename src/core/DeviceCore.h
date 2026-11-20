@@ -272,6 +272,7 @@ private:
     btp::Catalog* catalog_ = nullptr;
     void (*destroy_node_)(btp::Node*) = nullptr;
     char fw_build_[40] = {};
+    char ota_endpoint_[72] = {};  // "<host>.local" of the recovery, in the manifest
 
     // Link.
     LinkDriver* link_ = nullptr;
