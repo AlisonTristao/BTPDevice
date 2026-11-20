@@ -4,6 +4,14 @@ url: https://github.com/AlisonTristao/TraceKit
 license: MIT
 dependencies:
   idf: ">=6.0"
+  # Protocol and shell, fetched from GitHub at a pinned tag. The key is the
+  # component name the CMakeLists.txt requires (REQUIRES BTP TinyShell).
+  BTP:
+    git: https://github.com/AlisonTristao/BTP.git
+    version: v2.51.0
+  TinyShell:
+    git: https://github.com/AlisonTristao/TinyShell.git
+    version: v2.2.0
   # Serial link over native USB (TinyUSB CDC); only chips with USB OTG.
   espressif/esp_tinyusb:
     version: "^2.0.1"

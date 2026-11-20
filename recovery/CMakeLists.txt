@@ -3,12 +3,11 @@
 # tools/pio_recovery.py.
 cmake_minimum_required(VERSION 3.16)
 
-# BTP (for the key file's CRC) from the sibling checkout, like test_apps/.
-get_filename_component(_tracekit_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
-if(NOT DEFINED TRACEKIT_BTP_DIR)
-    get_filename_component(TRACEKIT_BTP_DIR "${_tracekit_root}/../BTP" ABSOLUTE)
+# BTP (for the key file's CRC) comes from GitHub through main/idf_component.yml.
+# For a local checkout instead, pass -DTRACEKIT_BTP_DIR=<path>.
+if(DEFINED TRACEKIT_BTP_DIR)
+    list(APPEND EXTRA_COMPONENT_DIRS "${TRACEKIT_BTP_DIR}")
 endif()
-list(APPEND EXTRA_COMPONENT_DIRS "${TRACEKIT_BTP_DIR}")
 
 # What `btp -recovery_info` and /status report (esp_app_desc_t::version).
 set(PROJECT_VER "0.1.0")

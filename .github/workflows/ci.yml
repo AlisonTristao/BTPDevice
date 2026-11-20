@@ -1,6 +1,8 @@
 # Host tests on every push, plus an ESP-IDF build of every test app and
-# example. BTP and TinyShell are checked out next to this repository, the same
-# sibling layout test_apps/tracekit_components.cmake expects locally.
+# example. BTP and TinyShell are fetched from GitHub at the tags pinned in
+# idf_component.yml (component manager) and test/host/CMakeLists.txt
+# (FetchContent). The checkout goes to a folder named TraceKit because ESP-IDF
+# names the component after its folder.
 name: ci
 
 on:
@@ -12,10 +14,6 @@ permissions:
   contents: read
 
 env:
-  # Minimum versions TraceKit builds against (docs/PLANO.md D15). Bump in
-  # the same commit that starts using something newer.
-  BTP_REF: v2.51.0
-  TINYSHELL_REF: v2.2.0
   IDF_VERSION: v6.0.1
 
 jobs:
@@ -25,16 +23,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: TraceKit
-      - uses: actions/checkout@v4
-        with:
-          repository: AlisonTristao/BTP
-          ref: ${{ env.BTP_REF }}
-          path: BTP
-      - uses: actions/checkout@v4
-        with:
-          repository: AlisonTristao/TinyShell
-          ref: ${{ env.TINYSHELL_REF }}
-          path: TinyShell
       - name: Configure
         run: cmake -S TraceKit/test/host -B build
       - name: Build
@@ -68,16 +56,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: TraceKit
-      - uses: actions/checkout@v4
-        with:
-          repository: AlisonTristao/BTP
-          ref: ${{ env.BTP_REF }}
-          path: BTP
-      - uses: actions/checkout@v4
-        with:
-          repository: AlisonTristao/TinyShell
-          ref: ${{ env.TINYSHELL_REF }}
-          path: TinyShell
       - name: Build ${{ matrix.app }} (${{ matrix.target }})
         uses: espressif/esp-idf-ci-action@v1
         with:

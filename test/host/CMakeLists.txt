@@ -14,19 +14,37 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 get_filename_component(TRACEKIT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 
-# BTP from the sibling checkout (same layout as test_apps/), codec only: no
-# AEAD backend on the host, no BTP test suites.
-if(NOT DEFINED TRACEKIT_BTP_DIR)
-    get_filename_component(TRACEKIT_BTP_DIR "${TRACEKIT_ROOT}/../BTP" ABSOLUTE)
-endif()
+# BTP and TinyShell come from GitHub at the same tags as idf_component.yml.
+# Pass -DTRACEKIT_BTP_DIR=<path> / -DTRACEKIT_TINYSHELL_DIR=<path> to use local
+# checkouts instead.
+include(FetchContent)
+set(TRACEKIT_BTP_TAG v2.51.0)
+set(TRACEKIT_TINYSHELL_TAG v2.2.0)
+
+# BTP, codec only: no AEAD backend on the host, no BTP test suites.
 set(BTP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BTP_ENABLE_AEAD OFF CACHE BOOL "" FORCE)
 set(BTP_INSTALL OFF CACHE BOOL "" FORCE)
+if(NOT DEFINED TRACEKIT_BTP_DIR)
+    FetchContent_Declare(btp
+        GIT_REPOSITORY https://github.com/AlisonTristao/BTP.git
+        GIT_TAG ${TRACEKIT_BTP_TAG}
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR _download_only)  # add_subdirectory below, EXCLUDE_FROM_ALL
+    FetchContent_MakeAvailable(btp)
+    set(TRACEKIT_BTP_DIR "${btp_SOURCE_DIR}")
+endif()
 add_subdirectory("${TRACEKIT_BTP_DIR}" btp EXCLUDE_FROM_ALL)
 
-# TinyShell from the sibling checkout (ShellLineEditor, for the terminal).
+# TinyShell (ShellLineEditor, for the terminal).
 if(NOT DEFINED TRACEKIT_TINYSHELL_DIR)
-    get_filename_component(TRACEKIT_TINYSHELL_DIR "${TRACEKIT_ROOT}/../TinyShell" ABSOLUTE)
+    FetchContent_Declare(tinyshell
+        GIT_REPOSITORY https://github.com/AlisonTristao/TinyShell.git
+        GIT_TAG ${TRACEKIT_TINYSHELL_TAG}
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR _download_only)  # add_subdirectory below, EXCLUDE_FROM_ALL
+    FetchContent_MakeAvailable(tinyshell)
+    set(TRACEKIT_TINYSHELL_DIR "${tinyshell_SOURCE_DIR}")
 endif()
 add_subdirectory("${TRACEKIT_TINYSHELL_DIR}" tinyshell EXCLUDE_FROM_ALL)
 target_compile_definitions(tinyshell PUBLIC TINYSHELL_COLOR)

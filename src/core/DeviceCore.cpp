@@ -2033,15 +2033,36 @@ void DeviceCore::register_storage_commands() noexcept {
     shell_.add(
         [this]() -> std::uint8_t {
             // Names only, never the passwords. The one from DeviceConfig::wifi
-            // (always first) is "config": it cannot be removed from here.
+            // (always first) is "config": it cannot be removed from here. The
+            // rest come from the file as it is NOW, so an add or a remove
+            // shows at once (the link itself uses them from the next boot).
             const bool has_config = device_.wifi.ssid != nullptr && device_.wifi.ssid[0] != '\0';
+            std::unique_ptr<WifiNetwork[]> list(new (std::nothrow) WifiNetwork[kMaxWifiNetworks]);
+            if (!list) return RESULT_ERROR;
+            std::size_t count = 0U;
+            if (has_config) {
+                std::snprintf(list[0].ssid, sizeof(list[0].ssid), "%s", device_.wifi.ssid);
+                count = 1U;
+            }
+            FileSystem* volume = fs();
+            if (volume != nullptr && device_.wifi.file != nullptr && volume->exists(device_.wifi.file)) {
+                constexpr std::size_t kCapacity =
+                    kMaxWifiNetworks * (WifiNetwork::kMaxSsid + WifiNetwork::kMaxPassword + 4U);
+                std::unique_ptr<char[]> text(new (std::nothrow) char[kCapacity]);
+                std::size_t size = 0U;
+                if (text && volume->read(device_.wifi.file, text.get(), kCapacity, &size)) {
+                    count += parse_wifi_networks(text.get(), size, list.get() + count, kMaxWifiNetworks - count)
+                                 .networks;
+                    std::memset(text.get(), 0, kCapacity);  // passwords
+                }
+            }
             char json[kJsonReplyBytes];
             int used = std::snprintf(json, sizeof(json), "{\"max\":%u,\"networks\":[",
                                      static_cast<unsigned>(kMaxWifiNetworks));
-            for (std::size_t i = 0U; i < network_count_ && used > 0 && used < static_cast<int>(sizeof(json)); ++i) {
+            for (std::size_t i = 0U; i < count && used > 0 && used < static_cast<int>(sizeof(json)); ++i) {
                 char ssid[2U * WifiNetwork::kMaxSsid + 1U];
                 std::size_t n = 0U;
-                for (const char* p = networks_[i].ssid; *p != '\0' && n + 2U < sizeof(ssid); ++p) {
+                for (const char* p = list[i].ssid; *p != '\0' && n + 2U < sizeof(ssid); ++p) {
                     if (*p == '"' || *p == '\\') ssid[n++] = '\\';
                     ssid[n++] = *p;
                 }
@@ -2049,6 +2070,9 @@ void DeviceCore::register_storage_commands() noexcept {
                 used += std::snprintf(json + used, sizeof(json) - static_cast<std::size_t>(used),
                                       "%s{\"ssid\":\"%s\",\"source\":\"%s\"}", i == 0U ? "" : ",", ssid,
                                       i == 0U && has_config ? "config" : "file");
+            }
+            for (std::size_t i = 0U; i < kMaxWifiNetworks; ++i) {
+                std::memset(list[i].password, 0, sizeof(list[i].password));
             }
             if (used > 0 && used < static_cast<int>(sizeof(json))) {
                 std::snprintf(json + used, sizeof(json) - static_cast<std::size_t>(used), "]}\n");

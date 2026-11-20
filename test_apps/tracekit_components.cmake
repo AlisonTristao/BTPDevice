@@ -1,8 +1,11 @@
-# Shared by every project under test_apps/ and examples/ while the library is
-# developed: TraceKit itself plus the BTP and TinyShell checkouts, expected as
-# siblings of this repository (c:/git/TraceKit, c:/git/BTP, c:/git/TinyShell).
-# Override with -DTRACEKIT_BTP_DIR=... / -DTRACEKIT_TINYSHELL_DIR=... when they
-# live elsewhere (CI checks them out next to this repository too).
+# Shared by every project under test_apps/ and examples/: registers this
+# repository as the TraceKit component. BTP and TinyShell are fetched from
+# GitHub by the component manager (see idf_component.yml at the root).
+#
+# To build against local checkouts of BTP or TinyShell instead (when changing
+# them together with TraceKit), pass -DTRACEKIT_BTP_DIR=<path> and/or
+# -DTRACEKIT_TINYSHELL_DIR=<path>: components in EXTRA_COMPONENT_DIRS take
+# precedence over the downloaded ones.
 get_filename_component(_tracekit_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 # ESP-IDF names a component after its folder, and the examples say
 # `REQUIRES TraceKit`: the checkout must be called TraceKit.
@@ -11,16 +14,10 @@ if(NOT _tracekit_folder STREQUAL "TraceKit")
     message(FATAL_ERROR "The library checkout is \"${_tracekit_folder}\": rename the folder to "
                         "TraceKit (ESP-IDF names the component after it; the examples require TraceKit).")
 endif()
-if(NOT DEFINED TRACEKIT_BTP_DIR)
-    get_filename_component(TRACEKIT_BTP_DIR "${_tracekit_root}/../BTP" ABSOLUTE)
-endif()
-if(NOT DEFINED TRACEKIT_TINYSHELL_DIR)
-    get_filename_component(TRACEKIT_TINYSHELL_DIR "${_tracekit_root}/../TinyShell" ABSOLUTE)
-endif()
-foreach(_dir "${TRACEKIT_BTP_DIR}" "${TRACEKIT_TINYSHELL_DIR}")
+list(APPEND EXTRA_COMPONENT_DIRS "${_tracekit_root}")
+foreach(_dir IN ITEMS ${TRACEKIT_BTP_DIR} ${TRACEKIT_TINYSHELL_DIR})
     if(NOT EXISTS "${_dir}/CMakeLists.txt")
-        message(FATAL_ERROR "TraceKit dependency not found at ${_dir}")
+        message(FATAL_ERROR "TraceKit: no CMakeLists.txt at ${_dir}")
     endif()
+    list(APPEND EXTRA_COMPONENT_DIRS "${_dir}")
 endforeach()
-list(APPEND EXTRA_COMPONENT_DIRS
-    "${_tracekit_root}" "${TRACEKIT_BTP_DIR}" "${TRACEKIT_TINYSHELL_DIR}")

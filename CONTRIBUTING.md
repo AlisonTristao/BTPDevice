@@ -139,9 +139,16 @@ core  →  security, storage
 
 ## 5. Build e testes
 
-Os projetos de `test_apps/` e `examples/` esperam o BTP e o TinyShell clonados
-**ao lado** deste repositório (`../BTP`, `../TinyShell`); ver
-`test_apps/tracekit_components.cmake`.
+O BTP e o TinyShell vêm do GitHub, na tag fixada em `idf_component.yml` (projetos
+ESP-IDF, pelo component manager) e em `test/host/CMakeLists.txt` (testes no PC, por
+`FetchContent`). As duas listas mudam juntas.
+
+Para desenvolver uma dependência junto com a TraceKit, aponte para o clone local:
+`-DTRACEKIT_BTP_DIR=<caminho>` e/ou `-DTRACEKIT_TINYSHELL_DIR=<caminho>`, tanto nos
+testes no PC quanto nos projetos de `test_apps/` e `examples/`.
+
+O clone desta biblioteca precisa estar numa pasta chamada `TraceKit`: o ESP-IDF dá
+ao componente o nome da pasta, e os projetos pedem `REQUIRES TraceKit`.
 
 ```text
 # Testes no PC (código portável: protocolo, chave, config, parsers)

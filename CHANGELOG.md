@@ -23,7 +23,12 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
   `sdkconfig.<env>` gerado. Continuam iguais, para não perder o que as placas já guardam: o
   namespace `btpdev` do NVS (chave, fuso, link, boot), o salt do link peer, os comandos `btp -...`,
   o protocolo BTP e as ferramentas `btp_*.py`.
-- README reescrito: referência de configuração, comandos, API, armazenamento e ferramentas.
+- **BTP e TinyShell vêm do GitHub**, em tags fixadas: pelo component manager nos projetos ESP-IDF
+  (`idf_component.yml` da biblioteca e do recovery) e por `FetchContent` nos testes no PC. Não é
+  mais preciso clonar os dois ao lado da biblioteca; `-DTRACEKIT_BTP_DIR` /
+  `-DTRACEKIT_TINYSHELL_DIR` continuam valendo para usar um clone local.
+- README reescrito: instalação como submódulo ou pelo component manager, referência de
+  configuração, comandos, API, armazenamento e ferramentas.
 
 ### Adicionado
 - **Recovery e OTA** (Fase R, [PLANO 4.14](docs/PLANO.md#414-recovery-e-ota)): o app fica no

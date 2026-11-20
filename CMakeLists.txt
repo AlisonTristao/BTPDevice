@@ -1,11 +1,7 @@
 # TraceKit -- ESP-IDF component.
 #
-# Dependencies are the BTP and TinyShell components (both ESP-IDF components
-# on their own since BTP 2.49.0 / TinyShell 2.1.0, docs/PLANO.md D15). While
-# the library is being built they come from sibling checkouts listed in the
-# project's EXTRA_COMPONENT_DIRS (see test_apps/), which is why the names
-# below are the directory names "BTP" and "TinyShell". Packaging through the
-# component manager is validated in Phase 7.
+# Dependencies are the BTP and TinyShell components, fetched from GitHub at a
+# pinned tag by the ESP-IDF component manager (idf_component.yml).
 #
 # Host tests do not go through this file: test/host/CMakeLists.txt compiles
 # the portable sources directly.

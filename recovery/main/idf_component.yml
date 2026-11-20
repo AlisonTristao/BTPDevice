@@ -1,4 +1,7 @@
 dependencies:
   idf: ">=6.0"
+  BTP:
+    git: https://github.com/AlisonTristao/BTP.git
+    version: v2.51.0
   espressif/mdns:
     version: "^1.2"
