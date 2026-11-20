@@ -30,3 +30,6 @@ __pycache__/
 
 # Wi-Fi credentials in example data folders
 examples/*/data/wifi.txt
+
+# TraceView projects of the bench: they may keep the device password
+examples/*/*.tvproj
