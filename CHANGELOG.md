@@ -122,8 +122,8 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - **O suporte a cartão SD só entra no binário de quem usa:** `SdConfig::enabled` virou
   `SdConfig::driver` (`.sd = {.driver = btpdev::sd_card, ...}`). Sem cartão, o app do exemplo 06
   caiu de 1.198 para 1.084 KB (−114 KB de flash) e 10 KB de RAM estática.
-- Stacks menores por padrão, pelo pico medido: `comms` 8 → 4 KB (pico ~2,6 KB), `shell` 8 → 4 KB
-  (~2,2 KB), task do TCP 6 → 3 KB (~1,1 KB). Um comando seu que precise de mais sobe
+- Stacks menores por padrão, pelo pico medido com manifesto, assinatura a 50 Hz e comandos ao mesmo
+  tempo: `comms` 8 → 5 KB (pico 3,4 KB), `shell` 8 → 5 KB (2,8 KB), task do TCP 6 → 3 KB (1,3 KB). Um comando seu que precise de mais sobe
   `DeviceConfig::shell.stack_bytes`; o `btp -mem` mostra o pico de cada task.
 - `DeviceConfig::psram` (`Off`, `Buffers`, `Stacks`): o que da lib vai para a PSRAM. `Buffers`
   (padrão) é o comportamento de antes; `Stacks` põe também as stacks da `comms` e das tasks de

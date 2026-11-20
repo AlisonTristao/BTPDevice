@@ -53,8 +53,10 @@ enum class Threading : std::uint8_t {
 struct TaskConfig {
     int core = 0;                        ///< 0 or 1; -1 = no affinity
     std::uint32_t priority = 10U;
-    /// Measured peak ~2.6 KB on an ESP32-S3 (sealed TCP, commands, status).
-    std::uint32_t stack_bytes = 4096U;
+    /// Measured peak 3.4 KB on an ESP32-S3 (sealed TCP: manifest, a 50 Hz
+    /// subscription and commands at once); 5 KB leaves room for a bigger
+    /// manifest (Memory::Large).
+    std::uint32_t stack_bytes = 5120U;
     /// The longest pause between two routine() passes (received bytes and
     /// finished commands wake the task at once anyway). Without `timer` it is
     /// rounded UP to whole FreeRTOS ticks: with the IDF's default
@@ -91,10 +93,10 @@ struct ShellConfig {
     /// not touch a loop on core 1.
     int core = -1;                       ///< 0 or 1; -1 = no affinity
     std::uint32_t priority = 0U;         ///< 0 = one below DeviceConfig::comms
-    /// The library's commands peak at ~2.2 KB; a command of yours that
+    /// The library's commands peak at 2.8 KB; a command of yours that
     /// formats long text or calls heavy APIs may need more (btp -mem shows
     /// the peak of every task).
-    std::uint32_t stack_bytes = 4096U;
+    std::uint32_t stack_bytes = 5120U;
 };
 
 /// Which port Link::Serial uses (DeviceConfig::serial_port).
