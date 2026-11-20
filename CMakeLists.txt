@@ -45,6 +45,8 @@ set(btpdev_srcs
     "src/core/RuntimeErrors.cpp"
     "src/core/StreamFraming.cpp"
     "src/core/TaskSpawn.cpp"
+    "src/core/TimeKeeper.cpp"
+    "src/core/TimeText.cpp"
     "src/protocol/SettingsRegistry.cpp"
     "src/protocol/ShellText.cpp"
     "src/protocol/Terminal.cpp"

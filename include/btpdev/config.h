@@ -164,6 +164,18 @@ struct WifiConfig {
     WifiBuffers buffers = WifiBuffers::Lean;
 };
 
+/// Wall-clock time (btpdev/time.h, docs/PLANO.md D29).
+struct TimeConfig {
+    /// POSIX TZ string. `btp -tz` replaces it and the choice is kept in NVS.
+    /// Brasília (UTC-3, no DST) by default; "UTC0", "CET-1CEST,M3.5.0,M10.5.0/3"...
+    const char* tz = "<-03>3";
+    /// Ask an NTP server when the TCP link has an IP.
+    bool sntp = true;
+    const char* server = "pool.ntp.org";
+    /// Time between two SNTP updates.
+    std::uint32_t sync_hours = 6U;
+};
+
 struct TcpConfig {
     std::uint16_t port = 44300U;         ///< TraceView's default
 };
@@ -232,6 +244,8 @@ struct DeviceConfig {
     /// heap and the stack every task has used. `btp -mem` prints the same
     /// report at any time, with or without this.
     bool debug_log = false;
+    /// Wall-clock time: zone and SNTP (TimeConfig).
+    TimeConfig time{};
     /// Updates over Wi-Fi through the recovery firmware (RecoveryConfig).
     RecoveryConfig recovery{};
     /// What of the library's memory may live in PSRAM (Psram).

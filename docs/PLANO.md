@@ -742,11 +742,12 @@ Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, config
 - [x] Na placa: `cfg -list/-get/-set/-reset`, recusa de faixa, tipo e nome, valores mantidos após reboot, `on_change` movendo o LED. Custo: 0,2 KB de heap com 2 configurações.
 
 **S2. Hora (D29)**
-- [ ] `DeviceConfig::time` (`TimeConfig`: `tz`, `sntp`, dois servidores, período de ressincronização).
-- [ ] SNTP pelo `esp_netif_sntp` quando o link TCP tem IP; ressincroniza a cada 6 h.
-- [ ] `btp -time` (mostra hora local, UTC, fonte, idade), `btp -time <ISO 8601>`, `btp -tz <POSIX>` (salvo no NVS).
-- [ ] `device.time_valid()`, `now()` (`time_t`), `now_us()`, `time_source()`. Validade guardada no RTC: some numa falta de energia, fica num reboot ou sono.
-- [ ] Testes de host: parse de ISO 8601 com fuso, regra de validade.
+- [x] `DeviceConfig::time` (`TimeConfig`: `tz`, `sntp`, `server`, `sync_hours`). Um servidor só: o IDF vem com `CONFIG_LWIP_SNTP_MAX_SERVERS=1`.
+- [x] SNTP pelo `esp_netif_sntp` quando o link é TCP (começa a perguntar quando houver IP); ressincroniza a cada 6 h.
+- [x] `btp -time` (hora local, UTC, fuso, fonte, idade), `btp -time_set <hora>` (ISO 8601 com fuso, local sem fuso, ou segundos desde 1970: o que o TraceView mandará), `btp -tz <POSIX>` (salvo no NVS). Comandos separados porque o TinyShell exige um número fixo de argumentos.
+- [x] `BtpDevice::time_valid()`, `now()`, `now_us()`, `time_source()`, `set_time()`. Validade e fonte na memória do RTC, junto do relógio.
+- [x] Testes de host (`test_time_text`): fusos, Z, sem segundos, local, época, datas inválidas, ano bissexto, formatação UTC (conferidos contra o `datetime` do Python).
+- [ ] Na placa: SNTP acertando (o hotspot de teste caiu antes da resposta), `btp -time_set`, `btp -tz`, hora mantida após `btp -reboot`.
 
 **S3. Economia sem desconectar (D30)**
 - [ ] `DeviceConfig::power` (`PowerMode::Performance` / `Saving`), `esp_pm_configure` e `esp_wifi_set_ps`.

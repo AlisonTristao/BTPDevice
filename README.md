@@ -242,6 +242,23 @@ O nome vira a chave do NVS (até 15 caracteres). Um valor salvo com outro tipo o
 da faixa nova volta ao padrão, com aviso. `btp -factory_reset yes` mantém as
 configurações; `all` apaga.
 
+## Hora
+
+O ESP32 não tem relógio com bateria: a hora sobrevive a reboot e ao sono profundo,
+mas não a uma falta de energia. Com o link TCP, a lib acerta sozinha por SNTP quando há
+internet (a cada 6 h). Sem internet, pelo terminal:
+
+```text
+btp -time                                 hora local, UTC, fuso e de onde veio
+btp -time_set 2026-11-19 14:00            hora local
+btp -time_set 2026-11-19T14:00:00-03:00   com fuso; ou segundos desde 1970
+btp -tz <-03>3                            fuso POSIX, salvo (Brasília é o padrão)
+```
+
+No código, `device.time_valid()` diz se a hora é confiável (use antes de gravar um log
+com data), `device.now()` dá os segundos UTC e `localtime_r()` converte para o fuso.
+Um RTC externo ou GPS entra com `device.set_time()`.
+
 ## Memória e PSRAM
 
 Em placas com PSRAM (ESP32-S3 N8R8, N16R8...), ligue-a no `sdkconfig.defaults` e a lib

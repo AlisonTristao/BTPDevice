@@ -154,6 +154,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
               static_cast<unsigned long>(source_id), static_cast<unsigned long>(boot_id),
               static_cast<unsigned>(mac_[0]), static_cast<unsigned>(mac_[1]), static_cast<unsigned>(mac_[2]),
               static_cast<unsigned>(mac_[3]), static_cast<unsigned>(mac_[4]), static_cast<unsigned>(mac_[5]));
+    time_.begin(device_.time);  // the zone, from NVS or the config
     // Before anything that can crash: a crash loop has to be counted (and
     // may end here, in the recovery). NVS is up since load_identity().
     recovery_.boot(device_.recovery);
@@ -195,6 +196,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     if (has_key_ && !sealed_) ESP_LOGI(tag::kKey, "Serial in clear (DeviceConfig::serial_cleartext)");
     boot_step("link", "%s started%s, %s", link_name(active_link_),
               active_link_ != requested ? " (fallback)" : "", sealed_ ? "sealed" : "in clear");
+    if (active_link_ == Link::Tcp) time_.start_sntp();
     err = create_node(topics);
     if (err != ESP_OK) return err;
     boot_step("node", "%u topic(s)", static_cast<unsigned>(registry_.size()));
@@ -234,6 +236,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     register_storage_commands();
     if (device_.recovery.enabled) register_recovery_commands();
     if (!settings_.empty()) register_settings_commands();
+    register_time_commands();
     if (commands != nullptr) {
         Commands declared(shell_);
         commands(declared);
@@ -1570,6 +1573,47 @@ void DeviceCore::register_recovery_commands() noexcept {
                        : RESULT_ERROR;
         },
         "factory_reset", "Erase the application (yes) or everything (all), through the recovery", "btp");
+}
+
+// ============================================================================
+// Time (docs/PLANO.md D29)
+// ============================================================================
+
+void DeviceCore::register_time_commands() noexcept {
+    shell_.add(
+        [this]() -> std::uint8_t {
+            char text[384];
+            time_.describe(text, sizeof(text));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "time", "Wall-clock time, zone and where it came from", "btp");
+    shell_.add(
+        [this](const char* when) -> std::uint8_t {
+            char error[128];
+            if (!time_.set_text(when, error, sizeof(error))) {
+                std::strncat(error, "\n", sizeof(error) - std::strlen(error) - 1U);
+                shell_print(error);
+                return RESULT_ERROR;
+            }
+            char text[384];
+            time_.describe(text, sizeof(text));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "time_set", "btp -time_set <2026-11-19 14:00 | ...T14:00:00-03:00 | seconds since 1970>", "btp");
+    shell_.add(
+        [this](const char* tz) -> std::uint8_t {
+            if (!time_.set_zone(tz)) {
+                shell_print("not a POSIX TZ string: Brasilia <-03>3, UTC UTC0, Lisbon WET0WEST,M3.5.0/1,M10.5.0\n");
+                return RESULT_ERROR;
+            }
+            char text[384];
+            time_.describe(text, sizeof(text));
+            shell_print(text);
+            return RESULT_OK;
+        },
+        "tz", "btp -tz <POSIX TZ> (saved; <-03>3 is Brasilia)", "btp");
 }
 
 // ============================================================================

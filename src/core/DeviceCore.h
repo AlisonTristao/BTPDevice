@@ -50,6 +50,7 @@
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
 #include "core/TaskSpawn.h"
+#include "core/TimeKeeper.h"
 #include "protocol/SettingsRegistry.h"
 #include "storage/NvsSettingsStore.h"
 #include "update/DownloadMode.h"
@@ -72,6 +73,8 @@ public:
     bool set_setting(const char* name, const char* value) noexcept;
     bool save_setting(const char* name) noexcept;
     bool get_setting(const char* name, char* out, std::size_t size) noexcept;
+    TimeKeeper& wall_clock() noexcept { return time_; }
+    const TimeKeeper& wall_clock() const noexcept { return time_; }
 
     /// Any task: publish a topic on the next pass (see TopicRegistry).
     bool publish(const char* topic) noexcept;
@@ -189,6 +192,7 @@ private:
     void register_storage_commands() noexcept;
     void register_recovery_commands() noexcept;
     void register_settings_commands() noexcept;
+    void register_time_commands() noexcept;
 
     // Keys (docs/PLANO.md 4.9): which one seals / opens a message.
     bool channel_b(const btp::Header& header) const noexcept;
@@ -286,6 +290,7 @@ private:
     // Telemetry.
     TopicRegistry registry_;
     SettingsRegistry settings_;
+    TimeKeeper time_;
     NvsSettingsStore settings_store_;
     LinkMutex settings_mutex_;  // cfg commands (shell task) vs set_setting() (any task)
 

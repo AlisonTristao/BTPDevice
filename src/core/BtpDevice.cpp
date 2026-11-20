@@ -122,6 +122,16 @@ bool BtpDevice::get_setting(const char* name, char* out, std::size_t size) const
     return core_ != nullptr && core_->get_setting(name, out, size);
 }
 
+bool BtpDevice::time_valid() const noexcept { return core_ != nullptr && core_->wall_clock().valid(); }
+std::time_t BtpDevice::now() const noexcept { return std::time(nullptr); }
+std::int64_t BtpDevice::now_us() const noexcept { return core_ != nullptr ? core_->wall_clock().now_us() : 0; }
+btpdev::TimeSource BtpDevice::time_source() const noexcept {
+    return core_ != nullptr ? core_->wall_clock().source() : btpdev::TimeSource::None;
+}
+bool BtpDevice::set_time(std::time_t utc) noexcept {
+    return core_ != nullptr && core_->wall_clock().set(static_cast<std::int64_t>(utc), btpdev::TimeSource::Application);
+}
+
 bool BtpDevice::subscribed(const char* topic) const noexcept {
     return core_ != nullptr && core_->subscribed(topic);
 }

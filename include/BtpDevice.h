@@ -16,10 +16,12 @@
 #include <btpdev/identity.h>
 #include <btpdev/log.h>
 #include <btpdev/settings.h>
+#include <btpdev/time.h>
 #include <btpdev/topics.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <ctime>
 #include <functional>
 
 class TinyShell;
@@ -124,6 +126,16 @@ public:
     bool save_setting(const char* name) noexcept;
     /// The current value as text ("30", "true"). False: no such setting.
     bool get_setting(const char* name, char* out, std::size_t size) const noexcept;
+
+    /// Wall-clock time (btpdev/time.h). False until SNTP, `btp -time_set`
+    /// or set_time() set it since the last power-up.
+    bool time_valid() const noexcept;
+    /// UTC seconds (meaningless while !time_valid()).
+    std::time_t now() const noexcept;
+    std::int64_t now_us() const noexcept;
+    btpdev::TimeSource time_source() const noexcept;
+    /// From the application's own source (an RTC chip, GPS): UTC seconds.
+    bool set_time(std::time_t utc) noexcept;
 
     /// This boot's BTP boot_id (an NVS counter), with source_id() the
     /// identity every message carries.
