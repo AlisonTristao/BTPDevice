@@ -26,6 +26,7 @@
 
 #include "core/FrameQueue.h"
 #include "core/Memory.h"
+#include "core/TaskSpawn.h"
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiStation.h"
@@ -41,7 +42,7 @@ struct TcpLinkConfig {
     /// Known networks (parsed networks file). Must stay valid while the link runs.
     const WifiNetwork* networks = nullptr;
     std::size_t network_count = 0U;
-    std::uint32_t task_stack_bytes = 6144U;
+    std::uint32_t task_stack_bytes = 3072U;  // measured peak ~1.1 KB
     std::uint32_t task_priority = 5U;
     int task_core = 0;
 };
@@ -102,6 +103,7 @@ private:
 
     std::atomic<bool> running_{false};
     TaskHandle_t task_ = nullptr;
+    TaskMemory task_memory_{};  // PSRAM stack (Psram::Stacks)
     int listen_fd_ = -1;
     std::atomic<int> client_fd_{-1};
     std::atomic<int> pending_fd_{-1};

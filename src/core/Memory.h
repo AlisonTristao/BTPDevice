@@ -9,9 +9,16 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <btpdev/config.h>
+
 namespace btpdev {
 
 /// Returns nullptr when neither PSRAM nor internal RAM has `size` bytes.
+/// Set once, from begin(): what of the library's memory may go to PSRAM
+/// (DeviceConfig::psram). Psram::Off keeps every buffer internal.
+void set_psram_policy(Psram policy) noexcept;
+Psram psram_policy() noexcept;
+
 std::uint8_t* alloc_buffer(std::size_t size) noexcept;
 /// Same, aligned for an object of alignment `alignment` (placement new).
 void* alloc_aligned(std::size_t alignment, std::size_t size) noexcept;

@@ -119,6 +119,23 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 - `btp -mem`: o mesmo relatório de memória e tasks, a qualquer hora, no terminal.
 
 ### Alterado
+- **O suporte a cartão SD só entra no binário de quem usa:** `SdConfig::enabled` virou
+  `SdConfig::driver` (`.sd = {.driver = btpdev::sd_card, ...}`). Sem cartão, o app do exemplo 06
+  caiu de 1.198 para 1.084 KB (−114 KB de flash) e 10 KB de RAM estática.
+- Stacks menores por padrão, pelo pico medido: `comms` 8 → 4 KB (pico ~2,6 KB), `shell` 8 → 4 KB
+  (~2,2 KB), task do TCP 6 → 3 KB (~1,1 KB). Um comando seu que precise de mais sobe
+  `DeviceConfig::shell.stack_bytes`; o `btp -mem` mostra o pico de cada task.
+- `DeviceConfig::psram` (`Off`, `Buffers`, `Stacks`): o que da lib vai para a PSRAM. `Buffers`
+  (padrão) é o comportamento de antes; `Stacks` põe também as stacks da `comms` e das tasks de
+  link. Sem `CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP`, a lib lembra no log que o Wi-Fi também pode ir.
+  As medidas por etapa do `debug_log` passam a contar só a RAM interna.
+- `WifiConfig::buffers` (`Lean`, padrão, ou `Sdkconfig`): a lib reserva 6 buffers de recepção e
+  usa transmissão dinâmica no `esp_wifi_init`. Com PSRAM ligada o IDF reservava 16 + 16 buffers
+  estáticos (~51 KB) na RAM interna.
+- **Resultado no ESP32-S3 N16R8 com link TCP:** a lib (com o Wi-Fi) passou de 124 para 53 KB de RAM
+  interna (46 KB com `Psram::Stacks`), e o heap interno livre para o app de 168 para 258 KB.
+- O aviso de stack curta do `begin()` mede a stack livre no ponto da chamada (a marca d'água
+  contava também o que a inicialização do IDF usou antes do `app_main`).
 - Requer TinyShell >= 2.2.0 (CI em `v2.2.0`) para `btpdev::progress()`. As
   mensagens da shell agora saem em inglês (`robot -pwm: success`,
   `nope: module not found`) e os argumentos digitados deixam de ser pretos

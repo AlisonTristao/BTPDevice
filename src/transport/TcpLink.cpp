@@ -75,10 +75,10 @@ esp_err_t TcpLink::start(const LinkEvents& events, ErrorInfo& error) noexcept {
     }
 
     running_.store(true);
-    const BaseType_t created = xTaskCreatePinnedToCore(
-        &TcpLink::task_entry, "btpdev_tcp", config_.task_stack_bytes, this,
-        config_.task_priority, &task_, config_.task_core < 0 ? tskNO_AFFINITY : config_.task_core);
-    if (created != pdPASS) {
+    const bool created = spawn_task(&TcpLink::task_entry, "btpdev_tcp", config_.task_stack_bytes, this,
+                                    config_.task_priority, config_.task_core, /*may_be_external=*/true, &task_,
+                                    &task_memory_);
+    if (!created) {
         running_.store(false);
         close_socket(listen_fd_);
         listen_fd_ = -1;
@@ -118,7 +118,9 @@ void TcpLink::stop() noexcept {
     close_socket(listen_fd);
     close_client();
     close_pending();
+    const TaskHandle_t task = task_;
     while (task_ != nullptr) vTaskDelay(1);  // run() clears it on exit
+    release_task(task, &task_memory_);
     wifi_.stop();
     {
         LinkLock lock(mutex_);
@@ -189,8 +191,9 @@ void TcpLink::close_client() noexcept {
 }
 
 void TcpLink::task_entry(void* context) noexcept {
-    static_cast<TcpLink*>(context)->run();
-    vTaskDelete(nullptr);
+    auto* self = static_cast<TcpLink*>(context);
+    self->run();
+    finish_task(self->task_memory_);
 }
 
 void TcpLink::run() noexcept {

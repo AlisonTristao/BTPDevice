@@ -212,6 +212,31 @@ xTaskCreatePinnedToCore(control_loop, "control", 4096, nullptr, 20, nullptr, 1);
   outro núcleo. `float` e inteiros de até 4 bytes alinhados são lidos de forma
   atômica. `f64` não tem forma ligada (8 bytes não são atômicos): use `.fill()`.
 
+## Memória e PSRAM
+
+Em placas com PSRAM (ESP32-S3 N8R8, N16R8...), ligue-a no `sdkconfig.defaults` e a lib
+põe nela os buffers dela (`DeviceConfig::psram = Psram::Buffers`, o padrão). O maior
+consumidor de RAM interna de um dispositivo TCP é o Wi-Fi, e só o sdkconfig o manda
+para a PSRAM:
+
+```ini
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y                 # N8R8/N16R8; QUAD nas de PSRAM quad
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y   # buffers do Wi-Fi e do lwIP na PSRAM
+```
+
+Sem PSRAM, ou com ela, `WifiConfig::buffers = WifiBuffers::Lean` (o padrão) reserva só 6
+buffers de recepção e transmite com buffers dinâmicos: com PSRAM ligada, o IDF reservaria
+~51 KB de buffers estáticos. `WifiBuffers::Sdkconfig` volta ao que o sdkconfig diz.
+
+`Psram::Stacks` manda também as stacks da task de comunicação e das tasks de link. Uma
+task com a stack na PSRAM não pode escrever na flash; as da lib nunca escrevem, mas os
+`fill()` dos tópicos rodam na task de comunicação, então com `Stacks` eles também não
+podem gravar arquivo nem NVS. `Psram::Off` deixa tudo na RAM interna.
+
+O cartão SD só entra no binário quando é usado: `.sd = {.driver = btpdev::sd_card, ...}`
+no `StorageConfig`.
+
 ## Debug pelo serial
 
 Com `debug_log = true`, o `begin()` descreve o boot no **console serial** (o

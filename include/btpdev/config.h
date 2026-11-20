@@ -53,7 +53,8 @@ enum class Threading : std::uint8_t {
 struct TaskConfig {
     int core = 0;                        ///< 0 or 1; -1 = no affinity
     std::uint32_t priority = 10U;
-    std::uint32_t stack_bytes = 8192U;
+    /// Measured peak ~2.6 KB on an ESP32-S3 (sealed TCP, commands, status).
+    std::uint32_t stack_bytes = 4096U;
     /// The longest pause between two routine() passes (received bytes and
     /// finished commands wake the task at once anyway). Without `timer` it is
     /// rounded UP to whole FreeRTOS ticks: with the IDF's default
@@ -66,13 +67,34 @@ struct TaskConfig {
     bool timer = false;
 };
 
+/// What of the library's memory goes to PSRAM, when the chip has it and the
+/// project enabled it (CONFIG_SPIRAM). Internal RAM is faster and is what
+/// Wi-Fi, BLE and DMA need; PSRAM is plentiful (2-8 MB) but slower.
+enum class Psram : std::uint8_t {
+    /// Everything in internal RAM, PSRAM left to the application.
+    Off,
+    /// The node, the queues and the decoders (the bulk of the library's
+    /// heap). The default.
+    Buffers,
+    /// Buffers, and also the stacks of the communication task and of the
+    /// link tasks. A task whose stack is in PSRAM must never write flash
+    /// (NVS, files): the library's never do, but topic fill() functions and
+    /// peer on_message() callbacks run on the communication task, so with
+    /// this they must not either. Needs CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM
+    /// (on by default on the S3); otherwise the stacks stay internal.
+    Stacks,
+};
+
 /// The task commands run on, one at a time (DeviceConfig::shell).
 struct ShellConfig {
     /// No affinity by default; pin it to core 0 when a heavy command must
     /// not touch a loop on core 1.
     int core = -1;                       ///< 0 or 1; -1 = no affinity
     std::uint32_t priority = 0U;         ///< 0 = one below DeviceConfig::comms
-    std::uint32_t stack_bytes = 8192U;
+    /// The library's commands peak at ~2.2 KB; a command of yours that
+    /// formats long text or calls heavy APIs may need more (btp -mem shows
+    /// the peak of every task).
+    std::uint32_t stack_bytes = 4096U;
 };
 
 /// Which port Link::Serial uses (DeviceConfig::serial_port).
@@ -115,6 +137,20 @@ struct UartConfig {
     bool mute_console = true;
 };
 
+/// How much internal RAM the Wi-Fi driver reserves for its buffers
+/// (WifiConfig::buffers). The driver's state and DMA buffers must be in
+/// internal RAM, so this is the biggest internal-RAM cost of a Wi-Fi link.
+enum class WifiBuffers : std::uint8_t {
+    /// 6 receive buffers reserved, transmit buffers taken only while
+    /// sending (the IDF's own default without PSRAM). Plenty for BTP's
+    /// traffic; saves ~6 KB of internal RAM without PSRAM and ~45 KB with
+    /// it, where the IDF reserves 16 receive and 16 transmit buffers.
+    Lean,
+    /// Whatever the project's sdkconfig says (CONFIG_ESP_WIFI_*): for a
+    /// device that moves a lot of data and has the RAM to spare.
+    Sdkconfig,
+};
+
 struct WifiConfig {
     /// One network written straight in the config (the simplest setup).
     /// Tried first; empty = none.
@@ -123,6 +159,7 @@ struct WifiConfig {
     /// More networks, from a file in the file system root, one
     /// "ssid,password" per line (tried in order, after `ssid`).
     const char* file = "wifi.txt";
+    WifiBuffers buffers = WifiBuffers::Lean;
 };
 
 struct TcpConfig {
@@ -195,6 +232,8 @@ struct DeviceConfig {
     bool debug_log = false;
     /// Updates over Wi-Fi through the recovery firmware (RecoveryConfig).
     RecoveryConfig recovery{};
+    /// What of the library's memory may live in PSRAM (Psram).
+    Psram psram = Psram::Buffers;
 };
 
 /// Where the provisioned key lives once imported (docs/PLANO.md section 4.9).
@@ -212,9 +251,21 @@ struct FsConfig {
 
 enum class SdMode : std::uint8_t { Spi, Sdmmc };
 
-/// Optional SD card, a second root for the same files.
+class FileSystem;
+struct ErrorInfo;
+struct SdConfig;
+/// Mounts an SD card: btpdev::sd_card. A pointer rather than a flag so a
+/// project without a card never links the FAT and SD drivers (~70 KB).
+using SdDriver = int (*)(const SdConfig& config, FileSystem& fs, ErrorInfo& error);
+
+/// The SD driver (SPI or SDMMC, FAT). Set SdConfig::driver to it to use a card.
+int sd_card(const SdConfig& config, FileSystem& fs, ErrorInfo& error);
+
+/// Optional SD card, a second root for the same files:
+///   .sd = {.driver = btpdev::sd_card, .cs = 10, .mosi = 11, .miso = 13, .sck = 12}
 struct SdConfig {
-    bool enabled = false;
+    /// nullptr: no card.
+    SdDriver driver = nullptr;
     SdMode mode = SdMode::Spi;
     int cs = -1;
     int mosi = -1;

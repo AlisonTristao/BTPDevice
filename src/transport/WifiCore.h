@@ -11,10 +11,13 @@
 // would silently de-provision the device. A failing NVS only costs the PHY
 // calibration cache, so it is a warning.
 
+#include <btpdev/config.h>
 #include <btpdev/error.h>
 
 namespace btpdev {
 
+/// Before the first wifi_core_start(): how many buffers the driver reserves.
+void wifi_core_set_buffers(WifiBuffers buffers) noexcept;
 esp_err_t wifi_core_start(ErrorInfo& error) noexcept;
 bool wifi_core_started() noexcept;
 

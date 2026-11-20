@@ -29,6 +29,7 @@
 
 #include "core/FrameQueue.h"
 #include "core/Memory.h"
+#include "core/TaskSpawn.h"
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
@@ -76,6 +77,7 @@ private:
     FrameQueue queue_;   // guarded by mutex_
     QueueHandle_t uart_events_ = nullptr;   // owned by the UART driver
     TaskHandle_t task_ = nullptr;
+    TaskMemory task_memory_{};  // PSRAM stack (Psram::Stacks)
     bool driver_installed_ = false;
     bool console_muted_ = false;
     std::atomic<bool> running_{false};

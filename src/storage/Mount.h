@@ -8,7 +8,8 @@
 //   LittleFS  a flash partition (StorageConfig::fs.partition), formatted on
 //             first use when fs.format_if_empty is set. Survives power loss
 //             mid-write, which is why it is the default (D5).
-//   SD card   SPI (cs, mosi, miso, sck) or SDMMC 1-bit (sck = CLK,
+//   SD card   btpdev::sd_card (SdCard.cpp, linked only when used): SPI
+//             (cs, mosi, miso, sck) or SDMMC 1-bit (sck = CLK,
 //             mosi = CMD, miso = D0), FAT. Never formatted by the library:
 //             a card may hold someone's data.
 
@@ -19,7 +20,6 @@
 namespace btpdev {
 
 esp_err_t mount_littlefs(const FsConfig& config, FileSystem& fs, ErrorInfo& error) noexcept;
-esp_err_t mount_sd(const SdConfig& config, FileSystem& fs, ErrorInfo& error) noexcept;
 /// A volume the application mounted (StorageConfig::app_volume): only attached,
 /// with the usage of a FAT volume when it is one.
 void attach_app_volume(const char* root, FileSystem& fs) noexcept;

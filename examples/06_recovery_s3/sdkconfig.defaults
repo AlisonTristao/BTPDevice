@@ -2,3 +2,10 @@
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../partitions/btpdev_16mb.csv"
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# The N16R8's 8 MB of octal PSRAM: the library's buffers go there by default
+# (DeviceConfig::psram), and so do the Wi-Fi and lwIP buffers with the last line.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y

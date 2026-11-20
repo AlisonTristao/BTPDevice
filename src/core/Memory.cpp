@@ -8,10 +8,17 @@
 
 namespace btpdev {
 
+namespace {
+Psram g_policy = Psram::Buffers;
+}  // namespace
+
+void set_psram_policy(Psram policy) noexcept { g_policy = policy; }
+Psram psram_policy() noexcept { return g_policy; }
+
 std::uint8_t* alloc_buffer(std::size_t size) noexcept {
     if (size == 0U) return nullptr;
 #if defined(ESP_PLATFORM)
-    void* buffer = heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    void* buffer = g_policy != Psram::Off ? heap_caps_malloc(size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) : nullptr;
     if (buffer == nullptr) buffer = heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     return static_cast<std::uint8_t*>(buffer);
 #else
@@ -22,7 +29,9 @@ std::uint8_t* alloc_buffer(std::size_t size) noexcept {
 void* alloc_aligned(std::size_t alignment, std::size_t size) noexcept {
     if (size == 0U) return nullptr;
 #if defined(ESP_PLATFORM)
-    void* buffer = heap_caps_aligned_alloc(alignment, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    void* buffer = g_policy != Psram::Off
+                       ? heap_caps_aligned_alloc(alignment, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+                       : nullptr;
     if (buffer == nullptr) {
         buffer = heap_caps_aligned_alloc(alignment, size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     }

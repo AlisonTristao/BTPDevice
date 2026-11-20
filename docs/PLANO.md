@@ -147,7 +147,7 @@ const btpdev::DeviceConfig device_config = {
 const btpdev::StorageConfig storage_config = {
     .fs  = { .partition = "storage", .format_if_empty = true },   // LittleFS
     .key = btpdev::KeySource::Nvs,     // importa /bally.key uma vez, depois renomeia
-    // .sd = { .enabled = true, .cs = 10, .mosi = 11, .miso = 13, .sck = 12 },
+    // .sd = { .driver = btpdev::sd_card, .cs = 10, .mosi = 11, .miso = 13, .sck = 12 },
 };
 ```
 
@@ -720,6 +720,14 @@ Branch `feature/settings-time-power`, a partir da `feature/recovery`. Decisões 
 | App inteiro | 1,17 MB de 8 MB | 124 KB de 334 KB (DIRAM, inclui código em IRAM) | 124 KB com TCP; ~167 KB livres |
 
 Estimativa do que esta fase acrescenta: ~15–25 KB de flash (SNTP ~8 KB, configurações ~6 KB, sono e PM ~4 KB) e ~2 KB de RAM.
+
+**S0. Memória (antes das funcionalidades)**
+- [x] SD fora do binário de quem não usa (`SdConfig::driver = btpdev::sd_card`): −114 KB de flash, −10 KB de RAM estática.
+- [x] Stacks pelo pico medido: `comms` 4 KB, `shell` 4 KB, TCP 3 KB (eram 8, 8 e 6).
+- [x] `DeviceConfig::psram` (`Off`, `Buffers`, `Stacks`); exemplo 06 com a PSRAM e o Wi-Fi/lwIP nela.
+- [x] `WifiConfig::buffers = Lean` (padrão): 6 buffers de recepção e transmissão dinâmica no `esp_wifi_init`.
+- [x] Medido na placa (S3 N16R8, link TCP, `debug_log`): RAM interna da lib 124 → 96 KB (PSRAM) → 53 KB (Wi-Fi `Lean`) → 46 KB (`Psram::Stacks`); heap interno livre 168 → 258 KB.
+- [ ] Na placa: Wi-Fi `Lean` conectando e com tráfego (sessão, manifesto, assinaturas, upload pelo recovery); `Psram::Stacks` com tráfego; picos das stacks com o TraceView.
 
 **S1. Configurações persistentes (D28)**
 - [ ] `include/btpdev/settings.h`: `Settings` com `boolean`, `u8`, `u16`, `u32`, `i32`, `f32`, `text` (até 64 octetos); `.range()`, `.unit()`, `.description()`, `.reboot()`; `on_change`.

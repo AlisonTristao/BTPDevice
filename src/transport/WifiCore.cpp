@@ -6,9 +6,19 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
+#include <sdkconfig.h>
+
 #include "core/LogTags.h"
+#include "core/Memory.h"
+#include "core/TaskSpawn.h"
 
 namespace btpdev {
+
+namespace {
+WifiBuffers g_buffers = WifiBuffers::Lean;
+}  // namespace
+
+void wifi_core_set_buffers(WifiBuffers buffers) noexcept { g_buffers = buffers; }
 namespace {
 
 bool g_started = false;
@@ -42,7 +52,25 @@ esp_err_t wifi_core_start(ErrorInfo& error) noexcept {
         return fail(error, BTPDEV_ERR_LINK_START, kTag, "could not create the Wi-Fi station netif");
     }
 
+#if CONFIG_SPIRAM && !CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP
+    // The Wi-Fi and lwIP buffers are the largest heap user of a TCP device,
+    // and only the project's sdkconfig can send them to PSRAM.
+    if (psram_policy() != Psram::Off && psram_available()) {
+        ESP_LOGI(kTag, "this board has PSRAM: CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y moves the Wi-Fi and lwIP "
+                       "buffers there and frees tens of KB of internal RAM");
+    }
+#endif
     wifi_init_config_t config = WIFI_INIT_CONFIG_DEFAULT();
+    if (g_buffers == WifiBuffers::Lean) {
+        // Reserved at init, in internal RAM, whether used or not. With PSRAM
+        // on, the IDF's defaults grow to 16 receive + 16 static transmit
+        // buffers (~51 KB); BTP never needs that many in flight.
+        constexpr int kStaticRx = 6;
+        if (config.static_rx_buf_num > kStaticRx) config.static_rx_buf_num = kStaticRx;
+        if (config.rx_ba_win > config.static_rx_buf_num) config.rx_ba_win = config.static_rx_buf_num;
+        config.tx_buf_type = 1;  // dynamic: taken while sending, given back after
+        if (config.dynamic_tx_buf_num == 0) config.dynamic_tx_buf_num = 32;  // 0 when the sdkconfig chose static
+    }
     err = esp_wifi_init(&config);
     if (err != ESP_OK) {
         return fail(error, BTPDEV_ERR_LINK_START, kTag, "esp_wifi_init() failed (%s)",

@@ -94,6 +94,9 @@ esp_err_t check_device_config(const DeviceConfig& config, ErrorInfo& out) noexce
     if (config.tcp.port == 0U) {
         return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::tcp.port is 0");
     }
+    if (config.psram != Psram::Off && config.psram != Psram::Buffers && config.psram != Psram::Stacks) {
+        return fail(out, BTPDEV_ERR_CONFIG, kTag, "DeviceConfig::psram is not a valid Psram");
+    }
     if (config.serial_port != SerialPort::Auto && config.serial_port != SerialPort::Usb &&
         config.serial_port != SerialPort::Uart && config.serial_port != SerialPort::UsbJtag) {
         return fail(out, BTPDEV_ERR_CONFIG, tag::kSerial,
@@ -159,7 +162,7 @@ esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noex
         return fail(out, BTPDEV_ERR_CONFIG, tag::kKey,
                     "StorageConfig::key_file is empty while key = Nvs");
     }
-    if (config.sd.enabled) {
+    if (config.sd.driver != nullptr) {
         if (config.sd.mount == nullptr || config.sd.mount[0] != '/') {
             return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
                         "StorageConfig::sd.mount must be an absolute path such as \"/sd\"");
@@ -184,7 +187,7 @@ esp_err_t check_storage_config(const StorageConfig& config, ErrorInfo& out) noex
                         "characters, such as \"/sdcard\"");
         }
         const bool same_as_fs = littlefs && std::strcmp(config.app_volume, config.fs.mount) == 0;
-        const bool same_as_sd = config.sd.enabled && std::strcmp(config.app_volume, config.sd.mount) == 0;
+        const bool same_as_sd = config.sd.driver != nullptr && std::strcmp(config.app_volume, config.sd.mount) == 0;
         if (same_as_fs || same_as_sd) {
             return fail(out, BTPDEV_ERR_CONFIG, kFsTag,
                         "StorageConfig::app_volume \"%s\" is also a volume the library mounts",

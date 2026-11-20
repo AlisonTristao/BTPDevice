@@ -9,6 +9,7 @@
 #include <btpdev/identity.h>
 #include <btpdev/version.h>
 #include <esp_app_desc.h>
+#include <esp_cpu.h>
 #include <esp_heap_caps.h>
 #include <esp_log.h>
 #include <esp_mac.h>
@@ -31,6 +32,7 @@
 #include "transport/EspNowLink.h"
 #include "transport/TcpLink.h"
 #include "transport/JtagSerialLink.h"
+#include "transport/WifiCore.h"
 #include "transport/UartSerialLink.h"
 #include "transport/UsbSerialLink.h"
 
@@ -94,7 +96,13 @@ DeviceCore::~DeviceCore() {
         esp_timer_stop(comms_timer_);
         esp_timer_delete(comms_timer_);
     }
-    if (comms_task_ != nullptr) vTaskDelete(comms_task_);
+    if (comms_task_ != nullptr) {
+        if (comms_memory_.external()) {
+            release_task(comms_task_, &comms_memory_);
+        } else {
+            vTaskDelete(comms_task_);
+        }
+    }
     if (shell_task_ != nullptr) vTaskDelete(shell_task_);
     if (link_ != nullptr) {
         link_->stop();
@@ -112,16 +120,21 @@ DeviceCore::~DeviceCore() {
 
 esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevice::TopicsFn& topics) noexcept {
     state_.store(State::Starting);
+    set_psram_policy(device_.psram);
     const PresetSizes sizes = preset_sizes(device_.memory);
     boot_started_us_ = esp_timer_get_time();
-    boot_heap_start_ = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    boot_heap_start_ = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     boot_heap_ = boot_heap_start_;
     begin_task_ = xTaskGetCurrentTaskHandle();
     {
         // begin() runs on the caller's stack and needs about 2.5 KB of it.
         // A task stack lives in the heap: an overflow here silently corrupts
         // a heap block and the crash comes much later, somewhere else.
-        const UBaseType_t free_bytes = uxTaskGetStackHighWaterMark(nullptr);
+        // What is left below the current stack pointer: the high-water mark
+        // would also count what the IDF's startup code used before app_main.
+        const auto* start = reinterpret_cast<const std::uint8_t*>(xTaskGetStackStart(nullptr));
+        const auto* sp = reinterpret_cast<const std::uint8_t*>(esp_cpu_get_sp());
+        const UBaseType_t free_bytes = sp > start ? static_cast<UBaseType_t>(sp - start) : 0U;
         if (free_bytes < kBeginStackBytes) {
             ESP_LOGW(kTag,
                      "begin() runs with %u bytes of stack left in this task and needs about %u: raise it "
@@ -163,6 +176,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     esp_err_t err = allocate(sizes);
     if (err != ESP_OK) return err;
     boot_step("buffers", "preset %s", memory_name(device_.memory));
+    wifi_core_set_buffers(device_.wifi.buffers);
     err = start_link_with_fallback(requested, sizes);
     if (err != ESP_OK) return err;
     sealed_ = has_key_ && !(active_link_ == Link::Serial && device_.serial_cleartext);
@@ -254,7 +268,7 @@ esp_err_t DeviceCore::start(const BtpDevice::CommandsFn& commands, const BtpDevi
     state_.store(State::Ready);
     recovery_.arm_stable_timer();
     if (device_.debug_log) {
-        const std::size_t heap_now = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        const std::size_t heap_now = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
         char took[16];
         format_kb(took, sizeof(took), boot_heap_start_ > heap_now ? boot_heap_start_ - heap_now : 0U);
         boot_step("ready", "in %lu ms, BTPDevice took %s KB",
@@ -272,7 +286,7 @@ void DeviceCore::boot_step(const char* step, const char* format, ...) noexcept {
     if (!device_.debug_log) return;
     // The heap the step took: another task allocating meanwhile (Wi-Fi) shows
     // up here too, so read it as an estimate.
-    const std::size_t heap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    const std::size_t heap = heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     const long long used = static_cast<long long>(boot_heap_) - static_cast<long long>(heap);
     boot_heap_ = heap;
     char detail[96];
@@ -624,9 +638,9 @@ esp_err_t DeviceCore::start_tasks() noexcept {
                     static_cast<unsigned>(device_.shell.stack_bytes));
     }
     if (device_.threading == Threading::Auto &&
-        xTaskCreatePinnedToCore(&DeviceCore::comms_task_entry, "btpdev_comms", device_.comms.stack_bytes,
-                                this, device_.comms.priority, &comms_task_,
-                                device_.comms.core < 0 ? tskNO_AFFINITY : device_.comms.core) != pdPASS) {
+        !spawn_task(&DeviceCore::comms_task_entry, "btpdev_comms", device_.comms.stack_bytes, this,
+                    device_.comms.priority, device_.comms.core, /*may_be_external=*/true, &comms_task_,
+                    &comms_memory_)) {
         return fail(error_, ESP_ERR_NO_MEM, kTag, "could not create the communication task (%u bytes)",
                     static_cast<unsigned>(device_.comms.stack_bytes));
     }
@@ -1339,7 +1353,7 @@ void DeviceCore::mount_storage() noexcept {
             ESP_LOGE(mount_error.module, "%s [%s]", mount_error.message, err_name(mount_error.code));
         }
     }
-    if (storage_.sd.enabled && mount_sd(storage_.sd, sd_, mount_error) != ESP_OK) {
+    if (storage_.sd.driver != nullptr && storage_.sd.driver(storage_.sd, sd_, mount_error) != ESP_OK) {
         ESP_LOGE(mount_error.module, "%s [%s]", mount_error.message, err_name(mount_error.code));
     }
     if (storage_.app_volume != nullptr && storage_.app_volume[0] != '\0') {

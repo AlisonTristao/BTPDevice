@@ -115,8 +115,8 @@ esp_err_t UartSerialLink::start(const LinkEvents& events, ErrorInfo& error) noex
 
     running_.store(true);
     task_done_.store(false);
-    if (xTaskCreatePinnedToCore(&UartSerialLink::task_entry, "btpdev_uart", kTaskStackBytes, this,
-                                kTaskPriority, &task_, 0) != pdPASS) {
+    if (!spawn_task(&UartSerialLink::task_entry, "btpdev_uart", kTaskStackBytes, this, kTaskPriority, 0,
+                    /*may_be_external=*/true, &task_, &task_memory_)) {
         running_.store(false);
         task_done_.store(true);
         task_ = nullptr;
@@ -134,6 +134,7 @@ void UartSerialLink::stop() noexcept {
     wake();
     // The task notices running_ within one event wait and deletes itself.
     for (int i = 0; i < 100 && !task_done_.load(); ++i) vTaskDelay(ms_to_ticks(10));
+    release_task(task_, &task_memory_);
     task_ = nullptr;
     if (connected_.load()) close_session();
     release();
@@ -158,8 +159,9 @@ void UartSerialLink::release() noexcept {
 }
 
 void UartSerialLink::task_entry(void* arg) noexcept {
-    static_cast<UartSerialLink*>(arg)->run();
-    vTaskDelete(nullptr);
+    auto* self = static_cast<UartSerialLink*>(arg);
+    self->run();
+    finish_task(self->task_memory_);
 }
 
 void UartSerialLink::run() noexcept {

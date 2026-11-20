@@ -8,6 +8,10 @@ using btpdev::StorageConfig;
 
 namespace {
 
+// Stands in for btpdev::sd_card, which is ESP-IDF only.
+int fake_sd_driver(const btpdev::SdConfig&, btpdev::FileSystem&, btpdev::ErrorInfo&) { return 0; }
+
+
 DeviceConfig valid_device() {
     DeviceConfig config{};
     config.name = "weather-station";
@@ -183,10 +187,10 @@ void storage_rules() {
     CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
 
     config = StorageConfig{};
-    config.sd.enabled = true;  // SPI without pins
+    config.sd.driver = &fake_sd_driver;  // SPI without pins
     CHECK(btpdev::check_storage_config(config, error) == BTPDEV_ERR_CONFIG);
     CHECK_CONTAINS(error.message, "pins");
-    config.sd = {.enabled = true, .mode = btpdev::SdMode::Spi,
+    config.sd = {.driver = &fake_sd_driver, .mode = btpdev::SdMode::Spi,
                  .cs = 10, .mosi = 11, .miso = 13, .sck = 12};
     CHECK(btpdev::check_storage_config(config, error) == ESP_OK);
     config.sd.mount = "/fs";  // same as the LittleFS mount

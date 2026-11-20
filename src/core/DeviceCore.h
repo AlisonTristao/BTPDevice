@@ -49,6 +49,7 @@
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 #include "transport/WifiNetworks.h"
+#include "core/TaskSpawn.h"
 #include "update/DownloadMode.h"
 #include "update/Recovery.h"
 
@@ -308,6 +309,7 @@ private:
 
     RuntimeErrors errors_;
     TaskHandle_t comms_task_ = nullptr;
+    TaskMemory comms_memory_{};
     TaskHandle_t shell_task_ = nullptr;
     esp_timer_handle_t comms_timer_ = nullptr;        // TaskConfig::timer
     std::atomic<TaskHandle_t> manual_task_{nullptr};  // Threading::Manual owner

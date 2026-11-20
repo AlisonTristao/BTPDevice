@@ -28,6 +28,7 @@
 
 #include "core/FrameQueue.h"
 #include "core/Memory.h"
+#include "core/TaskSpawn.h"
 #include "transport/Link.h"
 #include "transport/LinkMutex.h"
 
@@ -73,6 +74,7 @@ private:
     Buffer queue_storage_;
     FrameQueue queue_;   // guarded by mutex_
     TaskHandle_t task_ = nullptr;
+    TaskMemory task_memory_{};  // PSRAM stack (Psram::Stacks)
     bool driver_installed_ = false;
     bool console_muted_ = false;
     std::atomic<bool> running_{false};
