@@ -799,6 +799,11 @@ Validar a API numa aplicação grande. É o teste de fogo da lib, não o objetiv
 - Sinalização por evento (`on_event`, indicador de LED/buzzer).
 - Parâmetros persistentes declarados como os tópicos (editáveis pelo TraceView).
 - Deep sleep para sensores a bateria.
+- **Log em arquivo** (desligado por padrão, pensado para o cartão SD): eventos da lib (boot e motivo do
+  reset, crash, Wi-Fi, OTA, `cfg -set`, sono), o `ESP_LOG` acima de um nível e o que o app mandar, com
+  data e hora. Buffer na RAM (RTC no sono profundo) gravado em blocos e rotação por tamanho: no LittleFS,
+  acrescentar linha a linha copia o último bloco (4 KB) a cada linha e gasta a flash (~37 dias a 1 linha/s
+  numa partição de 256 KB). O hook fica antes do silêncio do ESP_LOG nos links Serial. `log -tail`, `log -clear`.
 
 ---
 

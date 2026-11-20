@@ -12,7 +12,9 @@
 //
 // Settings (`cfg -set period_s, 300`, ...) survive the sleep. To reach the
 // device for longer -- a session, `btp -recovery` -- send `btp -awake 10`
-// during an awake window: sleep_for() refuses for 10 minutes.
+// during an awake window (sleep_for() refuses for 10 minutes), or hold the
+// BOOT button for ~2 s: a tap wakes it to measure at once, held while it
+// wakes it stays awake.
 //
 //   data/bally.key + data/wifi.txt, then `pio run -t uploadfs` and `-t upload`.
 //   Terminal: `btp -sleep` (why it woke, how many wakes), `btp -fs`,
@@ -39,6 +41,10 @@ public:
             .link = btpdev::Link::Tcp,
             .memory = btpdev::Memory::Small,
             .debug_log = true,
+            // The DevKitC-1's BOOT button (GPIO0, pulled up on the board):
+            // a tap wakes the device to measure now; held for ~2 s while it
+            // wakes, it keeps the device awake (like btp -awake).
+            .sleep = {.wake_gpio = 0, .wake_level = false, .awake_gpio = 0, .awake_level = false},
         };
     }
 
