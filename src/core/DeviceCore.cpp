@@ -994,11 +994,24 @@ void DeviceCore::deliver_completion() noexcept {
     } else {
         // COMMAND_RESULT carries at most kMaxResultMessage of the output; the
         // terminal is where long output belongs.
+        // Without the shell's ANSI colours: a COMMAND_RESULT is read by
+        // programs (TraceView shows it as plain text, parses JSON out of it),
+        // not by a terminal -- the terminal keeps them.
         char message[kMaxResultMessage + 1U];
         const char* source = done.output[0] != '\0' ? done.output
                                                     : (done.status == 0U ? "" : "shell command failed");
-        const std::size_t length = strnlen(source, kMaxResultMessage);  // cut on purpose
-        std::memcpy(message, source, length);
+        std::size_t length = 0U;
+        for (const char* p = source; *p != '\0' && length < kMaxResultMessage; ++p) {
+            if (*p == '\x1b') {  // ESC [ params final-letter; a cut one just ends
+                if (p[1] == '[') {
+                    p += 2;
+                    while (*p != '\0' && !((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z'))) ++p;
+                    if (*p == '\0') break;
+                }
+                continue;
+            }
+            message[length++] = *p;
+        }
         message[length] = '\0';
         btp::NodeActionOutcome outcome{};
         if (done.status == RESULT_OK) {

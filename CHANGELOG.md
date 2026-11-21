@@ -7,6 +7,12 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Corrigido
+- **A resposta de comando (`COMMAND_RESULT`) vai sem as cores ANSI do shell**: ela é lida por
+  programas (o TraceView mostra como texto e tira JSON dela), e as cores apareciam como lixo
+  (`[33m`). O terminal continua colorido.
+- Testes no PC: o `CHECK_STR_EQ` comparava um ponteiro para um texto temporário já destruído
+  (`f().c_str()`), e um texto longo voltava ilegível (`test_debug_report` falhava no MinGW). Agora
+  ele copia o texto antes.
 - **`btp -wifi_add` de uma rede que já está no arquivo substitui a senha**, em vez de acrescentar uma
   segunda linha com o mesmo nome. Com duas linhas, o `btp -wifi_remove` (que vai pelo nome) levava as
   duas, e a placa podia ficar sem rede depois do reboot.
