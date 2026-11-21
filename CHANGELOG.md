@@ -7,6 +7,9 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Corrigido
+- **`btp -wifi_add` de uma rede que já está no arquivo substitui a senha**, em vez de acrescentar uma
+  segunda linha com o mesmo nome. Com duas linhas, o `btp -wifi_remove` (que vai pelo nome) levava as
+  duas, e a placa podia ficar sem rede depois do reboot.
 - **`btp -recovery` e `btp -reboot` às vezes não reiniciavam e travavam o shell**: o
   `esp_restart()` era chamado de um callback de `esp_timer`, e ele roda os shutdown handlers
   (o `esp_wifi_stop()`) na própria tarefa do `esp_timer`, da qual o driver de Wi-Fi depende. Às

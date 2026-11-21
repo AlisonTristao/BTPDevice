@@ -1925,6 +1925,33 @@ bool DeviceCore::get_setting(const char* name, char* out, std::size_t size) noex
     return settings_.get(name, out, size);
 }
 
+namespace {
+
+// Copies the networks file `text` (NUL-terminated) to `kept`, leaving out every
+// line whose name (before the first comma) is `ssid`. Returns how many went.
+unsigned drop_wifi_lines(const char* text, const char* ssid, char* kept, std::size_t* kept_size) noexcept {
+    std::size_t out = 0U;
+    unsigned removed = 0U;
+    const std::size_t want = std::strlen(ssid);
+    for (const char* line = text; *line != '\0';) {
+        const char* next = std::strchr(line, '\n');
+        const std::size_t length = next != nullptr ? static_cast<std::size_t>(next - line) + 1U : std::strlen(line);
+        const char* comma = static_cast<const char*>(std::memchr(line, ',', length));
+        const std::size_t name = comma != nullptr ? static_cast<std::size_t>(comma - line) : 0U;
+        if (comma != nullptr && name == want && std::strncmp(line, ssid, want) == 0) {
+            ++removed;
+        } else {
+            std::memcpy(kept + out, line, length);
+            out += length;
+        }
+        line += length;
+    }
+    *kept_size = out;
+    return removed;
+}
+
+}  // namespace
+
 void DeviceCore::register_storage_commands() noexcept {
     shell_.add(
         [this]() -> std::uint8_t {
@@ -2018,11 +2045,35 @@ void DeviceCore::register_storage_commands() noexcept {
             }
             char line[WifiNetwork::kMaxSsid + WifiNetwork::kMaxPassword + 3U];
             const int size = std::snprintf(line, sizeof(line), "%s,%s\n", ssid, password != nullptr ? password : "");
-            if (size <= 0 || !volume->append(device_.wifi.file, line, static_cast<std::size_t>(size))) {
+            if (size <= 0) return RESULT_ERROR;
+            // A name already in the file gets the new password in its place
+            // instead of a second entry: with two entries of one name,
+            // removing "one" took both (wifi_remove goes by name).
+            constexpr std::size_t kCapacity = kMaxWifiNetworks * (WifiNetwork::kMaxSsid + WifiNetwork::kMaxPassword + 4U);
+            std::unique_ptr<char[]> text(new (std::nothrow) char[kCapacity + 1U]);
+            std::unique_ptr<char[]> kept(new (std::nothrow) char[kCapacity + sizeof(line) + 1U]);
+            if (!text || !kept) return RESULT_ERROR;
+            std::size_t existing = 0U;
+            if (!volume->exists(device_.wifi.file) ||
+                !volume->read(device_.wifi.file, text.get(), kCapacity, &existing)) {
+                existing = 0U;
+            }
+            text[existing] = '\0';
+            std::size_t out = 0U;
+            const unsigned replaced = drop_wifi_lines(text.get(), ssid, kept.get(), &out);
+            if (out > 0U && kept[out - 1U] != '\n') kept[out++] = '\n';  // a last line with no newline
+            std::memcpy(kept.get() + out, line, static_cast<std::size_t>(size));
+            out += static_cast<std::size_t>(size);
+            const bool written = volume->write(device_.wifi.file, kept.get(), out);
+            std::memset(line, 0, sizeof(line));
+            std::memset(text.get(), 0, kCapacity + 1U);  // passwords
+            std::memset(kept.get(), 0, kCapacity + sizeof(line) + 1U);
+            if (!written) {
+                shell_print("could not write the file\n");
                 return RESULT_ERROR;
             }
-            std::memset(line, 0, sizeof(line));
-            shell_print("added: restart to use it (btp -reboot)\n");
+            shell_print(replaced > 0U ? "updated (it was there already): restart to use it (btp -reboot)\n"
+                                      : "added: restart to use it (btp -reboot)\n");
             return RESULT_OK;
         },
         "wifi_add", "Add a network to the networks file", "btp");
@@ -2095,21 +2146,7 @@ void DeviceCore::register_storage_commands() noexcept {
             text[size] = '\0';
             // Every line whose name (before the first comma) is `ssid` goes.
             std::size_t out = 0U;
-            unsigned removed = 0U;
-            const std::size_t want = std::strlen(ssid);
-            for (char* line = text.get(); *line != '\0';) {
-                char* next = std::strchr(line, '\n');
-                const std::size_t length = next != nullptr ? static_cast<std::size_t>(next - line) + 1U : std::strlen(line);
-                const char* comma = static_cast<const char*>(std::memchr(line, ',', length));
-                const std::size_t name = comma != nullptr ? static_cast<std::size_t>(comma - line) : 0U;
-                if (comma != nullptr && name == want && std::strncmp(line, ssid, want) == 0) {
-                    ++removed;
-                } else {
-                    std::memcpy(kept.get() + out, line, length);
-                    out += length;
-                }
-                line += length;
-            }
+            const unsigned removed = drop_wifi_lines(text.get(), ssid, kept.get(), &out);
             std::memset(text.get(), 0, kCapacity + 1U);  // passwords
             if (removed == 0U) {
                 std::memset(kept.get(), 0, kCapacity + 1U);
