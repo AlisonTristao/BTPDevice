@@ -7,12 +7,23 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 namespace tracekit_test {
 inline int& failures() {
     static int count = 0;
     return count;
 }
+
+// A copy of a C string taken while it is still alive. CHECK_STR_EQ(f().c_str(), ...)
+// hands over a pointer into a temporary std::string that dies at the end of
+// that statement: comparing through the pointer afterwards read freed memory
+// (a long string, out of the small-string buffer, came back as garbage).
+struct StrCopy {
+    explicit StrCopy(const char* text) : null(text == nullptr), value(text != nullptr ? text : "") {}
+    bool null;
+    std::string value;
+};
 }  // namespace tracekit_test
 
 #define CHECK(condition)                                                     \
@@ -26,11 +37,12 @@ inline int& failures() {
 
 #define CHECK_STR_EQ(actual, expected)                                       \
     do {                                                                     \
-        const char* check_a_ = (actual);                                     \
+        const tracekit_test::StrCopy check_a_((actual));                     \
         const char* check_e_ = (expected);                                   \
-        if (check_a_ == nullptr || std::strcmp(check_a_, check_e_) != 0) {   \
+        if (check_a_.null || check_a_.value != check_e_) {                   \
             std::printf("%s:%d: \"%s\" != \"%s\"\n", __FILE__, __LINE__,     \
-                        check_a_ ? check_a_ : "(null)", check_e_);           \
+                        check_a_.null ? "(null)" : check_a_.value.c_str(),   \
+                        check_e_);                                           \
             ++tracekit_test::failures();                                       \
         }                                                                    \
     } while (0)
