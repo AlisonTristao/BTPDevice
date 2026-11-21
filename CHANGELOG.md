@@ -6,6 +6,15 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Corrigido
+- **`btp -recovery` e `btp -reboot` às vezes não reiniciavam e travavam o shell**: o
+  `esp_restart()` era chamado de um callback de `esp_timer`, e ele roda os shutdown handlers
+  (o `esp_wifi_stop()`) na própria tarefa do `esp_timer`, da qual o driver de Wi-Fi depende. Às
+  vezes um esperava o outro: o reinício não acontecia, o Wi-Fi ficava capenga (pings perdidos,
+  mDNS falhando, sessões caindo) e todo comando seguinte voltava `BUSY`; como o `btp -recovery`
+  já tinha apontado o otadata para o recovery, o reset seguinte caía lá. Agora o reinício sai de
+  uma tarefa própria (`core/Restart.h`), também no recovery.
+
 ### Adicionado
 - **Upload comprimido no recovery**: o `POST /update` aceita a imagem como fluxo zlib
   (`X-OTA-Encoding: deflate`, `X-OTA-Size` com o tamanho descomprimido), e o `/status` anuncia

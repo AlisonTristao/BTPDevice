@@ -43,6 +43,7 @@
 #include <dhcpserver/dhcpserver.h>
 #endif
 
+#include "core/Restart.h"
 #include "security/KeyStore.h"
 #include "security/Sha256.h"
 #include "transport/WifiNetworks.h"
@@ -112,15 +113,9 @@ public:
 
 void new_nonce() { esp_fill_random(g.nonce, sizeof(g.nonce)); }
 
-void restart_later(std::uint32_t ms) {
-    esp_timer_create_args_t args{};
-    args.callback = [](void*) { esp_restart(); };
-    args.name = "rec_restart";
-    esp_timer_handle_t timer = nullptr;
-    if (esp_timer_create(&args, &timer) != ESP_OK || esp_timer_start_once(timer, ms * 1000ULL) != ESP_OK) {
-        esp_restart();
-    }
-}
+// Not from an esp_timer callback: esp_restart() stops Wi-Fi in the calling
+// task (see core/Restart.h).
+void restart_later(std::uint32_t ms) { tracekit::restart_later(ms); }
 
 // ---------------------------------------------------------------------------
 // NVS: the contract with the application (RecoveryContract.h)

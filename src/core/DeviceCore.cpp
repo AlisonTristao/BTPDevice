@@ -35,6 +35,7 @@
 #include "core/Identity.h"
 #include "core/TimeText.h"
 #include "core/LogTags.h"
+#include "core/Restart.h"
 #include "storage/Mount.h"
 #include "transport/BleLink.h"
 #include "transport/EspNowLink.h"
@@ -1337,14 +1338,9 @@ void DeviceCore::register_builtin_commands() noexcept {
     shell_.add(
         [this]() -> std::uint8_t {
             shell_print("restarting in 0.5 s\n");
-            // Later, on a timer: the reply has to leave before the reset.
-            esp_timer_create_args_t args{};
-            args.callback = [](void*) { esp_restart(); };
-            args.name = "tracekit_reboot";
-            esp_timer_handle_t timer = nullptr;
-            if (esp_timer_create(&args, &timer) != ESP_OK || esp_timer_start_once(timer, 500000) != ESP_OK) {
-                return RESULT_ERROR;
-            }
+            // Later (the reply has to leave before the reset), from a task of
+            // its own and not an esp_timer callback: see core/Restart.h.
+            restart_later(500U);
             return RESULT_OK;
         },
         "reboot", "Restart the device", "btp");

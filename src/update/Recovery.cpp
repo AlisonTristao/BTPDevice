@@ -12,6 +12,7 @@
 #include <nvs.h>
 
 #include "core/LogTags.h"
+#include "core/Restart.h"
 
 namespace tracekit {
 namespace {
@@ -56,17 +57,8 @@ const char* reset_name(esp_reset_reason_t reason) noexcept {
     }
 }
 
-void restart_after(std::uint32_t delay_ms) noexcept {
-    if (delay_ms == 0U) esp_restart();
-    esp_timer_create_args_t args{};
-    args.callback = [](void*) { esp_restart(); };
-    args.name = "tracekit_recovery";
-    esp_timer_handle_t timer = nullptr;
-    if (esp_timer_create(&args, &timer) != ESP_OK ||
-        esp_timer_start_once(timer, static_cast<std::uint64_t>(delay_ms) * 1000U) != ESP_OK) {
-        esp_restart();
-    }
-}
+// Not from an esp_timer callback: see core/Restart.h.
+void restart_after(std::uint32_t delay_ms) noexcept { restart_later(delay_ms); }
 
 }  // namespace
 
