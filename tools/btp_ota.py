@@ -14,6 +14,11 @@ leaves this machine:
     message    = b"btp-ota-1" + nonce + action + sha256(image)   ('U' update, 'B' reboot)
     X-OTA-Auth = hex(HMAC-SHA256(key_E, message))
 
+When the recovery lists "deflate" in its "encodings", the image goes as a
+zlib stream (X-OTA-Encoding: deflate, X-OTA-Size: the image's size), about a
+third smaller; the hash and the signature stay over the image itself.
+--no-compress sends it as is (to compare the times).
+
 Password E comes from --password-e, the BTP_PASSWORD_E environment variable
 or a prompt; or give the key file itself with --key-file bally.key.
 """
@@ -27,6 +32,7 @@ import json
 import os
 import sys
 import time
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import provision_key  # noqa: E402  (the key-derivation contract lives there)
@@ -123,9 +129,20 @@ def upload(args, status, key_e):
     headers = {"Content-Type": "application/octet-stream", "X-OTA-SHA256": digest.hex()}
     if key_e is not None:
         headers["X-OTA-Auth"] = auth_mac(key_e, bytes.fromhex(status["nonce"]), b"U", digest)
-    print("uploading %s (%d KB)..." % (os.path.basename(args.firmware), len(image) // 1024))
+    body = image
+    if not args.no_compress and "deflate" in status.get("encodings", []):
+        compressed = zlib.compress(image, 9)
+        if len(compressed) < len(image):
+            body = compressed
+            headers["X-OTA-Encoding"] = "deflate"
+            headers["X-OTA-Size"] = str(len(image))
+    if body is image:
+        print("uploading %s (%d KB)..." % (os.path.basename(args.firmware), len(image) // 1024))
+    else:
+        print("uploading %s (%d KB, %d KB compressed)..."
+              % (os.path.basename(args.firmware), len(image) // 1024, len(body) // 1024))
     started = time.monotonic()
-    code, text = request(args, "POST", "/update", body=image, headers=headers, timeout=120)
+    code, text = request(args, "POST", "/update", body=body, headers=headers, timeout=120)
     print("%d %s (%.1f s)" % (code, text, time.monotonic() - started))
     return 0 if code == 200 else 1
 
@@ -147,6 +164,7 @@ def main(argv=None):
     parser.add_argument("--reboot", action="store_true", help="leave the recovery, back to the application")
     parser.add_argument("--password-e", help="password E (else BTP_PASSWORD_E or a prompt)")
     parser.add_argument("--key-file", help="bally.key instead of the password")
+    parser.add_argument("--no-compress", action="store_true", help="send the image uncompressed")
     parser.add_argument("--port", type=int, default=80)
     parser.add_argument("--timeout", type=float, default=5.0, help="seconds for /status")
     parser.add_argument("--wait", type=float, default=60.0, help="seconds to wait for the recovery to answer")

@@ -6,6 +6,15 @@ versionamento segue [SemVer](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- **Upload comprimido no recovery**: o `POST /update` aceita a imagem como fluxo zlib
+  (`X-OTA-Encoding: deflate`, `X-OTA-Size` com o tamanho descomprimido), e o `/status` anuncia
+  `"encodings":["deflate"]`. Os `.bin` dos exemplos ficam com 63–64% do tamanho. O recovery
+  descomprime com o `tinfl` da ROM (todos os chips o têm), usando ~43 KB de RAM estática; o SHA e
+  o HMAC continuam sobre a imagem descomprimida, então a autenticação não muda. Sem o cabeçalho o
+  corpo é a imagem crua, como antes (a página do recovery, clientes antigos). `tools/btp_ota.py`
+  comprime quando o recovery aceita; `--no-compress` manda cru.
+
 ### Alterado
 - **Partições de 8 e 16 MB**: o LittleFS passa a 1 MB (eram 1,9 e 6,9 MB, usados em menos de
   1%) e a aplicação fica com o resto: 5,9 e 13,9 MB (eram 5 e 8 MB). O recovery e o LittleFS

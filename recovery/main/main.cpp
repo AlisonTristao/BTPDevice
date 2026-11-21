@@ -12,6 +12,7 @@
 
 #include <cinttypes>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include <esp_app_desc.h>
@@ -33,6 +34,7 @@
 #include <freertos/task.h>
 #include <lwip/sockets.h>
 #include <mdns.h>
+#include <miniz.h>
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <sdkconfig.h>
@@ -464,7 +466,7 @@ esp_err_t handle_status(httpd_req_t* req) {
                   "{\"ota_ready\":%s,\"firmware\":\"%s\",\"mode\":\"recovery\",\"recovery\":\"%s\","
                   "\"name\":\"%s\",\"nonce\":\"%s\",\"auth\":\"%s\",\"reason\":\"%s\","
                   "\"app\":{\"valid\":%s,\"project\":\"%s\",\"version\":\"%s\"},\"max_size\":%" PRIu32
-                  ",\"chip\":\"%s\",\"chip_id\":%d,\"ap\":\"%s\"}",
+                  ",\"chip\":\"%s\",\"chip_id\":%d,\"ap\":\"%s\",\"encodings\":[\"deflate\"]}",
                   ready ? "true" : "false", firmware, version(), name, nonce, auth_mode(), rec::reason_name(g.reason),
                   app_valid ? "true" : "false", project, app_version, g.app != nullptr ? g.app->size : 0U,
                   CONFIG_IDF_TARGET, CONFIG_IDF_FIRMWARE_CHIP_ID, g.ap_ssid);
@@ -494,6 +496,93 @@ const char* authorize(httpd_req_t* req, ota::Action action, const std::uint8_t* 
 
 std::uint16_t read_u16_le(const std::uint8_t* p) { return static_cast<std::uint16_t>(p[0] | (p[1] << 8)); }
 
+// Writes the application image into the app partition as it arrives, from
+// the body itself or from the inflater: the header is checked before the
+// first erase, the flash is erased ahead of the writes, and the SHA-256 is
+// taken over exactly what was written. write() returns false once it has
+// failed; `failure`/`status` say why.
+struct ImageWriter {
+    explicit ImageWriter(std::size_t expected) : expected(expected) {}
+
+    bool write(const std::uint8_t* data, std::size_t size) {
+        if (failure != nullptr) return false;
+        if (!checked) {
+            // Collected until there is a whole header, which may come in
+            // pieces (the inflater's first output can be short).
+            const std::size_t take = size < sizeof(head) - head_size ? size : sizeof(head) - head_size;
+            std::memcpy(head + head_size, data, take);
+            head_size += take;
+            data += take;
+            size -= take;
+            if (head_size < sizeof(head)) return true;
+            if (!check_header() || !store(head, sizeof(head))) return false;
+            checked = true;
+        }
+        return size == 0U || store(data, size);
+    }
+
+    tracekit::Sha256 sha;
+    std::size_t written = 0U;
+    const char* failure = nullptr;
+    const char* status = "500 Internal Server Error";
+
+private:
+    bool fail(const char* why, const char* http_status) {
+        failure = why;
+        status = http_status;
+        return false;
+    }
+
+    bool check_header() {
+        if (head[0] != 0xE9U) return fail("not an ESP application image (magic 0xE9 missing)", "400 Bad Request");
+        const std::uint16_t chip = read_u16_le(head + 12);
+        if (chip != CONFIG_IDF_FIRMWARE_CHIP_ID) {
+            ESP_LOGE(TAG, "chip id %u in the image, %u here", static_cast<unsigned>(chip),
+                     static_cast<unsigned>(CONFIG_IDF_FIRMWARE_CHIP_ID));
+            return fail("image built for another chip", "400 Bad Request");
+        }
+        ESP_LOGW(TAG, "upload of %u bytes: erasing the application", static_cast<unsigned>(expected));
+        Lock lock;
+        g.app_valid = false;
+        return true;
+    }
+
+    bool store(const std::uint8_t* data, std::size_t size) {
+        // Never past the size announced (and checked against the partition):
+        // a compressed body could otherwise inflate into anything.
+        if (written + size > expected) return fail("the image is larger than announced", "400 Bad Request");
+        const std::size_t end = written + size;
+        if (end > erased) {
+            std::size_t to = (end + kEraseBlock - 1U) / kEraseBlock * kEraseBlock;
+            if (to > g.app->size) to = g.app->size;
+            if (esp_partition_erase_range(g.app, erased, to - erased) != ESP_OK) return fail("flash erase failed", status);
+            erased = to;
+        }
+        if (esp_partition_write(g.app, written, data, size) != ESP_OK) return fail("flash write failed", status);
+        sha.update(data, size);
+        written = end;
+        const unsigned tenth = static_cast<unsigned>(written * 10U / expected);
+        if (tenth != last_tenth) {
+            last_tenth = tenth;
+            ESP_LOGI(TAG, "%u%%", tenth * 10U);
+        }
+        return true;
+    }
+
+    std::size_t expected;
+    std::size_t erased = 0U;
+    std::uint8_t head[24] = {};
+    std::size_t head_size = 0U;
+    bool checked = false;
+    unsigned last_tenth = 0U;
+};
+
+// The inflater (miniz's tinfl, in the chip's ROM) and its 32 KB dictionary,
+// which doubles as the output ring. Static: ~43 KB the recovery has to spare,
+// and only one upload runs at a time (g.busy).
+tinfl_decompressor g_inflator;
+std::uint8_t g_dict[TINFL_LZ_DICT_SIZE];
+
 esp_err_t handle_update(httpd_req_t* req) {
     // The hash the client commits to, before anything is erased.
     std::uint8_t claimed[ota::kHashSize] = {};
@@ -515,7 +604,34 @@ esp_err_t handle_update(httpd_req_t* req) {
     if (g.app == nullptr) return reply(req, "500 Internal Server Error", "no factory partition");
     const std::size_t total = req->content_len;
     if (total == 0U) return reply(req, "400 Bad Request", "empty body");
-    if (total > g.app->size) return reply(req, "413 Payload Too Large", "image larger than the app partition");
+
+    // X-OTA-Encoding: deflate -- the body is a zlib stream (RFC 1950, what
+    // HTTP calls "deflate") of the image, and X-OTA-Size its size once
+    // inflated. The hash and the signature are over the inflated image, so
+    // authentication does not change. Without the header the body is the
+    // image itself, as before (the page, older clients).
+    bool deflate = false;
+    std::size_t image_size = total;
+    {
+        char text[32] = "";
+        if (httpd_req_get_hdr_value_str(req, "X-OTA-Encoding", text, sizeof(text)) == ESP_OK) {
+            if (std::strcmp(text, "deflate") != 0) {
+                return reply(req, "415 Unsupported Media Type", "X-OTA-Encoding: only \"deflate\" is supported");
+            }
+            deflate = true;
+            char size_text[16] = "";
+            char* end = nullptr;
+            unsigned long size = 0;
+            if (httpd_req_get_hdr_value_str(req, "X-OTA-Size", size_text, sizeof(size_text)) == ESP_OK) {
+                size = std::strtoul(size_text, &end, 10);
+            }
+            if (end == nullptr || *end != '\0' || size == 0U) {
+                return reply(req, "400 Bad Request", "X-OTA-Encoding: deflate needs X-OTA-Size (the inflated size)");
+            }
+            image_size = size;
+        }
+    }
+    if (image_size > g.app->size) return reply(req, "413 Payload Too Large", "image larger than the app partition");
     {
         Lock lock;
         if (g.busy) return reply(req, "409 Conflict", "another upload is running");
@@ -524,15 +640,16 @@ esp_err_t handle_update(httpd_req_t* req) {
     }
 
     static std::uint8_t buffer[kChunk];
-    tracekit::Sha256 sha;
+    ImageWriter writer(image_size);
+    if (deflate) tinfl_init(&g_inflator);
+    std::size_t dict_offset = 0U;
+    tinfl_status inflated = TINFL_STATUS_NEEDS_MORE_INPUT;
     std::size_t received = 0U;
-    std::size_t erased = 0U;
-    unsigned last_tenth = 0U;
     const char* failure = nullptr;
     const char* status = "500 Internal Server Error";
     int timeouts = 0;
 
-    while (received < total) {
+    while (received < total && failure == nullptr) {
         const std::size_t want = total - received < sizeof(buffer) ? total - received : sizeof(buffer);
         const int got = httpd_req_recv(req, reinterpret_cast<char*>(buffer), want);
         if (got == HTTPD_SOCK_ERR_TIMEOUT && ++timeouts < 5) continue;
@@ -541,51 +658,55 @@ esp_err_t handle_update(httpd_req_t* req) {
             break;
         }
         timeouts = 0;
-        if (received == 0U) {
-            // The image header, checked before the first erase: magic and chip.
-            if (got < 24 || buffer[0] != 0xE9U) {
-                failure = "not an ESP application image (magic 0xE9 missing)";
+        received += static_cast<std::size_t>(got);
+        if (!deflate) {
+            if (!writer.write(buffer, static_cast<std::size_t>(got))) break;
+            continue;
+        }
+        // Inflate this chunk into the 32 KB dictionary ring, handing every
+        // piece of output to the writer before tinfl reuses that space.
+        const std::uint8_t* in = buffer;
+        std::size_t in_left = static_cast<std::size_t>(got);
+        const mz_uint32 flags = TINFL_FLAG_PARSE_ZLIB_HEADER | (received < total ? TINFL_FLAG_HAS_MORE_INPUT : 0U);
+        for (;;) {
+            std::size_t in_bytes = in_left;
+            std::size_t out_bytes = sizeof(g_dict) - dict_offset;
+            inflated = tinfl_decompress(&g_inflator, in, &in_bytes, g_dict, g_dict + dict_offset, &out_bytes, flags);
+            in += in_bytes;
+            in_left -= in_bytes;
+            if (out_bytes > 0U && !writer.write(g_dict + dict_offset, out_bytes)) break;
+            dict_offset = (dict_offset + out_bytes) & (sizeof(g_dict) - 1U);
+            if (inflated < TINFL_STATUS_DONE) {
+                failure = "the compressed image is corrupt (deflate stream)";
                 status = "400 Bad Request";
                 break;
             }
-            const std::uint16_t chip = read_u16_le(buffer + 12);
-            if (chip != CONFIG_IDF_FIRMWARE_CHIP_ID) {
-                failure = "image built for another chip";
-                status = "400 Bad Request";
-                ESP_LOGE(TAG, "chip id %u in the image, %u here", static_cast<unsigned>(chip),
-                         static_cast<unsigned>(CONFIG_IDF_FIRMWARE_CHIP_ID));
-                break;
-            }
-            ESP_LOGW(TAG, "upload of %u bytes: erasing the application", static_cast<unsigned>(total));
-            Lock lock;
-            g.app_valid = false;
+            // Only HAS_MORE_OUTPUT calls again with what is left of the
+            // chunk; NEEDS_MORE_INPUT means it took all of it.
+            if (inflated != TINFL_STATUS_HAS_MORE_OUTPUT) break;
         }
-        const std::size_t end = received + static_cast<std::size_t>(got);
-        if (end > erased) {
-            std::size_t to = (end + kEraseBlock - 1U) / kEraseBlock * kEraseBlock;
-            if (to > g.app->size) to = g.app->size;
-            if (esp_partition_erase_range(g.app, erased, to - erased) != ESP_OK) {
-                failure = "flash erase failed";
-                break;
-            }
-            erased = to;
+        if (writer.failure != nullptr) break;
+        if (inflated == TINFL_STATUS_DONE && (received < total || in_left > 0U)) {
+            failure = "data after the end of the compressed image";
+            status = "400 Bad Request";
         }
-        if (esp_partition_write(g.app, received, buffer, static_cast<std::size_t>(got)) != ESP_OK) {
-            failure = "flash write failed";
-            break;
-        }
-        sha.update(buffer, static_cast<std::size_t>(got));
-        received = end;
-        const unsigned tenth = static_cast<unsigned>(received * 10U / total);
-        if (tenth != last_tenth) {
-            last_tenth = tenth;
-            ESP_LOGI(TAG, "%u%%", tenth * 10U);
-        }
+    }
+    if (failure == nullptr && writer.failure != nullptr) {
+        failure = writer.failure;
+        status = writer.status;
+    }
+    if (failure == nullptr && deflate && inflated != TINFL_STATUS_DONE) {
+        failure = "the compressed image ended early";
+        status = "400 Bad Request";
+    }
+    if (failure == nullptr && writer.written != image_size) {
+        failure = deflate ? "the inflated image is not X-OTA-Size bytes" : "the image is too short";
+        status = "400 Bad Request";
     }
 
     if (failure == nullptr) {
         std::uint8_t digest[ota::kHashSize];
-        sha.finish(digest);
+        writer.sha.finish(digest);
         if (has_claim && !tracekit::equal_bytes(digest, claimed, sizeof(digest))) {
             failure = "SHA-256 of the received image does not match X-OTA-SHA256";
             status = "400 Bad Request";
@@ -594,6 +715,10 @@ esp_err_t handle_update(httpd_req_t* req) {
             failure = "the image did not validate (corrupt or incompatible)";
             status = "400 Bad Request";
         }
+    }
+    if (deflate) {
+        ESP_LOGI(TAG, "%u bytes received for a %u byte image", static_cast<unsigned>(received),
+                 static_cast<unsigned>(image_size));
     }
     check_app();
     {

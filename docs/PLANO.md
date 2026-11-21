@@ -494,8 +494,8 @@ LittleFS no fim da flash.
 | | Pedido | Resposta |
 |---|---|---|
 | `GET /` | — | A página de atualização (`recovery/main/page.html`): status, escolha do `.bin`, senha E (derivada e usada só no navegador), progresso, "voltar ao app". Qualquer outro caminho redireciona para `/` (portal cativo). |
-| `GET /status` | — | JSON: `ota_ready`, `firmware` (o que a aba do TraceView mostra), `mode: "recovery"`, `name`, `nonce` (32 hex), `auth` (`"hmac-sha256"`, `"none"` ou `"unavailable"`), `reason`, `app` (`project`, `version`, `valid`), `max_size`, `chip`, `chip_id`, `ap` (nome da rede própria, `""` se não subiu) |
-| `POST /update` | corpo = o `.bin`; `X-OTA-SHA256: <64 hex>`, `X-OTA-Auth: <64 hex>` | 200 e reinicia no app; 401 autenticação, 400 imagem, 413 grande demais, 500 flash |
+| `GET /status` | — | JSON: `ota_ready`, `firmware` (o que a aba do TraceView mostra), `mode: "recovery"`, `name`, `nonce` (32 hex), `auth` (`"hmac-sha256"`, `"none"` ou `"unavailable"`), `reason`, `app` (`project`, `version`, `valid`), `max_size`, `chip`, `chip_id`, `ap` (nome da rede própria, `""` se não subiu), `encodings` (`["deflate"]`: aceita o `.bin` comprimido) |
+| `POST /update` | corpo = o `.bin`; `X-OTA-SHA256: <64 hex>`, `X-OTA-Auth: <64 hex>`. Opcional: `X-OTA-Encoding: deflate` com `X-OTA-Size: <bytes da imagem>`, e o corpo é a imagem como fluxo zlib (RFC 1950), que o recovery descomprime com o `tinfl` da ROM enquanto grava. O SHA e o HMAC continuam sobre a imagem descomprimida | 200 e reinicia no app; 401 autenticação, 400 imagem (ou fluxo comprimido corrompido), 413 grande demais, 415 codificação desconhecida, 500 flash |
 | `POST /reboot` | `X-OTA-Auth` com a ação `B` e sha256 de zeros | 200 e volta ao app (se ele for válido) |
 
 **Autenticação** (`src/update/OtaAuth.h`, `tools/btp_ota.py`):
